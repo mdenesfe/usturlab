@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   ClaudeAdapter,
   fetchClaudeUsage,
+  getAccountIdentity,
   getClaudeProfileToken,
   slugify,
   type AccountProfile,
@@ -263,6 +264,31 @@ export async function addAccountWizard(
     await accounts.setSecret(id, outcome.secret);
     profile.hasSecret = true;
   }
+
+  // Same person, different label? Compare the login identity with existing
+  // accounts of this provider before saving a duplicate.
+  const identity = await getAccountIdentity(profile);
+  if (identity) {
+    for (const existing of accounts.all()) {
+      if (existing.provider !== provider || existing.id === profile.id) continue;
+      const existingIdentity = await getAccountIdentity(existing);
+      if (existingIdentity && existingIdentity === identity) {
+        const choice = await vscode.window.showWarningMessage(
+          `This ${adapter.displayName} account (${identity}) is already connected as ${provider}:${existing.label}. Add it again anyway?`,
+          { modal: true },
+          'Add anyway',
+        );
+        if (choice !== 'Add anyway') {
+          void vscode.window.showWarningMessage(
+            `usturlab: not saved — ${identity} is already connected as ${provider}:${existing.label}.`,
+          );
+          return;
+        }
+        break;
+      }
+    }
+  }
+
   await accounts.upsert(profile);
   void vscode.window.showInformationMessage(
     `usturlab: ${provider}:${profile.label} connected ✓ You can close the login terminal.`,

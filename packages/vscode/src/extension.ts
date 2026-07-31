@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { delimiter, join as joinPath } from 'node:path';
 import {
   AdapterRegistry,
   ClaudeAdapter,
@@ -22,6 +25,19 @@ import { registerCommands } from './commands.js';
 export function activate(ctx: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('usturlab');
   ctx.subscriptions.push(output);
+
+  // VS Code launched from the Dock inherits a minimal PATH; make sure the
+  // usual CLI homes are reachable so `claude`/`codex`/... resolve.
+  const extraDirs = [
+    joinPath(homedir(), '.local', 'bin'),
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+  ];
+  const pathEntries = (process.env.PATH ?? '').split(delimiter).filter(Boolean);
+  for (const dir of extraDirs) {
+    if (existsSync(dir) && !pathEntries.includes(dir)) pathEntries.push(dir);
+  }
+  process.env.PATH = pathEntries.join(delimiter);
 
   const config = vscode.workspace.getConfiguration('usturlab');
   const cliPath = (provider: string, fallback: string) =>
