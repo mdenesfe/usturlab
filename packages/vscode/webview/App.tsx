@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { AccountStatusDto, ConversationMeta, HostToWebview } from '../src/panel/protocol.js';
+import type { TaskMetric } from '../../core/src/quota/metricsSchema.js';
 import { vscode } from './vscodeApi.js';
 import { Transcript } from './components/Transcript.js';
 import { applyHostMessage, type TranscriptItem } from '../src/panel/transcript.js';
@@ -7,15 +8,17 @@ import { Composer } from './components/Composer.js';
 import { HistoryList } from './components/HistoryList.js';
 import { AccountsView } from './components/AccountsView.js';
 import { RulesView } from './components/RulesView.js';
-import { IconAccounts, IconPlus, IconRoute } from './components/icons.js';
+import { RulesBuilder } from './components/RulesBuilder.js';
+import { AnalyticsView } from './components/AnalyticsView.js';
+import { IconAccounts, IconPlus, IconRoute, IconAnalytics } from './components/icons.js';
 
 declare global {
   interface Window {
-    __USTURLAB_MODE__?: 'sidebar' | 'tab' | 'accounts' | 'rules';
+    __USTURLAB_MODE__?: 'sidebar' | 'tab' | 'accounts' | 'rules' | 'rulesBuilder' | 'analytics';
   }
 }
 
-const MODE: 'sidebar' | 'tab' | 'accounts' | 'rules' = window.__USTURLAB_MODE__ ?? 'tab';
+const MODE: 'sidebar' | 'tab' | 'accounts' | 'rules' | 'rulesBuilder' | 'analytics' = window.__USTURLAB_MODE__ ?? 'tab';
 
 const HASHTAG_RE = /(^|\s)#([\w-]+)/g;
 
@@ -23,6 +26,8 @@ export function App() {
   if (MODE === 'sidebar') return <SidebarApp />;
   if (MODE === 'accounts') return <AccountsApp />;
   if (MODE === 'rules') return <RulesApp />;
+  if (MODE === 'rulesBuilder') return <RulesBuilderApp />;
+  if (MODE === 'analytics') return <AnalyticsApp />;
   return <ChatApp />;
 }
 
@@ -43,6 +48,50 @@ function RulesApp() {
   return (
     <div class="app">
       <RulesView rules={state.rules} path={state.path} exists={state.exists} error={state.error} />
+    </div>
+  );
+}
+
+/** Center tab: visual rules builder. */
+function RulesBuilderApp() {
+  const [rulesState, setRulesState] = useState<Extract<HostToWebview, { kind: 'rules' }> | undefined>();
+  const [accounts, setAccounts] = useState<AccountStatusDto[]>([]);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent<HostToWebview>) => {
+      if (event.data.kind === 'rules') setRulesState(event.data);
+      if (event.data.kind === 'accounts') setAccounts(event.data.accounts);
+    };
+    window.addEventListener('message', onMessage);
+    vscode.postMessage({ kind: 'ready' });
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  if (!rulesState) return <div class="app" />;
+  return (
+    <div class="app">
+      <RulesBuilder rules={rulesState.rules} accounts={accounts} />
+    </div>
+  );
+}
+
+/** Center tab: analytics dashboard. */
+function AnalyticsApp() {
+  const [state, setState] = useState<Extract<HostToWebview, { kind: 'analytics' }> | undefined>();
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent<HostToWebview>) => {
+      if (event.data.kind === 'analytics') setState(event.data);
+    };
+    window.addEventListener('message', onMessage);
+    vscode.postMessage({ kind: 'ready' });
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  if (!state) return <div class="app" />;
+  return (
+    <div class="app">
+      <AnalyticsView metrics={state.metrics} accounts={state.accounts} />
     </div>
   );
 }
@@ -85,6 +134,9 @@ function SidebarApp() {
         </button>
         <button class="footer-btn" onClick={() => vscode.postMessage({ kind: 'openRules' })}>
           <IconRoute size={13} /> Rules
+        </button>
+        <button class="footer-btn" onClick={() => vscode.postMessage({ kind: 'openAnalytics' })}>
+          <IconAnalytics size={13} /> Analytics
         </button>
       </div>
     </div>

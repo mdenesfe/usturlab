@@ -2,7 +2,7 @@
   "name": "usturlab",
   "displayName": "usturlab — AI Subscription Router",
   "description": "Add all your AI subscriptions (multiple Claude accounts, Codex, Gemini, Copilot) and route every task to the best account and model with user-defined rules and automatic quota failover.",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "publisher": "mdenesfe",
   "license": "MIT",
   "icon": "media/marketplace-icon.png",
@@ -101,6 +101,11 @@
       {
         "command": "usturlab.debug.simulateLimit",
         "title": "usturlab: Simulate Usage Limit (debug)"
+      },
+      {
+        "command": "usturlab.openAnalytics",
+        "title": "usturlab: Analytics",
+        "icon": "$(graph)"
       }
     ],
     "menus": {
@@ -175,6 +180,11 @@
           ],
           "default": "auto",
           "markdownDescription": "`auto`: usturlab reads the task, judges its difficulty and picks the model — keeping nearly-exhausted accounts in reserve. `manual`: follow your rules and default chain exactly. Your rules always win in both modes."
+        },
+        "usturlab.autoPlanHeavyEdits": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "In auto mode, plan heavy code-writing work before it edits: usturlab switches that turn to Plan so you can review the approach. Turn off to let heavy work edit straight away."
         }
       }
     }

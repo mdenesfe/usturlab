@@ -75,6 +75,12 @@ export interface RoutingDecision {
     complexity: string;
     signals: string[];
   };
+  /** The conversation moved to a heavier model because the work got harder. */
+  escalated?: { from: string; to: string };
+  /** Router asks for this turn to be planned before it edits. */
+  suggestPermission?: PermissionMode;
+  /** Expected share of the chosen account's window, in percentage points. */
+  estimatedBurnPct?: number;
 }
 
 export type RunEvent =

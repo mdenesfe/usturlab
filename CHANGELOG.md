@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.4.0 — 2026-08-01
+
+### Auto routing now learns from what actually happened
+
+Until now the router judged providers from a hand-written capability table. It still starts there, but that table is only a prior — every run is measured and the score moves with the evidence.
+
+- **Clean-run rate is the signal.** A run counts as clean when it finished without you interrupting it, without you re-asking, and without the router having to escalate. Three friction signals are recorded: `steered` (you injected a message mid-run), `retried` (you re-asked the same thing right after the answer), `escalated` (the work turned out heavier than classified)
+- **Confidence-weighted calibration.** Kind-specific evidence leads (from 3 runs), the provider's overall record backs it up at half weight, and confidence grows with sample size — one bad streak can't disqualify a provider, but a consistent one moves it
+
+### It now knows what a run costs, not just what's left
+
+Knowing an account is "40% free" is useless without knowing whether the job costs 2% or 30% of that window.
+
+- **Estimated burn** per candidate: measured median from comparable past runs when there are ≥3, otherwise a tier prior scaled by kind (agentic work multiplies by 2.5)
+- **Affordability penalty** pushes down an account that this particular run would empty, so the router stops walking accounts off a cliff
+- Actual burn is measured after each run from the movement in the account's tightest usage window
+
+### Conversations hold together
+
+- **Stickiness:** a thread stays on the account it started on, and the bonus grows with thread length — moving a long conversation loses the native session and everything the model already knows. A draining account still loses it
+- **Thread weight:** a bare "yes, go ahead" / "evet yap" inherits the conversation's heaviest turn instead of dropping to a light model
+- **Mid-thread escalation:** when the work suddenly gets harder the router moves up a tier and says so in the transcript
+- **Auto plan** (`usturlab.autoPlanHeavyEdits`, on by default): heavy code-writing work switches that turn to Plan so you see the approach before it edits. A permission mode you set yourself is never overridden
+
+### Analytics tab
+
+`usturlab: Analytics` shows what the router learned — clean-rate and confidence per account, median burn per run, performance per kind of work with the best account for each, and a per-run timeline with friction flags. It follows runs live and can be cleared.
+
+- 112 core tests
+
 ## 0.3.2 — 2026-08-01
 
 - Composer controls tidied into two compact dropdowns — routing (Auto / Manual) and permissions (Plan / Edit / Full) — instead of a row of chips

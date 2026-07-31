@@ -52,6 +52,8 @@ export function registerCommands(
 
     vscode.commands.registerCommand('usturlab.editRules', () => rules.openOrCreate()),
 
+    vscode.commands.registerCommand('usturlab.openRulesBuilder', () => chat.openRulesBuilderTab()),
+
     vscode.commands.registerCommand('usturlab.editCommands', () => rules.openOrCreateCommands()),
 
     vscode.commands.registerCommand('usturlab.syncMcp', async () => {
@@ -99,6 +101,8 @@ export function registerCommands(
     vscode.commands.registerCommand('usturlab.openAccounts', () => chat.openAccountsTab()),
 
     vscode.commands.registerCommand('usturlab.openRules', () => chat.openRulesTab()),
+
+    vscode.commands.registerCommand('usturlab.openAnalytics', () => chat.openAnalyticsTab()),
 
     vscode.commands.registerCommand('usturlab.cancelTask', () => chat.cancelAll()),
 

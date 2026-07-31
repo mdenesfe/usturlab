@@ -16,6 +16,7 @@ import {
 import { refreshUsage } from './usage.js';
 import { migrateFromUsrouter } from './migration.js';
 import { AccountStore } from './storage/accountStore.js';
+import { MetricsStore } from './storage/metricsStore.js';
 import { globalStateQuotaPersistence } from './storage/quotaPersistence.js';
 import { RulesManager } from './rules/rulesFile.js';
 import { ChatViewProvider } from './panel/chatViewProvider.js';
@@ -54,12 +55,20 @@ export function activate(ctx: vscode.ExtensionContext): void {
   const quota = new QuotaTracker(globalStateQuotaPersistence(ctx));
   const sessions = new SessionStore();
   const rules = new RulesManager();
+  const metrics = new MetricsStore(ctx);
   ctx.subscriptions.push(rules);
+
+  // Declared before the orchestrator so routing can read thread memory.
+  let chatRef: ChatViewProvider | undefined;
 
   const orchestrator = new Orchestrator({
     adapters,
     quota,
     sessions,
+    getMetrics: () => metrics.all(),
+    getConversationContext: (id) => chatRef?.conversationContext(id),
+    getAutoPlan: () =>
+      vscode.workspace.getConfiguration('usturlab').get<boolean>('autoPlanHeavyEdits', true),
     getRules: () => rules.getRules(),
     getCustomCommands: () => rules.getCustomCommands(),
     getRoutingMode: () =>
@@ -71,7 +80,8 @@ export function activate(ctx: vscode.ExtensionContext): void {
   const statusBar = new RouterStatusBar();
   ctx.subscriptions.push(statusBar);
 
-  const chat = new ChatViewProvider(ctx, orchestrator, sessions, accounts, quota, adapters, rules, output);
+  const chat = new ChatViewProvider(ctx, orchestrator, sessions, accounts, quota, adapters, rules, metrics, output);
+  chatRef = chat;
   chat.setTargetListener((target) => statusBar.routed(target));
   ctx.subscriptions.push(
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chat, {

@@ -89,3 +89,11 @@ export const IconRoute = ({ size }: IconProps) => (
     <circle cx="2.5" cy="4.5" r="1" fill="currentColor" stroke="none" />
   </svg>
 );
+
+export const IconAnalytics = ({ size }: IconProps) => (
+  <svg {...base(size)}>
+    <rect x="3" y="9" width="2" height="5" rx="0.5" fill="currentColor" stroke="none" />
+    <rect x="7" y="5" width="2" height="9" rx="0.5" fill="currentColor" stroke="none" />
+    <rect x="11" y="7" width="2" height="7" rx="0.5" fill="currentColor" stroke="none" />
+  </svg>
+);

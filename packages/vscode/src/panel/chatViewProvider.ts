@@ -10,11 +10,16 @@ import {
   formatTarget,
   matchSlashCommand,
   shortId,
+  observedBurn,
+  isRetry,
+  type ConversationContext,
   type LiveRunHandle,
   type PermissionMode,
   type Target,
+  type TaskMetric,
 } from '@usturlab/core';
 import type { AccountStore } from '../storage/accountStore.js';
+import type { MetricsStore } from '../storage/metricsStore.js';
 import type { RulesManager } from '../rules/rulesFile.js';
 import type {
   AccountStatusDto,
@@ -48,7 +53,7 @@ interface ConversationRecord {
 }
 
 interface Surface {
-  mode: 'sidebar' | 'tab' | 'accounts' | 'rules';
+  mode: 'sidebar' | 'tab' | 'accounts' | 'rules' | 'rulesBuilder' | 'analytics';
   conversationId?: string;
 }
 
@@ -68,6 +73,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private panels = new Map<string, vscode.WebviewPanel>();
   private accountsPanel?: vscode.WebviewPanel;
   private rulesPanel?: vscode.WebviewPanel;
+  private rulesBuilderPanel?: vscode.WebviewPanel;
+  private analyticsPanel?: vscode.WebviewPanel;
   private conversations = new Map<string, ConversationRecord>();
   private tasks = new Map<string, AbortController>();
   private queues = new Map<
@@ -86,6 +93,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private onTargetChosen?: (target: Target) => void;
   private usageRefresher?: () => Promise<void>;
   private identities = new Map<string, string>();
+  /** What the router needs to keep a thread on one model: where it ran and how heavy it got. */
+  /** Conversations the user had to interject into — a signal the model was off track. */
+  private steeredRuns = new Set<string>();
+  private threadContext = new Map<
+    string,
+    {
+      lastTarget?: Target;
+      peakComplexity?: string;
+      turnCount: number;
+      /** Last finished run, so a quick re-ask can be attributed back to it. */
+      lastPrompt?: string;
+      lastFinishedAt?: number;
+      lastMetricId?: string;
+    }
+  >();
 
   constructor(
     private ctx: vscode.ExtensionContext,
@@ -95,6 +117,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private quota: QuotaTracker,
     private adapters: AdapterRegistry,
     private rules: RulesManager,
+    private metrics: MetricsStore,
     private output: vscode.OutputChannel,
   ) {
     const offQuota = quota.onDidChange(() => this.pushAccounts());
@@ -109,6 +132,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.pushAccounts();
         this.pushRules();
       }),
+      // An open analytics tab follows every recorded run live.
+      metrics.onDidChange(() => this.pushAnalytics()),
       { dispose: offQuota },
       {
         dispose: () => {
@@ -132,6 +157,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.onTargetChosen = cb;
   }
 
+  /** Conversation memory for the router: same thread → same model unless work escalates. */
+  conversationContext(conversationId: string): ConversationContext | undefined {
+    const ctx = this.threadContext.get(conversationId);
+    if (!ctx) return undefined;
+    return {
+      lastTarget: ctx.lastTarget,
+      peakComplexity: ctx.peakComplexity as ConversationContext['peakComplexity'],
+      turnCount: ctx.turnCount,
+    };
+  }
+
   setUsageRefresher(cb: () => Promise<void>): void {
     this.usageRefresher = cb;
   }
@@ -147,6 +183,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     'sidebar',
     'tab',
     'accounts',
+    'analytics',
   ]);
 
   private attach(webview: vscode.Webview, surface: Surface): void {
@@ -267,6 +304,52 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  /** Opens (or reveals) the visual rules builder tab. */
+  openRulesBuilderTab(): void {
+    if (this.safeReveal(this.rulesBuilderPanel)) return;
+    this.rulesBuilderPanel = undefined;
+    const panel = vscode.window.createWebviewPanel(
+      'usturlab.rulesBuilderTab',
+      'usturlab · Rules Builder',
+      vscode.ViewColumn.Active,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [vscode.Uri.joinPath(this.ctx.extensionUri, 'media')],
+      },
+    );
+    panel.iconPath = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'tab-icon.svg');
+    this.rulesBuilderPanel = panel;
+    this.attach(panel.webview, { mode: 'rulesBuilder' });
+    panel.onDidDispose(() => {
+      this.surfaces.delete(panel.webview);
+      this.rulesBuilderPanel = undefined;
+    });
+  }
+
+  /** Opens (or reveals) the analytics tab. */
+  openAnalyticsTab(): void {
+    if (this.safeReveal(this.analyticsPanel)) return;
+    this.analyticsPanel = undefined;
+    const panel = vscode.window.createWebviewPanel(
+      'usturlab.analyticsTab',
+      'usturlab · Analytics',
+      vscode.ViewColumn.Active,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [vscode.Uri.joinPath(this.ctx.extensionUri, 'media')],
+      },
+    );
+    panel.iconPath = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'tab-icon.svg');
+    this.analyticsPanel = panel;
+    this.attach(panel.webview, { mode: 'analytics' });
+    panel.onDidDispose(() => {
+      this.surfaces.delete(panel.webview);
+      this.analyticsPanel = undefined;
+    });
+  }
+
   private modesMessage(): HostToWebview {
     const config = vscode.workspace.getConfiguration('usturlab');
     return {
@@ -293,6 +376,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     for (const [webview, surface] of this.surfaces) {
       // Chat tabs consume rules too (tag suggestions in the composer).
       if (surface.mode === 'rules' || surface.mode === 'tab') this.safePost(webview, msg);
+    }
+  }
+
+  private pushAnalytics(webview?: vscode.Webview): void {
+    const msg: HostToWebview = {
+      kind: 'analytics',
+      metrics: this.metrics.all(),
+      accounts: this.accountDtos(),
+    };
+    if (webview) {
+      this.safePost(webview, msg);
+    } else {
+      for (const [w, surface] of this.surfaces) {
+        if (surface.mode === 'analytics') this.safePost(w, msg);
+      }
     }
   }
 
@@ -329,6 +427,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     rec.turns = [];
     rec.title = '';
     this.sessions.clearConversation(id);
+    this.threadContext.delete(id);
     const panel = this.panels.get(id);
     if (panel) panel.title = 'New chat';
     for (const [webview, surface] of this.surfaces) {
@@ -440,7 +539,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     if (surface.mode === 'rules') {
       this.safePost(webview, this.rulesMessage());
-    this.safePost(webview, this.modesMessage());
+      this.safePost(webview, this.modesMessage());
+      return;
+    }
+    if (surface.mode === 'rulesBuilder') {
+      this.safePost(webview, this.rulesMessage());
+      this.safePost(webview, {
+        kind: 'accounts',
+        accounts: this.accountDtos(),
+      } satisfies HostToWebview);
+      return;
+    }
+    if (surface.mode === 'analytics') {
+      this.pushAnalytics(webview);
       return;
     }
     const rec = surface.conversationId
@@ -503,6 +614,27 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
       case 'editRules':
         void vscode.commands.executeCommand('usturlab.editRules');
+        break;
+      case 'openRulesBuilder':
+        this.openRulesBuilderTab();
+        break;
+      case 'saveRule':
+        void this.rules.saveRule(msg.rule, msg.ruleIndex);
+        break;
+      case 'deleteRule':
+        void this.rules.deleteRule(msg.ruleId);
+        break;
+      case 'reorderRules':
+        void this.rules.reorderRules(msg.order);
+        break;
+      case 'saveDefaultChain':
+        void this.rules.saveDefaultChain(msg.chain);
+        break;
+      case 'openAnalytics':
+        this.openAnalyticsTab();
+        break;
+      case 'clearAnalytics':
+        void this.metrics.clear();
         break;
       case 'refreshUsage':
         void this.usageRefresher?.();
@@ -599,6 +731,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       text = `${text}\n\nAttached files:\n${shown.map((p) => `- ${p}`).join('\n')}`;
     }
     this.toConversation(conversationId, { kind: 'userEcho', text });
+    this.detectRetry(conversationId, text);
     // Host actions (/accounts, /clear…) must never be injected or queued.
     const slashAction = matchSlashCommand(text, this.rules.getCustomCommands());
     if (slashAction?.cmd.kind === 'action' && slashAction.cmd.action) {
@@ -610,6 +743,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       // model sees the message immediately. Queue only when unsupported.
       const live = this.liveRuns.get(conversationId);
       if (live?.handle.inject?.(text)) {
+        this.steeredRuns.add(conversationId);
         if (live.handle.injectMode === 'inline') {
           // The agent folds this into the turn already streaming — no new block.
           this.toConversation(conversationId, {
@@ -662,6 +796,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     await this.runTask(conversationId, text, tags, modes);
   }
 
+  /**
+   * A near-identical prompt right after an answer means that answer did not
+   * land — the run counts as friction even though it technically succeeded.
+   */
+  private detectRetry(conversationId: string, text: string): void {
+    const ctx = this.threadContext.get(conversationId);
+    if (!ctx?.lastMetricId || !ctx.lastPrompt || !ctx.lastFinishedAt) return;
+    if (!isRetry(ctx.lastPrompt, text, Date.now() - ctx.lastFinishedAt)) return;
+    void this.metrics.markRetried(ctx.lastMetricId);
+    // Only the run that was actually re-asked is penalized.
+    ctx.lastMetricId = undefined;
+  }
+
   private async runTask(
     conversationId: string,
     text: string,
@@ -691,6 +838,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const messageId = shortId();
     const startedAt = Date.now();
     let gotResult = false;
+    let escalated = false;
+    const usageBefore = this.accountUsagePct(conversationId);
     const controller = new AbortController();
     this.tasks.set(conversationId, controller);
     const live = {
@@ -719,6 +868,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       modes.routingMode ??
       vscode.workspace.getConfiguration('usturlab').get<'auto' | 'manual'>('routingMode', 'auto');
 
+    let metric: Partial<TaskMetric> = { id: messageId, timestamp: Date.now(), conversationId };
     try {
       const events = this.orchestrator.run(
         {
@@ -738,8 +888,43 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       for await (const ev of events) {
         switch (ev.type) {
           case 'routing': {
+            const cls = ev.decision.classification;
+            metric = {
+              ...metric,
+              kind: cls?.kind,
+              complexity: cls?.complexity,
+              routingReason: ev.decision.reason,
+              ruleId: ev.decision.ruleId,
+            };
+            if (cls?.complexity) {
+              const ctx = this.threadContext.get(conversationId) ?? { turnCount: 0 };
+              const order = ['trivial', 'simple', 'moderate', 'hard'];
+              if (
+                !ctx.peakComplexity ||
+                order.indexOf(cls.complexity) > order.indexOf(ctx.peakComplexity)
+              ) {
+                ctx.peakComplexity = cls.complexity;
+              }
+              this.threadContext.set(conversationId, ctx);
+            }
+            if (ev.decision.escalated) {
+              escalated = true;
+              post({
+                kind: 'notice',
+                text: `work got heavier — moving this thread up to the ${ev.decision.escalated.to} tier`,
+              });
+            }
+            if (ev.decision.suggestPermission === 'safe') {
+              post({
+                kind: 'notice',
+                text: 'heavy change — planning first; switch to Edit to let it write',
+              });
+            }
             const first = ev.decision.chain[0];
             if (first) {
+              metric = { ...metric, provider: first.provider, account: first.account, model: first.model };
+              metric.ruleId = ev.decision.ruleId;
+              metric.routingReason = ev.decision.reason;
               post({
                 kind: 'routing',
                 messageId: currentId(),
@@ -802,11 +987,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               this.sessions.appendTurn(conversationId, { role: 'assistant', text: ev.text });
             }
             gotResult = true;
+            const durationMs = Date.now() - startedAt;
+            metric = { ...metric, inputTokens: ev.usage?.inputTokens, outputTokens: ev.usage?.outputTokens, costUsd: ev.costUsd, durationMs, status: 'success' };
             post({
               kind: 'done',
               messageId: currentId(),
               costUsd: ev.costUsd,
-              durationMs: Date.now() - startedAt,
+              durationMs,
             });
             live.turnIdx++;
             break;
@@ -817,6 +1004,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             break;
           }
           case 'error':
+            metric = { ...metric, status: 'error', errorMessage: ev.message };
             post({ kind: 'error', messageId: currentId(), message: ev.message });
             break;
           case 'chain-exhausted':
@@ -833,9 +1021,47 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
       }
     } catch (e) {
+      metric = { ...metric, status: 'error', errorMessage: (e as Error).message };
       post({ kind: 'error', messageId: currentId(), message: (e as Error).message });
       this.output.appendLine(`[error] ${(e as Error).stack ?? e}`);
     } finally {
+      if (metric.status && metric.provider && metric.account) {
+        const steered = this.steeredRuns.delete(conversationId);
+        const target = live.lastTarget;
+        const usageAfter = target ? this.usagePctForTarget(target) : undefined;
+        void this.metrics.record({
+          id: metric.id!,
+          timestamp: metric.timestamp!,
+          conversationId: metric.conversationId!,
+          provider: metric.provider,
+          account: metric.account,
+          model: metric.model,
+          ruleId: metric.ruleId,
+          routingReason: metric.routingReason,
+          kind: metric.kind,
+          complexity: metric.complexity,
+          inputTokens: metric.inputTokens,
+          outputTokens: metric.outputTokens,
+          costUsd: metric.costUsd,
+          durationMs: metric.durationMs,
+          burnPct: observedBurn(usageBefore, usageAfter),
+          status: metric.status as 'success' | 'error' | 'failover',
+          errorMessage: metric.errorMessage,
+          steered,
+          escalated,
+        });
+      }
+      // Remember where this thread ran so the next turn stays put, and what it
+      // was asked, so a quick re-ask can be recognized as friction.
+      if (live.lastTarget) {
+        const ctx = this.threadContext.get(conversationId) ?? { turnCount: 0 };
+        ctx.lastTarget = live.lastTarget;
+        ctx.turnCount += 1;
+        ctx.lastPrompt = text;
+        ctx.lastFinishedAt = Date.now();
+        ctx.lastMetricId = metric.status ? metric.id : undefined;
+        this.threadContext.set(conversationId, ctx);
+      }
       if (this.tasks.get(conversationId) === controller) this.tasks.delete(conversationId);
       if (this.liveRuns.get(conversationId) === live) this.liveRuns.delete(conversationId);
       if (!controller.signal.aborted) {
@@ -922,6 +1148,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
     }
     if (changed) this.pushAccounts();
+  }
+
+  /** Tightest window fill for the account a thread last used, if known. */
+  private usagePctForTarget(target: Target): number | undefined {
+    const account = this.accounts
+      .all()
+      .find((a) => a.provider === target.provider && a.label === target.account);
+    if (!account) return undefined;
+    const windows = this.quota.snapshot([account.id])[0]?.usage ?? [];
+    return windows.length > 0 ? Math.max(...windows.map((w) => w.utilizationPct)) : undefined;
+  }
+
+  private accountUsagePct(conversationId: string): number | undefined {
+    const target = this.threadContext.get(conversationId)?.lastTarget;
+    return target ? this.usagePctForTarget(target) : undefined;
   }
 
   private accountDtos(): AccountStatusDto[] {

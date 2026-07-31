@@ -1,8 +1,9 @@
 import type { RulesFile } from '../rules/schema.js';
 import { builtinDefaultChain } from '../rules/defaults.js';
 import { matchesRule, parseMention } from './matcher.js';
-import { classifyTask, type Classification } from './classify.js';
-import { autoRoute } from './autoRoute.js';
+import { classifyTask, isContinuation, type Classification } from './classify.js';
+import { autoRoute, type ConversationContext } from './autoRoute.js';
+import type { TaskMetric } from '../quota/metricsSchema.js';
 import type { QuotaTracker } from '../quota/quotaTracker.js';
 import type { AccountProfile, RoutingDecision, Target, TaskRequest } from '../types.js';
 import { targetKey } from '../types.js';
@@ -16,6 +17,12 @@ export interface RouteResult {
 export interface RouteOptions {
   /** 'auto': classify the task and pick a model; 'manual': follow the default chain as written. */
   mode?: 'auto' | 'manual';
+  /** Past runs, used to calibrate capability and estimate burn. */
+  metrics?: TaskMetric[];
+  /** Where this conversation has been running so far. */
+  conversation?: ConversationContext;
+  /** Plan heavy code-writing work before it edits. */
+  autoPlan?: boolean;
 }
 
 export function resolveTargetAccount(
@@ -43,6 +50,9 @@ export function route(
   let ruleId: string | undefined;
   let reason: string;
   let classification: Classification | undefined;
+  let escalated: { from: string; to: string } | undefined;
+  let suggestPermission: RoutingDecision['suggestPermission'];
+  let estimatedBurnPct: number | undefined;
 
   if (mention) {
     const mentionTargets: Target[] = [];
@@ -72,9 +82,21 @@ export function route(
       reason = rule.description ?? `rule: ${rule.id}`;
     } else if (mode === 'auto') {
       classification = classifyTask(matchTask);
-      const auto = autoRoute(classification, accounts, quota);
+      // A bare "yes, go ahead" carries the thread's weight, not its own.
+      if (isContinuation(cleaned) && options.conversation?.peakComplexity) {
+        classification = { ...classification, complexity: options.conversation.peakComplexity };
+      }
+      const auto = autoRoute(classification, accounts, quota, {
+        metrics: options.metrics,
+        conversation: options.conversation,
+        autoPlan: options.autoPlan,
+        currentPermission: task.permissionMode,
+      });
       raw = [...auto.chain, ...defaultChain];
       reason = auto.reason;
+      escalated = auto.escalated;
+      suggestPermission = auto.suggestPermission;
+      estimatedBurnPct = auto.burn?.pct;
     } else {
       raw = defaultChain;
       reason = rules.defaultChain.length > 0 ? 'default chain' : 'priority order';
@@ -108,5 +130,17 @@ export function route(
     chain.push(target);
   }
 
-  return { decision: { chain, ruleId, reason, skipped, classification }, cleanedPrompt: cleaned };
+  return {
+    decision: {
+      chain,
+      ruleId,
+      reason,
+      skipped,
+      classification,
+      escalated,
+      suggestPermission,
+      estimatedBurnPct,
+    },
+    cleanedPrompt: cleaned,
+  };
 }

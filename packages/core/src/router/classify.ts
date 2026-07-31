@@ -49,6 +49,14 @@ const TRIVIAL_RE =
 
 const QUESTION_RE = /^(what|who|when|where|which|why|how|is|are|can|does|do|should|could)\b|\?\s*$/i;
 
+/** "yes", "go ahead", "devam et" — a continuation, not a new small task. */
+const CONTINUATION_RE =
+  /^(y(es|ep|eah)?|ok(ay)?|sure|go( ahead)?|do it|continue|proceed|next|please do|evet|tamam|olur|devam( et)?|yap|başla|onayla)[\s.!]*$/i;
+
+export function isContinuation(prompt: string): boolean {
+  return CONTINUATION_RE.test(prompt.trim());
+}
+
 export function classifyTask(task: TaskRequest): Classification {
   const prompt = task.prompt.trim();
   const lower = prompt.toLowerCase();
@@ -113,6 +121,8 @@ export function classifyTask(task: TaskRequest): Classification {
 
   const complexity: Complexity =
     score <= -1 ? 'trivial' : score === 0 ? 'simple' : score <= 2 ? 'moderate' : 'hard';
+
+  if (isContinuation(prompt)) signals.push('continuation');
 
   return { kind, complexity, signals: [...new Set(signals)].slice(0, 6), writesCode };
 }

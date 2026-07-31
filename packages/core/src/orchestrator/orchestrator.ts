@@ -2,6 +2,8 @@ import type { AdapterRegistry } from '../adapters/adapter.js';
 import type { QuotaTracker } from '../quota/quotaTracker.js';
 import { SessionStore, embedHistory } from '../session/sessionStore.js';
 import { route } from '../router/router.js';
+import type { ConversationContext } from '../router/autoRoute.js';
+import type { TaskMetric } from '../quota/metricsSchema.js';
 import { expandSlashCommand, matchSlashCommand, type SlashCommand } from '../commands/slashCommands.js';
 import type { LiveRunHandle } from '../adapters/adapter.js';
 import type { RulesFile } from '../rules/schema.js';
@@ -27,6 +29,12 @@ export interface OrchestratorDeps {
   getCustomCommands?: () => SlashCommand[];
   /** 'auto' lets the router classify and choose; 'manual' follows the chain as written. */
   getRoutingMode?: () => 'auto' | 'manual';
+  /** Past runs — calibrate capability and estimate burn. */
+  getMetrics?: () => TaskMetric[];
+  /** Where this conversation has run so far. */
+  getConversationContext?: (conversationId: string) => ConversationContext | undefined;
+  /** Plan heavy code-writing work before it edits. */
+  getAutoPlan?: () => boolean;
 }
 
 export class Orchestrator {
@@ -43,7 +51,12 @@ export class Orchestrator {
       this.deps.getRules(),
       this.deps.getAccounts(),
       quota,
-      { mode: task.routingMode ?? this.deps.getRoutingMode?.() ?? 'auto' },
+      {
+        mode: task.routingMode ?? this.deps.getRoutingMode?.() ?? 'auto',
+        metrics: this.deps.getMetrics?.(),
+        conversation: this.deps.getConversationContext?.(task.conversationId),
+        autoPlan: this.deps.getAutoPlan?.() ?? true,
+      },
     );
     yield { type: 'routing', decision };
 
@@ -51,6 +64,9 @@ export class Orchestrator {
       yield { type: 'chain-exhausted', tried: [] };
       return;
     }
+
+    // The router may ask for heavy code-writing work to be planned first.
+    const effectivePermission = decision.suggestPermission ?? task.permissionMode;
 
     const tried: Target[] = [];
     const history = sessions.getHistory(task.conversationId);
@@ -100,7 +116,7 @@ export class Orchestrator {
             cwd: task.cwd,
             model: target.model,
             resumeSessionId: nativeSid,
-            permissionMode: task.permissionMode,
+            permissionMode: effectivePermission,
             handle,
           },
           account,

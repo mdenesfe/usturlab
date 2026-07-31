@@ -8,7 +8,9 @@ import {
   RULES_TEMPLATE,
   parseCommandsFile,
   parseRulesFile,
+  type Rule,
   type RulesFile,
+  type RuleTarget,
   type SlashCommand,
 } from '@usturlab/core';
 
@@ -148,6 +150,54 @@ export class RulesManager implements vscode.Disposable {
       await vscode.workspace.fs.writeFile(uri, Buffer.from(RULES_TEMPLATE, 'utf8'));
     }
     await vscode.window.showTextDocument(uri);
+  }
+
+  async saveRule(rule: Rule, index?: number): Promise<void> {
+    const current = this.current;
+    const rules = [...current.rules];
+    if (index !== undefined && index >= 0 && index < rules.length) {
+      rules[index] = rule;
+    } else {
+      rules.push(rule);
+    }
+    await this.write({ ...current, rules });
+  }
+
+  async deleteRule(ruleId: string): Promise<void> {
+    const current = this.current;
+    await this.write({
+      ...current,
+      rules: current.rules.filter((r) => r.id !== ruleId),
+    });
+  }
+
+  async reorderRules(order: string[]): Promise<void> {
+    const current = this.current;
+    const ruleMap = new Map(current.rules.map((r) => [r.id, r]));
+    const reordered: Rule[] = [];
+    for (const id of order) {
+      const rule = ruleMap.get(id);
+      if (rule) reordered.push(rule);
+    }
+    for (const rule of current.rules) {
+      if (!order.includes(rule.id)) reordered.push(rule);
+    }
+    await this.write({ ...current, rules: reordered });
+  }
+
+  async saveDefaultChain(chain: RuleTarget[]): Promise<void> {
+    await this.write({ ...this.current, defaultChain: chain });
+  }
+
+  private async write(rules: RulesFile): Promise<void> {
+    const { path, exists } = this.locate();
+    const uri = vscode.Uri.file(path);
+    if (!exists) {
+      const dir = path.substring(0, path.lastIndexOf('/'));
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(dir));
+    }
+    const content = JSON.stringify(rules, null, 2);
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf8'));
   }
 
   dispose(): void {

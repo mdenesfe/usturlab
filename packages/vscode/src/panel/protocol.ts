@@ -1,4 +1,4 @@
-import type { ProviderId, RulesFile, SlashCommand, Target, UsageWindow } from '@usturlab/core';
+import type { ProviderId, RulesFile, SlashCommand, Target, UsageWindow, TaskMetric, Rule, RuleTarget } from '@usturlab/core';
 
 export interface AccountStatusDto {
   id: string;
@@ -43,7 +43,14 @@ export type WebviewToHost =
   | { kind: 'renameAccount'; id: string }
   | { kind: 'openRules' }
   | { kind: 'editRules' }
-  | { kind: 'refreshUsage' };
+  | { kind: 'openRulesBuilder' }
+  | { kind: 'saveRule'; rule: Rule; ruleIndex?: number }
+  | { kind: 'deleteRule'; ruleId: string }
+  | { kind: 'reorderRules'; order: string[] }
+  | { kind: 'saveDefaultChain'; chain: RuleTarget[] }
+  | { kind: 'refreshUsage' }
+  | { kind: 'openAnalytics' }
+  | { kind: 'clearAnalytics' };
 
 export type HostToWebview =
   | { kind: 'userEcho'; text: string }
@@ -61,4 +68,5 @@ export type HostToWebview =
   | { kind: 'rules'; rules: RulesFile; path: string; exists: boolean; error?: string; customCommands: SlashCommand[] }
   | { kind: 'modes'; permissionMode: string; routingMode: 'auto' | 'manual' }
   | { kind: 'attachments'; paths: string[] }
-  | { kind: 'conversationReset' };
+  | { kind: 'conversationReset' }
+  | { kind: 'analytics'; metrics: TaskMetric[]; accounts: AccountStatusDto[] };
