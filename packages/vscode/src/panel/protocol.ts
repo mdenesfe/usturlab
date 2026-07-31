@@ -1,4 +1,4 @@
-import type { ProviderId, RulesFile, SlashCommand, Target, UsageWindow, TaskMetric, Rule, RuleTarget } from '@usturlab/core';
+import type { ProviderId, RulesFile, SlashCommand, Target, ToolAction, UsageWindow, TaskMetric, Rule, RuleTarget } from '@usturlab/core';
 
 export interface AccountStatusDto {
   id: string;
@@ -56,7 +56,15 @@ export type HostToWebview =
   | { kind: 'userEcho'; text: string }
   | { kind: 'routing'; messageId: string; target: Target; ruleId?: string; reason: string }
   | { kind: 'delta'; messageId: string; text: string }
-  | { kind: 'toolUse'; messageId: string; name: string; detail?: string }
+  | {
+      kind: 'toolUse';
+      messageId: string;
+      name: string;
+      detail?: string;
+      preview?: string;
+      path?: string;
+      action?: ToolAction;
+    }
   | { kind: 'failover'; messageId: string; from: Target; to: Target; reason: string; resetAt?: number }
   | { kind: 'downgraded'; messageId: string; from: string; to: string }
   | { kind: 'notice'; text: string }

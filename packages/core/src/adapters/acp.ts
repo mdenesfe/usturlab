@@ -1,6 +1,7 @@
 import { EventQueue, JsonRpcProcess } from './jsonRpc.js';
 import { getObject, getString } from './ndjson.js';
 import { isTransientFailure } from './limits.js';
+import { describeToolUse } from './toolDetail.js';
 import type { AdapterEvent, LimitInfo, PermissionMode } from '../types.js';
 import type { RunRequest } from './adapter.js';
 
@@ -96,11 +97,35 @@ export async function* runAcp(opts: AcpOptions): AsyncGenerator<AdapterEvent> {
         }
         case 'tool_call': {
           const title = getString(update, 'title') ?? getString(update, 'kind') ?? 'tool';
-          const detail =
-            getString(update, 'rawInput', 'command') ??
-            getString(update, 'rawInput', 'path') ??
-            getString(update, 'locations', '0', 'path');
-          events.push({ type: 'tool-use', name: title, detail });
+          const rawInput = getObject(update, 'rawInput') ?? {};
+          const located = getString(update, 'locations', '0', 'path');
+          const info = describeToolUse(
+            getString(update, 'kind') ?? title,
+            located ? { path: located, ...rawInput } : rawInput,
+            req.cwd,
+          );
+          // ACP ships the real before/after for an edit; prefer it over ours.
+          const diff = getObject(update, 'content', '0');
+          const preview =
+            getString(diff, 'type') === 'diff'
+              ? describeToolUse(
+                  'edit',
+                  {
+                    file_path: getString(diff, 'path') ?? located,
+                    old_string: getString(diff, 'oldText') ?? '',
+                    new_string: getString(diff, 'newText') ?? '',
+                  },
+                  req.cwd,
+                ).preview
+              : info.preview;
+          events.push({
+            type: 'tool-use',
+            name: title,
+            detail: info.detail,
+            preview,
+            path: info.path,
+            action: info.action,
+          });
           break;
         }
         default:

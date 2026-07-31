@@ -966,7 +966,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             post({ kind: 'delta', messageId: currentId(), text: ev.text });
             break;
           case 'tool-use':
-            post({ kind: 'toolUse', messageId: currentId(), name: ev.name, detail: ev.detail });
+            post({
+              kind: 'toolUse',
+              messageId: currentId(),
+              name: ev.name,
+              detail: ev.detail,
+              preview: ev.preview,
+              path: ev.path,
+              action: ev.action,
+            });
             break;
           case 'model-downgraded':
             post({ kind: 'downgraded', messageId: currentId(), from: ev.from, to: ev.to });

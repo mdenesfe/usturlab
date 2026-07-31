@@ -1,4 +1,4 @@
-import type { Target } from '@usturlab/core';
+import type { Target, ToolAction } from '@usturlab/core';
 import type { HostToWebview } from './protocol.js';
 
 /**
@@ -11,7 +11,13 @@ import type { HostToWebview } from './protocol.js';
 
 export interface ToolStep {
   name: string;
+  /** One line, always visible: the file, command or query. */
   detail?: string;
+  /** Body revealed when the step is expanded (a diff, file content, a command). */
+  preview?: string;
+  /** File the step touched, workspace-relative when known. */
+  path?: string;
+  action?: ToolAction;
 }
 
 export type Segment =
@@ -93,7 +99,13 @@ export function applyHostMessage(items: TranscriptItem[], msg: HostToWebview): T
       const item = next[i] as Extract<TranscriptItem, { kind: 'assistant' }>;
       const segments = [...item.segments];
       const last = segments[segments.length - 1];
-      const step: ToolStep = { name: msg.name, detail: msg.detail };
+      const step: ToolStep = {
+        name: msg.name,
+        detail: msg.detail,
+        preview: msg.preview,
+        path: msg.path,
+        action: msg.action,
+      };
       if (last?.kind === 'tools') {
         segments[segments.length - 1] = { kind: 'tools', steps: [...last.steps, step] };
       } else {

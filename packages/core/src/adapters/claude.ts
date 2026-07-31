@@ -3,6 +3,7 @@ import type { LoginFlow, ProviderAdapter, RunRequest } from './adapter.js';
 import { spawnLines } from './spawn.js';
 import { getNumber, getObject, getString, tryParseJson } from './ndjson.js';
 import { detectClaudeLimit, isTransientFailure } from './limits.js';
+import { describeToolUse } from './toolDetail.js';
 import { buildChildEnv } from '../accounts/env.js';
 import type { AdapterEvent, PermissionMode, ResolvedAccount } from '../types.js';
 
@@ -161,7 +162,15 @@ export class ClaudeAdapter implements ProviderAdapter {
           for (const block of content) {
             const b = block as Record<string, unknown>;
             if (b.type === 'tool_use' && typeof b.name === 'string') {
-              yield { type: 'tool-use', name: b.name };
+              const info = describeToolUse(b.name, b.input, req.cwd);
+              yield {
+                type: 'tool-use',
+                name: b.name,
+                detail: info.detail,
+                preview: info.preview,
+                path: info.path,
+                action: info.action,
+              };
             }
           }
         }

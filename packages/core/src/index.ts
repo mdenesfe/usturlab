@@ -22,6 +22,7 @@ export * from './adapters/spawn.js';
 export * from './adapters/jsonRpc.js';
 export * from './adapters/acp.js';
 export * from './adapters/limits.js';
+export * from './adapters/toolDetail.js';
 export * from './adapters/claude.js';
 export * from './adapters/codex.js';
 export * from './adapters/gemini.js';

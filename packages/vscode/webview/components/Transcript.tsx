@@ -24,9 +24,88 @@ function summarizeSteps(steps: ToolStep[]): string {
     .join(' · ');
 }
 
+// Deliberately basic glyphs: a webview cannot rely on any icon font.
+const ACTION_GLYPH: Record<string, string> = {
+  read: '◇',
+  write: '✚',
+  edit: '✎',
+  search: '⌕',
+  run: '❯',
+  fetch: '↓',
+  task: '⚑',
+  other: '·',
+};
+
+const ACTION_LABEL: Record<string, string> = {
+  read: 'read',
+  write: 'wrote',
+  edit: 'edited',
+  search: 'searched',
+  run: 'ran',
+  fetch: 'fetched',
+  task: 'agent',
+  other: '',
+};
+
+function fileName(path: string): string {
+  const parts = path.split('/');
+  return parts[parts.length - 1] || path;
+}
+
+/**
+ * Files the group touched, newest last — the mini preview the collapsed row
+ * shows so you can see what happened without opening anything.
+ */
+function touchedFiles(steps: ToolStep[]): string[] {
+  const seen: string[] = [];
+  for (const step of steps) {
+    if (!step.path) continue;
+    const name = fileName(step.path);
+    if (!seen.includes(name)) seen.push(name);
+  }
+  return seen;
+}
+
+/** One row: what was done, to which file, expandable to the content itself. */
+function ToolStepRow({ step }: { step: ToolStep }) {
+  const action = step.action ?? 'other';
+  const label = ACTION_LABEL[action];
+  const head = (
+    <>
+      <span class={`tool-step-action ${action}`} title={label || undefined}>
+        {ACTION_GLYPH[action] ?? '·'}
+      </span>
+      <span class="tool-step-name">{step.name}</span>
+      {step.detail && <code class="tool-step-detail">{step.detail}</code>}
+    </>
+  );
+  if (!step.preview) {
+    return <div class="tool-step">{head}</div>;
+  }
+  const isDiff = action === 'edit';
+  return (
+    <details class="tool-step expandable">
+      <summary class="tool-step-summary">{head}</summary>
+      <pre class={`tool-step-preview ${action}`}>
+        {isDiff
+          ? step.preview.split('\n').map((line, i) => (
+              <div
+                key={i}
+                class={`diff-line ${line.startsWith('-') ? 'del' : line.startsWith('+') ? 'add' : ''}`}
+              >
+                {line || ' '}
+              </div>
+            ))
+          : step.preview}
+      </pre>
+    </details>
+  );
+}
+
 /** Collapsible timeline entry for consecutive tool activity. */
 function ToolGroup({ steps, running }: { steps: ToolStep[]; running: boolean }) {
   const latest = steps[steps.length - 1];
+  const files = touchedFiles(steps);
   return (
     <details class="tool-group">
       <summary class="tool-summary">
@@ -35,19 +114,22 @@ function ToolGroup({ steps, running }: { steps: ToolStep[]; running: boolean }) 
           {steps.length} step{steps.length > 1 ? 's' : ''}
         </span>
         <span class="tool-names">{summarizeSteps(steps)}</span>
+        {files.length > 0 && (
+          <span class="tool-files" title={steps.map((s) => s.path).filter(Boolean).join('\n')}>
+            {files.slice(0, 3).join(' · ')}
+            {files.length > 3 ? ` +${files.length - 3}` : ''}
+          </span>
+        )}
         {running && latest && (
           <span class="tool-running">
-            {latest.name}
+            {latest.detail ? fileName(latest.detail) : latest.name}
             <LiveDots />
           </span>
         )}
       </summary>
       <div class="tool-steps">
         {steps.map((step, i) => (
-          <div key={i} class="tool-step">
-            <span class="tool-step-name">{step.name}</span>
-            {step.detail && <code class="tool-step-detail">{step.detail}</code>}
-          </div>
+          <ToolStepRow key={i} step={step} />
         ))}
       </div>
     </details>

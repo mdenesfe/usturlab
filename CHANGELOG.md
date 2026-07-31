@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0 — 2026-08-01
+
+### The timeline says which file, and what changed — on every provider
+
+Tool activity used to be a bare list of names. Claude sent no arguments at all, so `Read` meant nothing; Codex and the ACP agents sent one loose field each.
+
+- **One shared describer** turns any provider's raw tool arguments into the same view, so Claude, Codex, Gemini and Copilot all read identically
+- **Collapsed** — the group row now previews the files it touched: `7 steps · Read ×4 · Edit ×2 — autoRoute.ts · learning.ts +2`
+- **Expanded** — every step shows what it did and where: `◇ Read src/router/autoRoute.ts:105-160`, `✎ Edit src/a.ts`, `❯ Bash pnpm test`, `⌕ Grep "retryable" in packages`
+- **Steps with content expand again** into the content itself: an edit shows a colored before/after diff, a write shows the first lines it wrote, a multi-line command shows the whole script, a sub-agent shows its prompt. Long content is truncated with a line count rather than flooding the panel
+- Per-provider mapping is real, not guessed: Codex's `fileChange` lists every path it touched, ACP's `content` diff is used verbatim when the agent supplies one, ACP kinds (`read`/`edit`/`execute`/`search`/`fetch`/`delete`/`move`) each get their own action, and unknown or MCP tools still fall back to a readable line instead of vanishing
+
+- 138 core tests
+
 ## 0.4.1 — 2026-08-01
 
 ### A dropped connection no longer costs you a provider

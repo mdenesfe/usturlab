@@ -4,6 +4,7 @@ import type { LoginFlow, ProviderAdapter, RunRequest } from './adapter.js';
 import { EventQueue, JsonRpcProcess, type RpcNotification } from './jsonRpc.js';
 import { getNumber, getObject, getString } from './ndjson.js';
 import { detectCodexLimit, isTransientFailure } from './limits.js';
+import { describeToolUse } from './toolDetail.js';
 import { buildChildEnv } from '../accounts/env.js';
 import type { AdapterEvent, PermissionMode, ResolvedAccount } from '../types.js';
 
@@ -122,12 +123,21 @@ export class CodexAdapter implements ProviderAdapter {
           const name = TOOL_ITEM_NAMES[type];
           if (name) {
             if (itemId) openItems.set(itemId, name);
-            const detail =
-              getString(item, 'command') ??
-              getString(item, 'query') ??
-              getString(item, 'toolName') ??
-              getString(item, 'path');
-            events.push({ type: 'tool-use', name, detail });
+            // Codex puts the arguments on the item itself; the shared describer
+            // turns them into the same file/diff view every provider gets.
+            const info = describeToolUse(
+              getString(item, 'toolName') ?? name,
+              { ...item, ...(getObject(item, 'arguments') ?? {}) },
+              req.cwd,
+            );
+            events.push({
+              type: 'tool-use',
+              name,
+              detail: info.detail,
+              preview: info.preview,
+              path: info.path,
+              action: info.action,
+            });
           }
           break;
         }

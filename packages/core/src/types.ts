@@ -1,3 +1,5 @@
+import type { ToolAction } from './adapters/toolDetail.js';
+
 export type ProviderId = 'claude' | 'codex' | 'gemini' | 'copilot';
 
 /**
@@ -58,7 +60,17 @@ export interface LimitInfo {
 export type AdapterEvent =
   | { type: 'session'; sessionId: string }
   | { type: 'text-delta'; text: string }
-  | { type: 'tool-use'; name: string; detail?: string }
+  | {
+      type: 'tool-use';
+      name: string;
+      /** One line, always visible: the file, command or query. */
+      detail?: string;
+      /** Body revealed when the step is expanded (a diff, file content, a command). */
+      preview?: string;
+      /** File the tool touched, workspace-relative when known. */
+      path?: string;
+      action?: ToolAction;
+    }
   | { type: 'model-downgraded'; from: string; to: string }
   | { type: 'result'; text: string; usage?: Usage; costUsd?: number }
   | ({ type: 'limit' } & LimitInfo)

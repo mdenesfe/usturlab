@@ -366,8 +366,25 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+}
+
+/* Mini preview of the files a collapsed group touched. */
+.tool-files {
+  flex: 1 1 40%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-family: var(--mono);
+  opacity: 0.85;
+}
+
+.tool-files::before {
+  content: '— ';
+  opacity: 0.6;
 }
 
 .tool-running {
@@ -376,6 +393,7 @@ body {
   gap: 4px;
   color: var(--accent);
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .tool-steps {
@@ -383,8 +401,8 @@ body {
   padding: 6px 10px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  max-height: 240px;
+  gap: 2px;
+  max-height: 420px;
   overflow-y: auto;
 }
 
@@ -393,6 +411,65 @@ body {
   align-items: baseline;
   gap: 8px;
   min-width: 0;
+  padding: 1px 0;
+}
+
+.tool-step-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+  list-style: none;
+  padding: 1px 0;
+}
+
+.tool-step-summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-step.expandable > .tool-step-summary:hover {
+  background: var(--vscode-list-hoverBackground);
+  border-radius: 3px;
+}
+
+/* Only expandable rows get the disclosure arrow. */
+.tool-step-summary::after {
+  content: '›';
+  color: var(--muted);
+  opacity: 0.6;
+  transition: transform 0.12s;
+}
+
+.tool-step[open] > .tool-step-summary::after {
+  transform: rotate(90deg);
+}
+
+.tool-step-action {
+  flex-shrink: 0;
+  width: 12px;
+  text-align: center;
+  opacity: 0.9;
+}
+
+.tool-step-action.read {
+  color: #6fa8dc;
+}
+.tool-step-action.edit {
+  color: #d7ba7d;
+}
+.tool-step-action.write {
+  color: #4ec9b0;
+}
+.tool-step-action.search {
+  color: #b18cd9;
+}
+.tool-step-action.run {
+  color: var(--accent);
+}
+.tool-step-action.fetch,
+.tool-step-action.task {
+  color: var(--muted);
 }
 
 .tool-step-name {
@@ -408,6 +485,45 @@ body {
   background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.1));
   padding: 0 5px;
   border-radius: 3px;
+  min-width: 0;
+}
+
+.tool-step-preview {
+  margin: 2px 0 6px 20px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--border);
+  background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.08));
+  border-radius: 0 3px 3px 0;
+  font-family: var(--mono);
+  font-size: 0.92em;
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  max-height: 260px;
+}
+
+/* Diffs read as diffs. */
+.tool-step-preview.edit {
+  color: var(--vscode-foreground);
+  padding: 4px 0;
+}
+
+.diff-line {
+  padding: 0 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.diff-line.del {
+  background: color-mix(in srgb, #f48771 12%, transparent);
+  color: color-mix(in srgb, #f48771 75%, var(--vscode-foreground));
+}
+
+.diff-line.add {
+  background: color-mix(in srgb, #4ec9b0 12%, transparent);
+  color: color-mix(in srgb, #4ec9b0 75%, var(--vscode-foreground));
 }
 
 .assistant-body {
