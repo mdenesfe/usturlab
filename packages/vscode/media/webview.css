@@ -235,19 +235,30 @@ body {
 .msg-user {
   margin: 16px 0 12px;
   padding: 9px 14px 11px;
-  background: color-mix(in srgb, var(--accent) 5%, var(--vscode-sideBar-background));
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  background: var(--vscode-sideBar-background);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 
 .msg-user-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--mono);
   font-size: 0.68em;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--accent);
+  color: var(--muted);
   margin-bottom: 4px;
   user-select: none;
+}
+
+.msg-user-label::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .msg-user-text {
@@ -284,16 +295,9 @@ body {
   opacity: 0.8;
 }
 
-.assistant-chip {
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  padding: 0 7px;
-  font-size: 0.9em;
+.assistant-meta {
   color: var(--muted);
-}
-
-.assistant-chip.rule {
-  font-style: italic;
+  opacity: 0.85;
 }
 
 .assistant-body {
@@ -621,7 +625,7 @@ body {
 }
 
 .chat-tab .composer:focus-within {
-  border-color: var(--accent);
+  border-color: var(--vscode-focusBorder);
 }
 
 .chat-tab .composer.running {

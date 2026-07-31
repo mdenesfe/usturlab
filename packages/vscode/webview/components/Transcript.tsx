@@ -90,16 +90,15 @@ export function Transcript({
                     <span class="assistant-name" style={{ color }}>
                       {item.target.account}
                     </span>
-                    <span class="assistant-provider" title={PROVIDER_NAME[provider]}>
+                    <span class="assistant-meta" title={PROVIDER_NAME[provider]}>
                       {provider}
+                      {item.target.model ? ` · ${item.target.model}` : ''}
                     </span>
-                    {item.target.model && <span class="assistant-chip">{item.target.model}</span>}
                     {item.ruleId && (
-                      <span class="assistant-chip rule" title={item.reason}>
-                        ⚲ {item.ruleId}
+                      <span class="assistant-meta" title={item.reason}>
+                        · {item.ruleId}
                       </span>
                     )}
-                    {!item.done && <LiveDots />}
                   </div>
                 )}
                 {item.tools.length > 0 && (
