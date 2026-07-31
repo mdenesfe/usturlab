@@ -152,6 +152,11 @@
           "type": "string",
           "default": "copilot",
           "description": "Path to the copilot CLI binary."
+        },
+        "usturlab.notifyOnFinish": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a notification when a chat task finishes while its tab is not focused."
         }
       }
     }

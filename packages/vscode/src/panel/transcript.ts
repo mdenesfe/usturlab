@@ -18,6 +18,7 @@ export type TranscriptItem =
       ruleId?: string;
       reason?: string;
       costUsd?: number;
+      durationMs?: number;
     }
   | { kind: 'failover'; text: string }
   | { kind: 'notice'; text: string }
@@ -99,7 +100,7 @@ export function applyHostMessage(items: TranscriptItem[], msg: HostToWebview): T
       const i = lastAssistant(msg.messageId);
       if (i !== -1) {
         const item = next[i] as Extract<TranscriptItem, { kind: 'assistant' }>;
-        next[i] = { ...item, done: true, costUsd: msg.costUsd };
+        next[i] = { ...item, done: true, costUsd: msg.costUsd, durationMs: msg.durationMs };
       }
       break;
     }

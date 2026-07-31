@@ -7,6 +7,7 @@ import {
   QuotaTracker,
   AdapterRegistry,
   getAccountIdentity,
+  formatTarget,
   matchSlashCommand,
   shortId,
   type PermissionMode,
@@ -516,6 +517,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     const messageId = shortId();
+    const startedAt = Date.now();
+    let lastTarget: Target | undefined;
+    let gotResult = false;
     const controller = new AbortController();
     this.tasks.set(conversationId, controller);
     const post = (msg: HostToWebview) => this.toConversation(conversationId, msg);
@@ -579,6 +583,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             break;
           }
           case 'attempt':
+            lastTarget = ev.target;
             this.onTargetChosen?.(ev.target);
             if (ev.attempt > 1) {
               post({ kind: 'toolUse', messageId, name: `retry #${ev.attempt}` });
@@ -605,7 +610,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             break;
           case 'result':
             rec.turns.push({ role: 'user', text }, { role: 'assistant', text: ev.text });
-            post({ kind: 'done', messageId, costUsd: ev.costUsd });
+            gotResult = true;
+            post({ kind: 'done', messageId, costUsd: ev.costUsd, durationMs: Date.now() - startedAt });
             break;
           case 'limit': {
             const reset = ev.resetAt ? ` Resets ${new Date(ev.resetAt).toLocaleString()}.` : '';
@@ -633,12 +639,41 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       this.output.appendLine(`[error] ${(e as Error).stack ?? e}`);
     } finally {
       if (this.tasks.get(conversationId) === controller) this.tasks.delete(conversationId);
+      if (!controller.signal.aborted) {
+        this.notifyFinished(conversationId, gotResult, startedAt, lastTarget);
+      }
       rec.log = compactLog(rec.log);
       this.toConversation(conversationId, { kind: 'busy', running: false }, { log: false });
       this.pushAccounts();
       this.sendConversations();
       this.persistSoon();
     }
+  }
+
+  /** Toast when a run ends while the user is looking elsewhere. */
+  private notifyFinished(
+    conversationId: string,
+    ok: boolean,
+    startedAt: number,
+    target: Target | undefined,
+  ): void {
+    const enabled = vscode.workspace
+      .getConfiguration('usturlab')
+      .get<boolean>('notifyOnFinish', true);
+    if (!enabled) return;
+    const panel = this.panels.get(conversationId);
+    if (panel?.active && vscode.window.state.focused) return;
+
+    const title = this.conversations.get(conversationId)?.title || 'Chat';
+    const secs = ((Date.now() - startedAt) / 1000).toFixed(0);
+    const where = target ? ` · ${formatTarget(target)}` : '';
+    const message = ok
+      ? `usturlab: "${title}" finished in ${secs}s${where}`
+      : `usturlab: "${title}" needs attention${where}`;
+    const show = ok ? vscode.window.showInformationMessage : vscode.window.showWarningMessage;
+    void show(message, 'Open').then((choice) => {
+      if (choice === 'Open') this.openConversationTab(conversationId);
+    });
   }
 
   // ── accounts ─────────────────────────────────────────────────────

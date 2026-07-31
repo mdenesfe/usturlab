@@ -1,7 +1,17 @@
 import type { TranscriptItem } from '../../src/panel/transcript.js';
 import { Markdown } from './Markdown.js';
-import { RoutingBadge } from './RoutingBadge.js';
 import { IconUsturlab } from './icons.js';
+import { BRAND_COLOR, BrandMark, PROVIDER_NAME } from './brandIcons.js';
+
+function LiveDots() {
+  return (
+    <span class="live-dots">
+      <i />
+      <i />
+      <i />
+    </span>
+  );
+}
 
 export function Transcript({
   items,
@@ -41,7 +51,7 @@ export function Transcript({
                   <code>#tests</code> trigger tag rules
                 </div>
                 <div>
-                  <code>.usturlab/rules.json</code> edit routing rules
+                  <code>/review</code> commands run on every model
                 </div>
               </div>
             </>
@@ -57,43 +67,81 @@ export function Transcript({
           case 'user':
             return (
               <div key={i} class="msg-user">
+                <div class="msg-user-label">you</div>
                 <div class="msg-user-text">{item.text}</div>
               </div>
             );
-          case 'assistant':
+          case 'assistant': {
+            const provider = item.target?.provider;
+            const color = provider ? BRAND_COLOR[provider] : undefined;
             return (
-              <div key={i} class="msg-assistant">
-                {item.target && (
-                  <RoutingBadge target={item.target} ruleId={item.ruleId} reason={item.reason} />
+              <div
+                key={i}
+                class="msg-assistant"
+                style={
+                  color
+                    ? { borderLeftColor: `color-mix(in srgb, ${color} 55%, transparent)` }
+                    : undefined
+                }
+              >
+                {item.target && provider && (
+                  <div class="assistant-head">
+                    <BrandMark provider={provider} size={14} />
+                    <span class="assistant-name" style={{ color }}>
+                      {item.target.account}
+                    </span>
+                    <span class="assistant-provider" title={PROVIDER_NAME[provider]}>
+                      {provider}
+                    </span>
+                    {item.target.model && <span class="assistant-chip">{item.target.model}</span>}
+                    {item.ruleId && (
+                      <span class="assistant-chip rule" title={item.reason}>
+                        ⚲ {item.ruleId}
+                      </span>
+                    )}
+                    {!item.done && <LiveDots />}
+                  </div>
                 )}
                 {item.tools.length > 0 && (
                   <div class="tools">
                     {item.tools.map((t, j) => (
                       <span key={j} class="tool-chip" title={t}>
-                        {t}
+                        ⚙ {t}
                       </span>
                     ))}
                   </div>
                 )}
                 {item.text ? (
-                  <Markdown text={item.text} />
+                  <div class="assistant-body">
+                    <Markdown text={item.text} />
+                    {!item.done && <span class="type-cursor" />}
+                  </div>
                 ) : !item.done ? (
-                  <span class="thinking">thinking</span>
+                  <div class="thinking-row">
+                    thinking
+                    <LiveDots />
+                  </div>
                 ) : null}
-                {item.done && item.costUsd !== undefined && (
-                  <div
-                    class="cost"
-                    title="API-equivalent value — subscription usage is not billed per request"
-                  >
-                    ≈ ${item.costUsd.toFixed(4)}
+                {item.done && (item.durationMs !== undefined || item.costUsd !== undefined) && (
+                  <div class="assistant-foot">
+                    <span class="foot-check">✓</span>
+                    {item.durationMs !== undefined && (
+                      <span>{(item.durationMs / 1000).toFixed(1)}s</span>
+                    )}
+                    {item.costUsd !== undefined && (
+                      <span title="API-equivalent value — subscription usage is not billed per request">
+                        ≈ ${item.costUsd.toFixed(4)}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
             );
+          }
           case 'failover':
             return (
-              <div key={i} class="divider failover">
-                <span>{item.text}</span>
+              <div key={i} class="failover-banner">
+                ⚡ {item.text}
               </div>
             );
           case 'notice':
