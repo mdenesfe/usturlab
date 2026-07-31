@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { LoginFlow, ProviderAdapter, RunRequest } from './adapter.js';
 import { runAcp } from './acp.js';
@@ -28,7 +28,35 @@ export class GeminiAdapter implements ProviderAdapter {
 
   constructor(private cliPath = 'gemini') {}
 
+  /** Make sure the profile selects the auth type this account actually uses. */
+  private seedProfile(account: ResolvedAccount): void {
+    if (!account.homeDir) return;
+    const geminiDir = join(account.homeDir, '.gemini');
+    const settingsPath = join(geminiDir, 'settings.json');
+    const authType = account.authMode === 'api-key' ? 'gemini-api-key' : 'oauth-personal';
+    try {
+      mkdirSync(geminiDir, { recursive: true });
+      const current = existsSync(settingsPath)
+        ? (JSON.parse(readFileSync(settingsPath, 'utf8')) as Record<string, unknown>)
+        : {};
+      const security = (current.security as Record<string, unknown> | undefined) ?? {};
+      const auth = (security.auth as Record<string, unknown> | undefined) ?? {};
+      if (auth.selectedType === authType && current.selectedAuthType === authType) return;
+      auth.selectedType = authType;
+      security.auth = auth;
+      current.security = security;
+      current.selectedAuthType = authType;
+      // Shared project memory: every provider reads the same AGENTS.md.
+      current.contextFileName = ['AGENTS.md', 'GEMINI.md'];
+      current.context = { ...(current.context as object), fileName: ['AGENTS.md', 'GEMINI.md'] };
+      writeFileSync(settingsPath, JSON.stringify(current, null, 2));
+    } catch {
+      // Best-effort; the CLI can still be configured by hand.
+    }
+  }
+
   buildEnv(account: ResolvedAccount, base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+    this.seedProfile(account);
     const env = buildChildEnv(account, base);
     // Headless runs in a not-yet-trusted workspace abort otherwise; the user
     // initiated the task in their own workspace, so trust it.

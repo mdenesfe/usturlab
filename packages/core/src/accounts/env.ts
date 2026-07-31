@@ -51,11 +51,14 @@ export function buildChildEnv(
       }
       break;
     case 'gemini':
-      if (account.authMode === 'managed-home' && account.homeDir) {
-        // No official config-dir env; gemini resolves os.homedir().
+      if (account.homeDir) {
+        // No official config-dir env; gemini resolves os.homedir(). API-key
+        // accounts need this too, otherwise the CLI picks up the machine's
+        // OAuth profile and its auth type instead of the key.
         env.HOME = account.homeDir;
         env.USERPROFILE = account.homeDir;
-      } else if (account.authMode === 'api-key' && account.secret) {
+      }
+      if (account.authMode === 'api-key' && account.secret) {
         env.GEMINI_API_KEY = account.secret;
       }
       break;

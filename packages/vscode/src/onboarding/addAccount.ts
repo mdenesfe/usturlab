@@ -117,7 +117,7 @@ export async function addAccountWizard(
     provider,
     label: label.trim(),
     authMode: authPick.mode,
-    homeDir: authPick.mode === 'api-key' && provider !== 'copilot' ? undefined : profileDir,
+    homeDir: profileDir,
     hasSecret: false,
     priority: accounts.all().length + 1,
   };

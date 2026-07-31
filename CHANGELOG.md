@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1 — 2026-08-01
+
+### Gemini is now actually usable without a Google subscription
+- API-key Gemini accounts get their **own isolated profile** and the profile is seeded with the matching auth type (`gemini-api-key`). Before this, a key-based account fell back to the machine's OAuth profile — which Google now rejects for free individual accounts — so it could never run
+- Every account type gets a profile directory, keeping providers isolated regardless of how you signed in
+
+### The ACP path is verified without needing a live account
+- A fake ACP agent fixture speaks the real protocol, so the Gemini/Copilot path is covered end to end offline: session open, streamed text, tool calls with detail, permission requests answered per permission mode, mid-run injection producing a separate turn, cancellation noise filtered out, native resume with fallback, quota failures mapped to limit events, and a missing CLI reported instead of hanging
+- 97 tests total
+
 ## 0.3.0 — 2026-08-01
 
 ### Every provider now runs a live session
