@@ -29,7 +29,8 @@ export type WebviewToHost =
   | { kind: 'addAccount' }
   | { kind: 'removeAccount'; id: string }
   | { kind: 'openRules' }
-  | { kind: 'editRules' };
+  | { kind: 'editRules' }
+  | { kind: 'refreshUsage' };
 
 export type HostToWebview =
   | { kind: 'userEcho'; text: string }

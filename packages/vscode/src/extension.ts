@@ -8,10 +8,9 @@ import {
   Orchestrator,
   QuotaTracker,
   SessionStore,
-  fetchClaudeUsage,
-  fetchCopilotCredits,
   CLAUDE_USAGE_MIN_INTERVAL_MS,
 } from '@usrouter/core';
+import { refreshUsage } from './usage.js';
 import { AccountStore } from './storage/accountStore.js';
 import { globalStateQuotaPersistence } from './storage/quotaPersistence.js';
 import { RulesManager } from './rules/rulesFile.js';
@@ -61,34 +60,20 @@ export function activate(ctx: vscode.ExtensionContext): void {
 
   registerCommands(ctx, { accounts, adapters, quota, rules, chat, statusBar });
 
-  startUsagePolling(ctx, accounts, quota, output);
+  const usageRefresher = () => refreshUsage(accounts, quota);
+  chat.setUsageRefresher(usageRefresher);
+  startUsagePolling(ctx, usageRefresher, output);
 
   output.appendLine('[usrouter] activated');
 }
 
-/** Opt-in proactive quota polling (usrouter.pollUsage). */
+/** Opt-in continuous polling (usrouter.pollUsage); on-demand refresh always works. */
 function startUsagePolling(
   ctx: vscode.ExtensionContext,
-  accounts: AccountStore,
-  quota: QuotaTracker,
+  tick: () => Promise<void>,
   output: vscode.OutputChannel,
 ): void {
   let timer: NodeJS.Timeout | undefined;
-
-  const tick = async () => {
-    for (const account of accounts.all()) {
-      if (!account.hasSecret) continue;
-      const secret = await accounts.getSecret(account.id);
-      if (!secret) continue;
-      if (account.provider === 'claude' && account.authMode === 'oauth-token') {
-        const windows = await fetchClaudeUsage(secret);
-        if (windows.length > 0) quota.setUsage(account.id, windows);
-      } else if (account.provider === 'copilot' && account.authMode === 'api-key') {
-        const windows = await fetchCopilotCredits(secret);
-        if (windows.length > 0) quota.setUsage(account.id, windows);
-      }
-    }
-  };
 
   const apply = () => {
     const enabled = vscode.workspace.getConfiguration('usrouter').get<boolean>('pollUsage', false);

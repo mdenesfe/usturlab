@@ -88,6 +88,11 @@ export function Composer({
             >
               <span class={`dot ${a.available ? 'ok' : 'off'}`} />
               {a.provider}:{a.label}
+              {(a.usage ?? []).length > 0 && (
+                <span class="pill-pct">
+                  {Math.max(...a.usage!.map((u) => u.utilizationPct))}%
+                </span>
+              )}
             </button>
           ))}
         </div>

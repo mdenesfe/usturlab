@@ -7,6 +7,7 @@ export * from './orchestrator/orchestrator.js';
 export * from './quota/quotaTracker.js';
 export * from './quota/claudeUsagePoller.js';
 export * from './quota/copilotCreditsPoller.js';
+export * from './quota/codexUsageReader.js';
 export * from './session/sessionStore.js';
 export * from './accounts/env.js';
 export * from './adapters/adapter.js';

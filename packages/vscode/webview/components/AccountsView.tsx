@@ -30,9 +30,14 @@ export function AccountsView({ accounts }: { accounts: AccountStatusDto[] }) {
           <span>Accounts</span>
           <span class="accounts-count">{accounts.length}</span>
         </div>
-        <button class="run-btn send" onClick={() => vscode.postMessage({ kind: 'addAccount' })}>
-          <IconPlus size={12} /> Add account
-        </button>
+        <div class="accounts-actions">
+          <button class="ghost-btn" onClick={() => vscode.postMessage({ kind: 'refreshUsage' })}>
+            Refresh usage
+          </button>
+          <button class="run-btn send" onClick={() => vscode.postMessage({ kind: 'addAccount' })}>
+            <IconPlus size={12} /> Add account
+          </button>
+        </div>
       </div>
 
       {accounts.length === 0 ? (
@@ -75,9 +80,18 @@ export function AccountsView({ accounts }: { accounts: AccountStatusDto[] }) {
                     </div>
                     <span class="usage-label">
                       {u.utilizationPct}% · {u.label}
+                      {u.resetAt &&
+                        ` · resets ${new Date(u.resetAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
                     </span>
                   </div>
                 ))}
+                {(a.usage ?? []).length === 0 && (
+                  <div class="usage-none">
+                    {a.provider === 'gemini'
+                      ? 'usage data not exposed by gemini'
+                      : 'no usage data yet — Refresh usage'}
+                  </div>
+                )}
               </div>
               <button
                 class="icon-btn account-del"

@@ -66,6 +66,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private tasks = new Map<string, AbortController>();
   private persistTimer?: NodeJS.Timeout;
   private onTargetChosen?: (target: Target) => void;
+  private usageRefresher?: () => Promise<void>;
 
   constructor(
     private ctx: vscode.ExtensionContext,
@@ -99,6 +100,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   setTargetListener(cb: (target: Target) => void): void {
     this.onTargetChosen = cb;
+  }
+
+  setUsageRefresher(cb: () => Promise<void>): void {
+    this.usageRefresher = cb;
   }
 
   // ── surfaces ─────────────────────────────────────────────────────
@@ -354,6 +359,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         kind: 'accounts',
         accounts: this.accountDtos(),
       } satisfies HostToWebview);
+      // Fresh usage on open; results fan out via the quota listener.
+      void this.usageRefresher?.();
       return;
     }
     if (surface.mode === 'rules') {
@@ -407,6 +414,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
       case 'editRules':
         void vscode.commands.executeCommand('usrouter.editRules');
+        break;
+      case 'refreshUsage':
+        void this.usageRefresher?.();
         break;
       case 'cancel':
         if (surface.conversationId) {

@@ -705,6 +705,24 @@ body {
   color: var(--muted);
 }
 
+.usage-none {
+  font-family: var(--mono);
+  font-size: 0.72em;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.accounts-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pill-pct {
+  color: var(--vscode-foreground);
+  opacity: 0.8;
+}
+
 .account-del {
   opacity: 0.5;
   flex-shrink: 0;
