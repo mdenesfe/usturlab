@@ -80,7 +80,7 @@ export function Transcript({
                 class="msg-assistant"
                 style={
                   color
-                    ? { borderLeftColor: `color-mix(in srgb, ${color} 32%, transparent)` }
+                    ? { background: `color-mix(in srgb, ${color} 6%, transparent)` }
                     : undefined
                 }
               >
