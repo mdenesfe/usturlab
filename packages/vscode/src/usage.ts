@@ -1,6 +1,7 @@
 import {
   fetchClaudeUsage,
   fetchCopilotCredits,
+  getClaudeProfileToken,
   readCodexUsage,
   type QuotaTracker,
 } from '@usrouter/core';
@@ -43,10 +44,20 @@ export async function refreshUsage(
 
       try {
         let windows: Awaited<ReturnType<typeof fetchClaudeUsage>> = [];
-        if (account.provider === 'claude' && account.authMode === 'oauth-token' && account.hasSecret) {
-          const secret = await accounts.getSecret(account.id);
-          if (secret) {
-            windows = await fetchClaudeUsage(secret, {
+        if (account.provider === 'claude') {
+          // Full-profile logins carry usage scope; setup-tokens usually don't,
+          // but try whatever credential the account has.
+          let token: string | undefined;
+          if (account.authMode === 'managed-home' && account.homeDir) {
+            token = await getClaudeProfileToken(account.homeDir);
+            if (!token) {
+              log?.(`[usage] ${account.provider}:${account.label} → no profile credential found`);
+            }
+          } else if (account.authMode === 'oauth-token' && account.hasSecret) {
+            token = await accounts.getSecret(account.id);
+          }
+          if (token) {
+            windows = await fetchClaudeUsage(token, {
               debug: (info) => log?.(`[usage] ${account.provider}:${account.label} → ${info}`),
             });
           }

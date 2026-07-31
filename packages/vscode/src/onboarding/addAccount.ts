@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   ClaudeAdapter,
   fetchClaudeUsage,
+  getClaudeProfileToken,
   slugify,
   type AccountProfile,
   type AdapterRegistry,
@@ -31,13 +32,13 @@ const AUTH_OPTIONS: Record<ProviderId, AuthOption[]> = {
   claude: [
     {
       label: 'Claude subscription (recommended)',
-      description: 'claude setup-token — long-lived token, works with Pro/Max',
-      mode: 'oauth-token',
+      description: 'Full login in an isolated profile — chat + usage view',
+      mode: 'managed-home',
     },
     {
-      label: 'Claude subscription (isolated profile)',
-      description: 'Full CLAUDE_CONFIG_DIR profile with its own /login',
-      mode: 'managed-home',
+      label: 'Claude subscription (token only)',
+      description: 'claude setup-token — chat works, no usage view',
+      mode: 'oauth-token',
     },
     { label: 'Anthropic API key', description: 'Pay-as-you-go, not a subscription', mode: 'api-key' },
   ],
@@ -269,8 +270,12 @@ export async function addAccountWizard(
 
   // Verify at login time whether this credential can also serve the usage
   // view, so the user learns immediately instead of staring at empty bars.
-  if (provider === 'claude' && outcome.secret) {
-    void fetchClaudeUsage(outcome.secret).then((windows) => {
+  if (provider === 'claude') {
+    void (async () => {
+      const token =
+        outcome.secret ??
+        (profile.authMode === 'managed-home' ? await getClaudeProfileToken(profileDir) : undefined);
+      const windows = token ? await fetchClaudeUsage(token) : [];
       if (windows.length > 0) {
         void vscode.window.showInformationMessage(
           `usrouter: usage view enabled for ${provider}:${profile.label} (${windows
@@ -279,10 +284,14 @@ export async function addAccountWizard(
         );
       } else {
         void vscode.window.showWarningMessage(
-          `usrouter: ${provider}:${profile.label} chat works, but this token cannot read usage data. The Accounts view will not show quota bars for it.`,
+          `usrouter: ${provider}:${profile.label} chat works, but usage data is not readable with this login${
+            profile.authMode === 'oauth-token'
+              ? ' — re-add via "Claude subscription (recommended)" for quota bars'
+              : ''
+          }.`,
         );
       }
-    });
+    })();
   }
   await vscode.commands.executeCommand('usrouter.openAccounts');
 }

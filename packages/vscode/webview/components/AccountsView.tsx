@@ -35,8 +35,8 @@ function usageHint(a: AccountStatusDto): string {
       return 'Usage appears after the first task runs on this profile — Codex writes rate-limit snapshots into its session files.';
     case 'claude':
       return a.authMode === 'oauth-token'
-        ? 'No data yet — hit Refresh. Usage comes from the same endpoint Claude Code’s /usage screen uses.'
-        : 'Usage view needs a subscription-token account (re-add via "Claude subscription (recommended)").';
+        ? 'setup-token only grants chat (the consent screen asks nothing more). Re-add this account via "Claude subscription (recommended)" — a full profile login — to get quota bars.'
+        : 'No data yet — hit Refresh. Usage reads from this profile’s login credential.';
     case 'copilot':
       return a.authMode === 'api-key'
         ? 'No data yet — the PAT needs the "Plan: read" permission.'

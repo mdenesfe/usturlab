@@ -10,6 +10,7 @@ export * from './quota/copilotCreditsPoller.js';
 export * from './quota/codexUsageReader.js';
 export * from './session/sessionStore.js';
 export * from './accounts/env.js';
+export * from './accounts/claudeCredentials.js';
 export * from './adapters/adapter.js';
 export * from './adapters/spawn.js';
 export * from './adapters/limits.js';
