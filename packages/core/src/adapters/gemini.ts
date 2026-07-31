@@ -154,7 +154,9 @@ export class GeminiAdapter implements ProviderAdapter {
     }
     return {
       terminalCommand: [this.cliPath],
-      env: { HOME: profileDir, USERPROFILE: profileDir },
+      // Trust env skips the folder-trust dialog so the flow goes straight to
+      // the Google sign-in.
+      env: { HOME: profileDir, USERPROFILE: profileDir, GEMINI_CLI_TRUST_WORKSPACE: 'true' },
       watch: { kind: 'file', path: join(geminiDir, 'oauth_creds.json') },
       instructions:
         'Gemini CLI will start with an isolated profile. A browser opens — sign in with the Google ' +

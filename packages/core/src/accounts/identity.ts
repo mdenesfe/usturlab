@@ -51,10 +51,11 @@ export async function getAccountIdentity(
         if (!account.homeDir) return undefined;
         const file = join(account.homeDir, 'config.json');
         if (!existsSync(file)) return undefined;
-        const parsed = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
-        for (const key of ['user', 'login', 'username'] as const) {
-          if (typeof parsed[key] === 'string') return parsed[key] as string;
-        }
+        // JSONC — strip line comments before parsing.
+        const raw = readFileSync(file, 'utf8').replace(/^\s*\/\/.*$/gm, '');
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        const last = parsed.lastLoggedInUser as Record<string, unknown> | undefined;
+        if (last && typeof last.login === 'string') return last.login;
         return undefined;
       }
       default:

@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { LoginFlow, ProviderAdapter, RunRequest } from './adapter.js';
 import { spawnLines } from './spawn.js';
@@ -79,15 +79,27 @@ export class CopilotAdapter implements ProviderAdapter {
   }
 
   loginFlow(profileDir: string): LoginFlow {
+    // config.json is JSONC; loggedInUsers fills in the moment the device flow
+    // completes — a precise auto-detect signal.
+    const isLoggedIn = async (): Promise<boolean> => {
+      try {
+        const file = join(profileDir, 'config.json');
+        if (!existsSync(file)) return false;
+        const raw = readFileSync(file, 'utf8').replace(/^\s*\/\/.*$/gm, '');
+        const parsed = JSON.parse(raw) as { loggedInUsers?: unknown[] };
+        return Array.isArray(parsed.loggedInUsers) && parsed.loggedInUsers.length > 0;
+      } catch {
+        return false;
+      }
+    };
     return {
       terminalCommand: [this.cliPath, 'login'],
       env: { COPILOT_HOME: profileDir },
-      // Device flow needs the user to read a code from the terminal; no file signal.
-      watch: { kind: 'manual-confirm' },
+      watch: { kind: 'poll', check: isLoggedIn, intervalMs: 2000 },
       instructions:
         'The terminal runs "copilot login": it shows a device code — enter it on the GitHub page ' +
-        'that opens, with the account you want to add. Then confirm here.',
-      verify: async () => existsSync(join(profileDir, 'config.json')),
+        'that opens, with the account you want to add. usrouter detects the completed login automatically.',
+      verify: isLoggedIn,
     };
   }
 }
