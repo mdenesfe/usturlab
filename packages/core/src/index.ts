@@ -22,3 +22,4 @@ export * from './adapters/copilot.js';
 export * from './adapters/fake.js';
 export * from './util/ids.js';
 export * from './commands/slashCommands.js';
+export * from './mcp/mcpSync.js';

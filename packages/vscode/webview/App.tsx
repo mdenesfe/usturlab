@@ -108,6 +108,9 @@ function ChatApp() {
   const [items, setItems] = useState<TranscriptItem[]>([]);
   const [accounts, setAccounts] = useState<AccountStatusDto[]>([]);
   const [tags, setTags] = useState<string[]>([]);
+  const [customCommands, setCustomCommands] = useState<
+    import('../../core/src/commands/slashCommands.js').SlashCommand[]
+  >([]);
   const [running, setRunning] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -123,6 +126,7 @@ function ChatApp() {
       if (msg.kind === 'accounts') setAccounts(msg.accounts);
       if (msg.kind === 'rules') {
         setTags([...new Set(msg.rules.rules.flatMap((r) => r.match.tags ?? []))]);
+        setCustomCommands(msg.customCommands ?? []);
       }
       if (msg.kind === 'conversationReset') setItems([]);
     };
@@ -166,6 +170,7 @@ function ChatApp() {
         <Composer
           accounts={accounts}
           tags={tags}
+          customCommands={customCommands}
           running={running}
           onSend={send}
           onCancel={() => vscode.postMessage({ kind: 'cancel' })}

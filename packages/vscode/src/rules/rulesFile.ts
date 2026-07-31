@@ -2,7 +2,15 @@ import * as vscode from 'vscode';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { EMPTY_RULES, RULES_TEMPLATE, parseRulesFile, type RulesFile } from '@usturlab/core';
+import {
+  COMMANDS_TEMPLATE,
+  EMPTY_RULES,
+  RULES_TEMPLATE,
+  parseCommandsFile,
+  parseRulesFile,
+  type RulesFile,
+  type SlashCommand,
+} from '@usturlab/core';
 
 export interface RulesState {
   rules: RulesFile;
@@ -13,6 +21,7 @@ export interface RulesState {
 
 export class RulesManager implements vscode.Disposable {
   private current: RulesFile = EMPTY_RULES;
+  private customCommands: SlashCommand[] = [];
   private lastError: string | undefined;
   private emitter = new vscode.EventEmitter<void>();
   readonly onDidChange = this.emitter.event;
@@ -20,7 +29,7 @@ export class RulesManager implements vscode.Disposable {
   private watcher: vscode.FileSystemWatcher;
 
   constructor() {
-    this.watcher = vscode.workspace.createFileSystemWatcher('**/.usturlab/rules.json');
+    this.watcher = vscode.workspace.createFileSystemWatcher('**/.usturlab/{rules,commands}.json');
     this.watcher.onDidChange(() => this.load());
     this.watcher.onDidCreate(() => this.load());
     this.watcher.onDidDelete(() => this.load());
@@ -50,12 +59,52 @@ export class RulesManager implements vscode.Disposable {
     return this.current;
   }
 
+  getCustomCommands(): SlashCommand[] {
+    return this.customCommands;
+  }
+
+  private locateCommands(): string | undefined {
+    const ws = vscode.workspace.workspaceFolders?.[0];
+    const candidates: string[] = [];
+    if (ws) candidates.push(join(ws.uri.fsPath, '.usturlab', 'commands.json'));
+    candidates.push(join(homedir(), '.usturlab', 'commands.json'));
+    if (ws) candidates.push(join(ws.uri.fsPath, '.usrouter', 'commands.json'));
+    candidates.push(join(homedir(), '.usrouter', 'commands.json'));
+    return candidates.find((c) => existsSync(c));
+  }
+
+  private loadCommands(): void {
+    this.customCommands = [];
+    const path = this.locateCommands();
+    if (!path) return;
+    try {
+      const parsed = parseCommandsFile(readFileSync(path, 'utf8'));
+      if (parsed.ok) this.customCommands = parsed.commands;
+    } catch {
+      // ignore, keep empty
+    }
+  }
+
+  async openOrCreateCommands(): Promise<void> {
+    const existing = this.locateCommands();
+    const ws = vscode.workspace.workspaceFolders?.[0];
+    const path =
+      existing ??
+      (ws ? join(ws.uri.fsPath, '.usturlab', 'commands.json') : join(homedir(), '.usturlab', 'commands.json'));
+    const uri = vscode.Uri.file(path);
+    if (!existing) {
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(COMMANDS_TEMPLATE, 'utf8'));
+    }
+    await vscode.window.showTextDocument(uri);
+  }
+
   getState(): RulesState {
     const { path, exists } = this.locate();
     return { rules: this.current, path, exists, error: this.lastError };
   }
 
   load(): void {
+    this.loadCommands();
     const { path, exists } = this.locate();
     this.diagnostics.clear();
     this.lastError = undefined;

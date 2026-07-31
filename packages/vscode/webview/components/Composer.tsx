@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 // Deep import: the core barrel pulls node built-ins the browser bundle can't take.
-import { SLASH_COMMANDS } from '../../../core/src/commands/slashCommands.js';
+import { SLASH_COMMANDS, type SlashCommand } from '../../../core/src/commands/slashCommands.js';
 import type { AccountStatusDto } from '../../src/panel/protocol.js';
 import { IconSend, IconStop } from './icons.js';
 import { BrandMark } from './brandIcons.js';
@@ -29,6 +29,7 @@ function computeSuggestions(
   token: string,
   accounts: AccountStatusDto[],
   tags: string[],
+  commands: SlashCommand[],
 ): Suggestion[] {
   if (token.startsWith('@')) {
     const q = token.slice(1).toLowerCase();
@@ -65,7 +66,7 @@ function computeSuggestions(
   }
   if (token.startsWith('/')) {
     const q = token.slice(1).toLowerCase();
-    return SLASH_COMMANDS.filter((c) => c.name.startsWith(q)).map((c) => ({
+    return commands.filter((c) => c.name.startsWith(q)).map((c) => ({
       insert: `/${c.name}`,
       label: c.usage ?? `/${c.name}`,
       detail: c.description,
@@ -77,16 +78,19 @@ function computeSuggestions(
 export function Composer({
   accounts,
   tags,
+  customCommands = [],
   running,
   onSend,
   onCancel,
 }: {
   accounts: AccountStatusDto[];
   tags: string[];
+  customCommands?: SlashCommand[];
   running: boolean;
   onSend: (text: string) => void;
   onCancel: () => void;
 }) {
+  const allCommands = [...customCommands, ...SLASH_COMMANDS];
   const [text, setText] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -107,7 +111,7 @@ export function Composer({
   const refreshSuggestions = (value: string, caret: number) => {
     const token = activeToken(value, caret);
     tokenRef.current = token;
-    const items = token ? computeSuggestions(token.token, accounts, tags).slice(0, 8) : [];
+    const items = token ? computeSuggestions(token.token, accounts, tags, allCommands).slice(0, 8) : [];
     setSuggestions(items);
     setActiveIndex(0);
   };

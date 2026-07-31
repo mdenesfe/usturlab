@@ -1,4 +1,4 @@
-import type { ProviderId, RulesFile, Target, UsageWindow } from '@usturlab/core';
+import type { ProviderId, RulesFile, SlashCommand, Target, UsageWindow } from '@usturlab/core';
 
 export interface AccountStatusDto {
   id: string;
@@ -49,5 +49,5 @@ export type HostToWebview =
   | { kind: 'busy'; running: boolean }
   | { kind: 'accounts'; accounts: AccountStatusDto[] }
   | { kind: 'conversations'; list: ConversationMeta[]; activeId: string }
-  | { kind: 'rules'; rules: RulesFile; path: string; exists: boolean; error?: string }
+  | { kind: 'rules'; rules: RulesFile; path: string; exists: boolean; error?: string; customCommands: SlashCommand[] }
   | { kind: 'conversationReset' };

@@ -63,6 +63,14 @@
         "title": "usturlab: Edit Routing Rules"
       },
       {
+        "command": "usturlab.editCommands",
+        "title": "usturlab: Edit Custom Slash Commands"
+      },
+      {
+        "command": "usturlab.syncMcp",
+        "title": "usturlab: Sync MCP Servers to All Profiles"
+      },
+      {
         "command": "usturlab.newConversation",
         "title": "usturlab: New Conversation",
         "icon": "$(clear-all)"

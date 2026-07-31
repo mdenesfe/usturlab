@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, renameSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -58,6 +58,33 @@ export async function migrateFromUsrouter(
     }
   } catch (e) {
     log(`[migrate] ${(e as Error).message}`);
+  }
+
+  // Idempotent: existing gemini profiles read the shared AGENTS.md too.
+  for (const account of accounts.all()) {
+    if (account.provider === 'gemini' && account.homeDir) {
+      ensureGeminiAgentsMd(account.homeDir, log);
+    }
+  }
+}
+
+function ensureGeminiAgentsMd(homeDir: string, log: (line: string) => void): void {
+  try {
+    const settingsPath = join(homeDir, '.gemini', 'settings.json');
+    const settings = existsSync(settingsPath)
+      ? (JSON.parse(readFileSync(settingsPath, 'utf8')) as Record<string, unknown>)
+      : {};
+    if (Array.isArray(settings.contextFileName) && settings.contextFileName.includes('AGENTS.md')) {
+      return;
+    }
+    settings.contextFileName = ['AGENTS.md', 'GEMINI.md'];
+    const context = (settings.context as Record<string, unknown> | undefined) ?? {};
+    context.fileName = ['AGENTS.md', 'GEMINI.md'];
+    settings.context = context;
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+    log('[migrate] gemini profile now reads AGENTS.md');
+  } catch {
+    // best effort
   }
 }
 

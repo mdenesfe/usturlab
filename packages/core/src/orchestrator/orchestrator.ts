@@ -2,7 +2,7 @@ import type { AdapterRegistry } from '../adapters/adapter.js';
 import type { QuotaTracker } from '../quota/quotaTracker.js';
 import { SessionStore, embedHistory } from '../session/sessionStore.js';
 import { route } from '../router/router.js';
-import { expandSlashCommand, matchSlashCommand } from '../commands/slashCommands.js';
+import { expandSlashCommand, matchSlashCommand, type SlashCommand } from '../commands/slashCommands.js';
 import type { RulesFile } from '../rules/schema.js';
 import type {
   AccountProfile,
@@ -22,6 +22,8 @@ export interface OrchestratorDeps {
   getAccounts: () => AccountProfile[];
   /** Injects secrets from the host secret store. */
   resolveAccount: (target: Target) => Promise<ResolvedAccount | undefined>;
+  /** User-defined slash commands (.usturlab/commands.json). */
+  getCustomCommands?: () => SlashCommand[];
 }
 
 export class Orchestrator {
@@ -46,7 +48,7 @@ export class Orchestrator {
     const history = sessions.getHistory(task.conversationId);
     // Slash prompts pass through raw to Claude (it runs its native command);
     // every other provider gets the equivalent plain-English template.
-    const slash = matchSlashCommand(cleanedPrompt);
+    const slash = matchSlashCommand(cleanedPrompt, this.deps.getCustomCommands?.() ?? []);
 
     for (let i = 0; i < decision.chain.length; i++) {
       if (signal.aborted) return;

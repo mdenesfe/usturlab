@@ -45,6 +45,7 @@ export function activate(ctx: vscode.ExtensionContext): void {
     quota,
     sessions,
     getRules: () => rules.getRules(),
+    getCustomCommands: () => rules.getCustomCommands(),
     getAccounts: () => accounts.all(),
     resolveAccount: (target) => accounts.resolve(target),
   });

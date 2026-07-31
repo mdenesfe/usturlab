@@ -244,6 +244,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       path: state.path,
       exists: state.exists,
       error: state.error,
+      customCommands: this.rules.getCustomCommands(),
     };
   }
 
@@ -492,7 +493,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Action slash commands run in the host, not on a model.
-    const slash = matchSlashCommand(text);
+    const slash = matchSlashCommand(text, this.rules.getCustomCommands());
     if (slash?.cmd.kind === 'action') {
       const notice = (t: string) => this.toConversation(conversationId, { kind: 'notice', text: t });
       switch (slash.cmd.action) {

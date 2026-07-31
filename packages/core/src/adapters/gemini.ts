@@ -143,7 +143,13 @@ export class GeminiAdapter implements ProviderAdapter {
         writeFileSync(
           settingsPath,
           JSON.stringify(
-            { security: { auth: { selectedType: 'oauth-personal' } }, selectedAuthType: 'oauth-personal' },
+            {
+              security: { auth: { selectedType: 'oauth-personal' } },
+              selectedAuthType: 'oauth-personal',
+              // Shared project memory: every provider reads the same AGENTS.md.
+              context: { fileName: ['AGENTS.md', 'GEMINI.md'] },
+              contextFileName: ['AGENTS.md', 'GEMINI.md'],
+            },
             null,
             2,
           ),

@@ -1,4 +1,8 @@
 import * as vscode from 'vscode';
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { MCP_TEMPLATE, parseMcpFile, syncMcpToProfile } from '@usturlab/core';
 import type { AdapterRegistry, QuotaTracker } from '@usturlab/core';
 import type { AccountStore } from './storage/accountStore.js';
 import type { RulesManager } from './rules/rulesFile.js';
@@ -47,6 +51,46 @@ export function registerCommands(
     }),
 
     vscode.commands.registerCommand('usturlab.editRules', () => rules.openOrCreate()),
+
+    vscode.commands.registerCommand('usturlab.editCommands', () => rules.openOrCreateCommands()),
+
+    vscode.commands.registerCommand('usturlab.syncMcp', async () => {
+      const ws = vscode.workspace.workspaceFolders?.[0];
+      const candidates = [
+        ws ? join(ws.uri.fsPath, '.usturlab', 'mcp.json') : undefined,
+        join(homedir(), '.usturlab', 'mcp.json'),
+      ].filter((c): c is string => !!c);
+      const path = candidates.find((c) => existsSync(c));
+      if (!path) {
+        const create = await vscode.window.showInformationMessage(
+          'usturlab: no MCP definition file yet. Define servers once — usturlab syncs them into every provider profile.',
+          'Create mcp.json',
+        );
+        if (create) {
+          const target = vscode.Uri.file(candidates[0]!);
+          await vscode.workspace.fs.writeFile(target, Buffer.from(MCP_TEMPLATE, 'utf8'));
+          await vscode.window.showTextDocument(target);
+        }
+        return;
+      }
+      const parsed = parseMcpFile(readFileSync(path, 'utf8'));
+      if (!parsed.ok) {
+        void vscode.window.showErrorMessage(`usturlab: mcp.json invalid — ${parsed.error}`);
+        return;
+      }
+      const names = Object.keys(parsed.servers);
+      if (names.length === 0) {
+        void vscode.window.showWarningMessage('usturlab: mcp.json defines no servers.');
+        return;
+      }
+      const results = accounts.all().map((account) => {
+        const error = syncMcpToProfile(account, parsed.servers);
+        return `${account.provider}:${account.label} ${error ? `✗ (${error})` : '✓'}`;
+      });
+      void vscode.window.showInformationMessage(
+        `usturlab: synced ${names.length} MCP server(s) → ${results.join(' · ')}. They load on each account's next run.`,
+      );
+    }),
 
     vscode.commands.registerCommand('usturlab.newConversation', () => chat.newConversation()),
 
