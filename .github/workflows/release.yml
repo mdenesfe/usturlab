@@ -7,6 +7,8 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -19,13 +21,16 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test
-      - name: Publish to VS Code Marketplace
-        run: pnpm -C packages/vscode exec vsce publish --no-dependencies -p "$VSCE_PAT"
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-      - name: Package .vsix for GitHub release
+      - name: Package .vsix
         run: pnpm -C packages/vscode package
+      - name: Publish to VS Code Marketplace
+        if: env.VSCE_PAT != ''
+        run: pnpm -C packages/vscode exec vsce publish --no-dependencies -p "$VSCE_PAT"
+      - name: Marketplace publish skipped
+        if: env.VSCE_PAT == ''
+        run: echo "VSCE_PAT secret not set — skipping marketplace publish."
       - name: Attach .vsix to GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: packages/vscode/*.vsix
+          generate_release_notes: true
