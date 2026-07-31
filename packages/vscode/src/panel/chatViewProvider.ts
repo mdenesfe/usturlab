@@ -92,7 +92,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   ) {
     const offQuota = quota.onDidChange(() => this.pushAccounts());
     ctx.subscriptions.push(
-      accounts.onDidChange(() => this.pushAccounts()),
+      accounts.onDidChange(() => {
+        this.pushAccounts();
+        // A freshly authed account gets its identity/usage without reopening.
+        void this.loadIdentities();
+        void this.usageRefresher?.();
+      }),
       rules.onDidChange(() => {
         this.pushAccounts();
         this.pushRules();
