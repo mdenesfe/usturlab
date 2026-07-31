@@ -2,17 +2,11 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { AccountStatusDto } from '../../src/panel/protocol.js';
 import { vscode } from '../vscodeApi.js';
 import { IconAccounts, IconPlus, IconTrash } from './icons.js';
-
-const PROVIDER_GLYPH: Record<string, string> = {
-  claude: 'C',
-  codex: 'X',
-  gemini: 'G',
-  copilot: 'P',
-};
+import { BRAND_COLOR, BrandMark, PROVIDER_NAME } from './brandIcons.js';
 
 const AUTH_LABEL: Record<string, string> = {
   'oauth-token': 'subscription token',
-  'managed-home': 'subscription profile',
+  'managed-home': 'subscription login',
   'api-key': 'API key',
 };
 
@@ -35,7 +29,7 @@ function usageHint(a: AccountStatusDto): string {
       return 'Usage appears after the first task runs on this profile — Codex writes rate-limit snapshots into its session files.';
     case 'claude':
       return a.authMode === 'oauth-token'
-        ? 'setup-token only grants chat (the consent screen asks nothing more). Re-add this account via "Claude subscription (recommended)" — a full profile login — to get quota bars.'
+        ? 'setup-token only grants chat. Re-add this account via "Claude subscription (recommended)" — a full profile login — to get quota bars.'
         : 'No data yet — hit Refresh. Usage reads from this profile’s login credential.';
     case 'copilot':
       return a.authMode === 'api-key'
@@ -46,13 +40,22 @@ function usageHint(a: AccountStatusDto): string {
   }
 }
 
-function fmtReset(ts?: number): string | undefined {
-  if (!ts) return undefined;
+function fmtAt(ts: number): string {
   const d = new Date(ts);
   const today = new Date().toDateString() === d.toDateString();
   return today
     ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtIn(ts: number): string | undefined {
+  const diff = ts - Date.now();
+  if (diff <= 0) return undefined;
+  const min = Math.round(diff / 60_000);
+  if (min < 60) return `${min}m`;
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return `${hours}h ${min % 60}m`;
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
 }
 
 export function AccountsView({ accounts }: { accounts: AccountStatusDto[] }) {
@@ -63,7 +66,7 @@ export function AccountsView({ accounts }: { accounts: AccountStatusDto[] }) {
 
   useEffect(() => {
     const move = (e: MouseEvent) => {
-      if (dragging.current) setListWidth(Math.min(420, Math.max(170, e.clientX)));
+      if (dragging.current) setListWidth(Math.min(420, Math.max(180, e.clientX)));
     };
     const up = () => {
       dragging.current = false;
@@ -118,9 +121,14 @@ export function AccountsView({ accounts }: { accounts: AccountStatusDto[] }) {
               class={`accounts-row ${selected?.id === a.id ? 'active' : ''}`}
               onClick={() => setSelectedId(a.id)}
             >
-              <div class={`provider-glyph small p-${a.provider}`}>{PROVIDER_GLYPH[a.provider]}</div>
+              <span
+                class="brand-badge small"
+                style={{ background: `color-mix(in srgb, ${BRAND_COLOR[a.provider]} 14%, transparent)` }}
+              >
+                <BrandMark provider={a.provider} size={13} />
+              </span>
               <span class="accounts-row-name" title={`${a.provider}:${a.label}`}>
-                {a.provider}:{a.label}
+                {a.label}
               </span>
               <span class="accounts-row-state">
                 {pct !== undefined ? (
@@ -145,28 +153,29 @@ export function AccountsView({ accounts }: { accounts: AccountStatusDto[] }) {
       {selected && (
         <div class="account-detail">
           <div class="detail-header">
-            <div class={`provider-glyph big p-${selected.provider}`}>
-              {PROVIDER_GLYPH[selected.provider]}
-            </div>
+            <span
+              class="brand-badge big"
+              style={{ background: `color-mix(in srgb, ${BRAND_COLOR[selected.provider]} 14%, transparent)` }}
+            >
+              <BrandMark provider={selected.provider} size={26} />
+            </span>
             <div class="detail-title">
-              <div class="detail-name">
-                {selected.provider}:{selected.label}
-              </div>
+              <div class="detail-name">{selected.label}</div>
               <div class="detail-sub">
+                <span class="detail-provider" style={{ color: BRAND_COLOR[selected.provider] }}>
+                  {PROVIDER_NAME[selected.provider]}
+                </span>
                 <span class="account-auth">{AUTH_LABEL[selected.authMode] ?? selected.authMode}</span>
                 <span class={`detail-status ${selected.available ? 'ok' : 'off'}`}>
                   <span class={`dot ${selected.available ? 'ok' : 'off'}`} />
                   {selected.available
                     ? 'ready'
-                    : `limited${selected.resetAt ? ` · resets ${fmtReset(selected.resetAt)}` : ''}`}
+                    : `limited${selected.resetAt ? ` · resets ${fmtAt(selected.resetAt)}` : ''}`}
                 </span>
               </div>
             </div>
             <div class="detail-actions">
-              <button
-                class="ghost-btn"
-                onClick={() => vscode.postMessage({ kind: 'refreshUsage' })}
-              >
+              <button class="ghost-btn" onClick={() => vscode.postMessage({ kind: 'refreshUsage' })}>
                 Refresh
               </button>
               <button
@@ -179,26 +188,34 @@ export function AccountsView({ accounts }: { accounts: AccountStatusDto[] }) {
             </div>
           </div>
 
-          <div class="detail-section">
+          <div class="detail-section wide">
             <div class="detail-section-title">Usage</div>
             {(selected.usage ?? []).length > 0 ? (
-              (selected.usage ?? []).map((u) => (
-                <div key={u.label} class="usage-block">
-                  <div class="usage-block-head">
-                    <span class="usage-block-label">{u.label}</span>
-                    <span class={`usage-block-pct ${barClass(u.utilizationPct)}`}>
-                      {u.utilizationPct}%
-                    </span>
-                  </div>
-                  <div class="usage-bar big">
-                    <div
-                      class={`usage-fill ${barClass(u.utilizationPct)}`}
-                      style={{ width: `${Math.min(100, u.utilizationPct)}%` }}
-                    />
-                  </div>
-                  {u.resetAt && <div class="usage-block-reset">resets {fmtReset(u.resetAt)}</div>}
-                </div>
-              ))
+              <div class="usage-grid">
+                {(selected.usage ?? []).map((u) => {
+                  const rel = u.resetAt ? fmtIn(u.resetAt) : undefined;
+                  return (
+                    <div key={u.label} class="usage-card">
+                      <div class="usage-card-label">{u.label}</div>
+                      <div class={`usage-card-pct ${barClass(u.utilizationPct)}`}>
+                        {u.utilizationPct}
+                        <span class="pct-sign">%</span>
+                      </div>
+                      <div class="usage-bar big">
+                        <div
+                          class={`usage-fill ${barClass(u.utilizationPct)}`}
+                          style={{ width: `${Math.min(100, u.utilizationPct)}%` }}
+                        />
+                      </div>
+                      {u.resetAt && (
+                        <div class="usage-card-reset">
+                          resets {rel ? `in ${rel}` : ''} · {fmtAt(u.resetAt)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               <div class="usage-hint">{usageHint(selected)}</div>
             )}

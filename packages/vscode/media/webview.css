@@ -935,6 +935,92 @@ body.resizing {
   border-radius: 4px;
 }
 
+/* ── brand badges + usage cards ─────────────────────────── */
+
+.brand-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.brand-badge.small {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+.brand-badge.big {
+  width: 46px;
+  height: 46px;
+  border-radius: 11px;
+}
+
+.detail-provider {
+  font-size: 0.82em;
+  font-weight: 600;
+}
+
+.detail-section.wide {
+  max-width: 640px;
+}
+
+.usage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.usage-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: var(--vscode-sideBar-background);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.usage-card-label {
+  font-family: var(--mono);
+  font-size: 0.72em;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.usage-card-pct {
+  font-family: var(--mono);
+  font-size: 1.9em;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.usage-card-pct .pct-sign {
+  font-size: 0.5em;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 2px;
+}
+
+.usage-card-pct.low {
+  color: var(--vscode-charts-green, #6cbe6c);
+}
+
+.usage-card-pct.mid {
+  color: var(--vscode-charts-yellow, #d0a54e);
+}
+
+.usage-card-pct.high {
+  color: var(--vscode-charts-red, #d05e5e);
+}
+
+.usage-card-reset {
+  font-family: var(--mono);
+  font-size: 0.74em;
+  color: var(--muted);
+}
+
 .usage-block-reset {
   font-family: var(--mono);
   font-size: 0.72em;

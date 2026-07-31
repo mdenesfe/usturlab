@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { AccountStatusDto } from '../../src/panel/protocol.js';
 import { IconSend, IconStop } from './icons.js';
+import { BrandMark } from './brandIcons.js';
 
 const MAX_TEXTAREA_HEIGHT = 180;
 
@@ -86,12 +87,14 @@ export function Composer({
               }
               onClick={() => insertMention(a)}
             >
-              <span class={`dot ${a.available ? 'ok' : 'off'}`} />
-              {a.provider}:{a.label}
-              {(a.usage ?? []).length > 0 && (
+              <BrandMark provider={a.provider} size={11} />
+              {a.label}
+              {(a.usage ?? []).length > 0 ? (
                 <span class="pill-pct">
                   {Math.max(...a.usage!.map((u) => u.utilizationPct))}%
                 </span>
+              ) : (
+                <span class={`dot ${a.available ? 'ok' : 'off'}`} />
               )}
             </button>
           ))}
