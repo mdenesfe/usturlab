@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test
+      - name: VS Code smoke test (linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: xvfb-run -a pnpm -C packages/vscode test:vscode
+      - name: VS Code smoke test (macos)
+        if: matrix.os == 'macos-latest'
+        run: pnpm -C packages/vscode test:vscode
+      - name: Package .vsix
+        if: matrix.os == 'ubuntu-latest'
+        run: pnpm -C packages/vscode package
+      - name: Upload .vsix artifact
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: usrouter-vsix
+          path: packages/vscode/*.vsix

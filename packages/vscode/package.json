@@ -1,0 +1,177 @@
+{
+  "name": "usrouter",
+  "displayName": "usrouter — AI Subscription Router",
+  "description": "Add all your AI subscriptions (multiple Claude accounts, Codex, Gemini, Copilot) and route every task to the best account and model with user-defined rules and automatic quota failover.",
+  "version": "0.1.0",
+  "publisher": "mdenesfe",
+  "license": "MIT",
+  "icon": "media/marketplace-icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mdenesfe/usrouter"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "router",
+    "claude",
+    "codex",
+    "gemini",
+    "copilot",
+    "subscriptions"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "usrouter",
+          "title": "usrouter",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "usrouter": [
+        {
+          "type": "webview",
+          "id": "usrouter.chat",
+          "name": "Chats"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "usrouter.addAccount",
+        "title": "usrouter: Add Account",
+        "icon": "$(add)"
+      },
+      {
+        "command": "usrouter.removeAccount",
+        "title": "usrouter: Remove Account"
+      },
+      {
+        "command": "usrouter.editRules",
+        "title": "usrouter: Edit Routing Rules"
+      },
+      {
+        "command": "usrouter.newConversation",
+        "title": "usrouter: New Conversation",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "usrouter.openChatInTab",
+        "title": "usrouter: Open Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "usrouter.openAccounts",
+        "title": "usrouter: Manage Accounts",
+        "icon": "$(account)"
+      },
+      {
+        "command": "usrouter.openRules",
+        "title": "usrouter: Routing Rules",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "usrouter.openInTerminal",
+        "title": "usrouter: Open Session in Terminal"
+      },
+      {
+        "command": "usrouter.cancelTask",
+        "title": "usrouter: Cancel Running Task"
+      },
+      {
+        "command": "usrouter.debug.simulateLimit",
+        "title": "usrouter: Simulate Usage Limit (debug)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "usrouter.newConversation",
+          "when": "view == usrouter.chat",
+          "group": "navigation@1"
+        }
+      ]
+    },
+    "jsonValidation": [
+      {
+        "fileMatch": [
+          "**/.usrouter/rules.json",
+          "**/rules.json"
+        ],
+        "url": "./schemas/rules.schema.json"
+      }
+    ],
+    "configuration": {
+      "title": "usrouter",
+      "properties": {
+        "usrouter.permissionMode": {
+          "type": "string",
+          "enum": [
+            "safe",
+            "edits",
+            "full"
+          ],
+          "default": "safe",
+          "markdownDescription": "How much autonomy routed CLIs get: `safe` (read/plan only), `edits` (auto-accept file edits), `full` (skip all approvals — use with care)."
+        },
+        "usrouter.pollUsage": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Proactively poll provider usage endpoints (Claude 5h/weekly window, Copilot AI credits) to show quota in the Accounts view. Uses undocumented endpoints; off by default."
+        },
+        "usrouter.cliPath.claude": {
+          "type": "string",
+          "default": "claude",
+          "description": "Path to the claude CLI binary."
+        },
+        "usrouter.cliPath.codex": {
+          "type": "string",
+          "default": "codex",
+          "description": "Path to the codex CLI binary."
+        },
+        "usrouter.cliPath.gemini": {
+          "type": "string",
+          "default": "gemini",
+          "description": "Path to the gemini CLI binary."
+        },
+        "usrouter.cliPath.copilot": {
+          "type": "string",
+          "default": "copilot",
+          "description": "Path to the copilot CLI binary."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs && tsc -p tsconfig.json",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc -p tsconfig.json",
+    "test:vscode": "vscode-test",
+    "package": "node esbuild.mjs --production && vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@usrouter/core": "workspace:*",
+    "preact": "^10.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@types/vscode": "^1.95.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  }
+}

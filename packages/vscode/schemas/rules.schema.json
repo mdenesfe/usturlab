@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "usrouter routing rules",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": 1 },
+    "rules": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/rule" }
+    },
+    "defaultChain": {
+      "type": "array",
+      "description": "Fallback chain tried in order when no rule matches (and appended after rule targets).",
+      "items": { "$ref": "#/definitions/target" }
+    }
+  },
+  "definitions": {
+    "target": {
+      "type": "object",
+      "required": ["provider", "account"],
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "enum": ["claude", "codex", "gemini", "copilot"] },
+        "account": { "type": "string", "minLength": 1, "description": "Account label as shown in the Accounts view." },
+        "model": { "type": "string", "description": "Optional model override (e.g. sonnet, haiku, gpt-5.4, gemini-2.5-flash)." }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": ["id", "match", "target"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "match": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "description": "Fields present are AND-ed; values within a field are OR-ed.",
+          "properties": {
+            "keywords": { "type": "array", "items": { "type": "string" }, "description": "Case-insensitive substrings matched against the prompt." },
+            "globs": { "type": "array", "items": { "type": "string" }, "description": "Glob patterns matched against the active file path." },
+            "languages": { "type": "array", "items": { "type": "string" }, "description": "VS Code language ids (typescript, python, ...)." },
+            "tags": { "type": "array", "items": { "type": "string" }, "description": "Tags selected in the composer." },
+            "maxPromptChars": { "type": "integer", "minimum": 1, "description": "Rule only matches prompts up to this length." }
+          }
+        },
+        "target": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Failover chain for this rule, tried in order.",
+          "items": { "$ref": "#/definitions/target" }
+        }
+      }
+    }
+  }
+}

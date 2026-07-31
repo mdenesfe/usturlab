@@ -1,0 +1,11 @@
+node_modules/
+dist/
+out/
+*.vsix
+.vscode-test/
+packages/vscode/media/webview.js
+packages/vscode/media/webview.js.map
+.DS_Store
+*.log
+.usrouter/
+.claude/settings.local.json
