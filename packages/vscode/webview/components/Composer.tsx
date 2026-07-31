@@ -297,8 +297,8 @@ export function Composer({
                 textareaRef.current?.focus();
               }}
             >
-              <BrandMark provider={a.provider} size={11} />
-              {a.label}
+              <BrandMark provider={a.provider} size={13} />
+              <span class="pill-name">{a.label}</span>
               {(a.usage ?? []).length > 0 ? (
                 <span class="pill-pct">{Math.max(...a.usage!.map((u) => u.utilizationPct))}%</span>
               ) : (

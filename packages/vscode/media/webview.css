@@ -4,6 +4,7 @@
 
 :root {
   --accent: #e30a17; /* Türk kırmızısı */
+  --control-h: 24px;
   --mono: var(--vscode-editor-font-family, 'SF Mono', Menlo, Consolas, monospace);
   --border: var(--vscode-widget-border, rgba(128, 128, 128, 0.22));
   --muted: var(--vscode-descriptionForeground);
@@ -675,7 +676,8 @@ body {
 .mode-select {
   font-family: var(--mono);
   font-size: 0.72em;
-  padding: 2px 6px;
+  height: var(--control-h);
+  padding: 0 6px;
   border-radius: 5px;
   border: 1px solid var(--border);
   background: transparent;
@@ -694,8 +696,8 @@ body {
 }
 
 .attach-btn {
-  width: 24px;
-  height: 24px;
+  width: var(--control-h);
+  height: var(--control-h);
   border: 1px solid var(--border);
   border-radius: 5px;
 }
@@ -838,33 +840,46 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px 8px;
+  padding: 6px 8px 8px;
 }
 
 .account-strip {
   flex: 1;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
 }
 
+/* Equal-width pills on a shared grid: marks, names and percentages all
+   line up in columns however many accounts there are. */
 .account-pill {
-  display: inline-flex;
+  height: var(--control-h);
+  width: 128px;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   font-family: var(--mono);
   font-size: 0.72em;
   color: var(--muted);
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 9px;
-  padding: 1px 7px;
+  border-radius: 6px;
+  padding: 0 8px;
   cursor: pointer;
-  max-width: 160px;
+  text-align: left;
+}
+
+.account-pill > span:nth-child(2),
+.account-pill > .pill-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.account-pill svg {
+  justify-self: center;
 }
 
 .account-pill:hover {
@@ -881,6 +896,7 @@ body {
   height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
+  justify-self: end;
 }
 
 .dot.ok {
@@ -1120,6 +1136,8 @@ body {
 .pill-pct {
   color: var(--vscode-foreground);
   opacity: 0.8;
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── accounts: master-detail split ──────────────────────── */
@@ -1690,10 +1708,12 @@ body.resizing {
 .run-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
   border: none;
-  border-radius: 4px;
-  padding: 4px 10px;
+  border-radius: 5px;
+  height: var(--control-h);
+  padding: 0 12px;
   font-size: 0.82em;
   font-family: var(--vscode-font-family);
   cursor: pointer;
