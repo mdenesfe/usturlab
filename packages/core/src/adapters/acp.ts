@@ -216,10 +216,19 @@ export async function* runAcp(opts: AcpOptions): AsyncGenerator<AdapterEvent> {
         };
       }
 
+      // ACP has no system-prompt slot, so standing instructions ride on the
+      // first prompt of a session — and again only when they changed.
+      const brief = req.systemBrief?.trim();
+      const needsBrief = !!brief && (!req.resumeSessionId || req.restateBrief === true);
+      const promptText = needsBrief
+        ? `Standing instructions for this session — follow them for every turn, ` +
+          `and do not acknowledge them:\n${brief}\n\n---\n\n${req.prompt}`
+        : req.prompt;
+
       outstanding++;
       const response = await rpc.request(
         'session/prompt',
-        { sessionId, prompt: [{ type: 'text', text: req.prompt }] },
+        { sessionId, prompt: [{ type: 'text', text: promptText }] },
         30 * 60_000,
       );
       refusal = getString(response, 'stopReason') === 'refusal';

@@ -49,6 +49,8 @@ export class ClaudeAdapter implements ProviderAdapter {
     ];
     if (req.model) args.push('--model', req.model);
     if (req.resumeSessionId) args.push('--resume', req.resumeSessionId);
+    // Claude keeps its own system prompt and appends ours to it.
+    if (req.systemBrief?.trim()) args.push('--append-system-prompt', req.systemBrief);
 
     const env = this.buildEnv(account, process.env);
     let sawRateLimitRetry = false;

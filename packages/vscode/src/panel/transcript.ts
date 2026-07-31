@@ -37,6 +37,7 @@ export type TranscriptItem =
       costUsd?: number;
       durationMs?: number;
     }
+  | { kind: 'review'; by: string; text: string }
   | { kind: 'failover'; text: string }
   | { kind: 'notice'; text: string }
   | { kind: 'error'; text: string };
@@ -112,6 +113,10 @@ export function applyHostMessage(items: TranscriptItem[], msg: HostToWebview): T
         segments.push({ kind: 'tools', steps: [step] });
       }
       next[i] = { ...item, segments };
+      break;
+    }
+    case 'review': {
+      next.push({ kind: 'review', by: msg.by, text: msg.text });
       break;
     }
     case 'downgraded': {

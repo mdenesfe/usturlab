@@ -6,6 +6,7 @@ import {
   handoffPrompt,
   resumeInterruptedPrompt,
 } from '../session/sessionStore.js';
+import { withBrief } from '../context/brief.js';
 import { route } from '../router/router.js';
 import type { ConversationContext } from '../router/autoRoute.js';
 import type { TaskMetric } from '../quota/metricsSchema.js';
@@ -15,6 +16,8 @@ import type { RulesFile } from '../rules/schema.js';
 import type {
   AccountProfile,
   AdapterEvent,
+  PermissionMode,
+  ProviderId,
   ResolvedAccount,
   RunEvent,
   Target,
@@ -58,6 +61,15 @@ export interface OrchestratorDeps {
   getAutoPlan?: () => boolean;
   /** Backoff between same-account retries; one entry per retry. */
   retryBackoffMs?: number[];
+
+  // ── what the models are told ──────────────────────────────
+  /** Workspace context assembled by the host (open file, git state, conventions). */
+  getBrief?: (task: TaskRequest, provider: ProviderId) => string;
+  /** Standing instructions for a provider, plus the line ids they came from. */
+  getProviderBrief?: (
+    provider: ProviderId,
+    permissionMode: PermissionMode,
+  ) => { text: string; lineIds: string[] };
 }
 
 export class Orchestrator {
@@ -134,6 +146,22 @@ export class Orchestrator {
               ? resumeInterruptedPrompt(slashPrompt)
               : handoffPrompt(slashPrompt, interrupted.partial, formatTarget(interrupted.target));
         }
+        // Workspace context rides with the message; standing instructions go
+        // through each CLI's own system-prompt channel.
+        const brief = this.deps.getBrief?.(task, target.provider) ?? '';
+        basePrompt = withBrief(basePrompt, brief);
+
+        const providerBrief = this.deps.getProviderBrief?.(target.provider, effectivePermission);
+        const systemBrief = providerBrief?.text;
+        const restateBrief =
+          !!systemBrief &&
+          sessions.briefChanged(task.conversationId, target, task.cwd, systemBrief);
+        if (systemBrief) {
+          sessions.rememberBrief(task.conversationId, target, task.cwd, systemBrief);
+          if (attempt === 1 && providerBrief!.lineIds.length > 0) {
+            yield { type: 'brief', target, lineIds: providerBrief!.lineIds };
+          }
+        }
         const prompt =
           adapter.supportsNativeResume && (nativeSid || history.length === 0)
             ? basePrompt
@@ -152,6 +180,8 @@ export class Orchestrator {
             model: target.model,
             resumeSessionId: nativeSid,
             permissionMode: effectivePermission,
+            systemBrief,
+            restateBrief,
             handle,
           },
           account,

@@ -96,6 +96,8 @@ export interface RoutingDecision {
 }
 
 export type RunEvent =
+  /** Standing instructions this run carried, so outcomes can be attributed to them. */
+  | { type: 'brief'; target: Target; lineIds: string[] }
   | { type: 'routing'; decision: RoutingDecision }
   | { type: 'attempt'; target: Target; attempt: number }
   | { type: 'failover'; from: Target; to: Target; reason: string; resetAt?: number }

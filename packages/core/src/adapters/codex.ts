@@ -220,6 +220,9 @@ export class CodexAdapter implements ProviderAdapter {
           sandbox: SANDBOX[req.permissionMode],
         };
         if (req.model) threadParams.model = req.model;
+        // developerInstructions adds to Codex's own base prompt; baseInstructions
+        // would replace it, which would make it worse, not better.
+        if (req.systemBrief?.trim()) threadParams.developerInstructions = req.systemBrief;
 
         let started: Record<string, unknown>;
         if (req.resumeSessionId) {

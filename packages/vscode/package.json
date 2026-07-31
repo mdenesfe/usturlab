@@ -2,7 +2,7 @@
   "name": "usturlab",
   "displayName": "usturlab — AI Subscription Router",
   "description": "Add all your AI subscriptions (multiple Claude accounts, Codex, Gemini, Copilot) and route every task to the best account and model with user-defined rules and automatic quota failover.",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "publisher": "mdenesfe",
   "license": "MIT",
   "icon": "media/marketplace-icon.png",
@@ -185,6 +185,31 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "In auto mode, plan heavy code-writing work before it edits: usturlab switches that turn to Plan so you can review the approach. Turn off to let heavy work edit straight away."
+        },
+        "usturlab.sendWorkspaceContext": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Tell the model what it would have known sitting where you are: the open file and your selection, the branch and uncommitted changes, and the project's own convention files. Whatever a CLI already reads by itself is not sent twice."
+        },
+        "usturlab.standingInstructions": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Give each provider the standing instructions it needs to behave like the best one — delivered through its own system-prompt channel. Lines that measurably lower the clean-run rate are dropped automatically."
+        },
+        "usturlab.verifyChanges": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "After a run changes files, run the project's **own** typecheck/test script and, if it fails, give the model one chance to fix it. Commands are never invented — only what `package.json` or a `Makefile` declares. Never runs in Plan mode."
+        },
+        "usturlab.secondOpinion": {
+          "type": "string",
+          "enum": [
+            "never",
+            "hard",
+            "always"
+          ],
+          "default": "hard",
+          "markdownDescription": "Have a **different** provider review the work before you rely on it — a different model sees different mistakes. `hard`: only on work classified as hard. Costs a second account's quota, so it is skipped when headroom is low."
         }
       }
     }

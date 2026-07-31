@@ -22,6 +22,17 @@ export interface RunRequest {
   model?: string;
   resumeSessionId?: string;
   permissionMode: PermissionMode;
+  /**
+   * Standing instructions for this provider. Delivered through whatever the
+   * CLI actually offers — a system-prompt flag where one exists, otherwise
+   * prepended to the session's first prompt.
+   */
+  systemBrief?: string;
+  /**
+   * Set when a resumed session must hear the brief again because it changed
+   * (only matters for transports without a system-prompt slot).
+   */
+  restateBrief?: boolean;
   /** Populated by adapters that support mid-run injection. */
   handle?: LiveRunHandle;
 }

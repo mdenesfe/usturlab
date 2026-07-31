@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
 import { relative } from 'node:path';
 import {
@@ -13,6 +14,18 @@ import {
   observedBurn,
   isRetry,
   isTransientFailure,
+  accountHeadroom,
+  describeReport,
+  repairPrompt,
+  pickReviewer,
+  reviewPrompt,
+  revisionPrompt,
+  isClean,
+  parsePlan,
+  pickExecutor,
+  executePrompt,
+  executorTier,
+  AUTO_TIER_MODELS,
   type ConversationContext,
   type LiveRunHandle,
   type PermissionMode,
@@ -21,6 +34,9 @@ import {
 } from '@usturlab/core';
 import type { AccountStore } from '../storage/accountStore.js';
 import type { MetricsStore } from '../storage/metricsStore.js';
+import type { PreferenceStore } from '../storage/preferenceStore.js';
+import type { WorkspaceContext } from '../context/workspaceContext.js';
+import type { Verifier } from '../verify/verifier.js';
 import type { RulesManager } from '../rules/rulesFile.js';
 import type {
   AccountStatusDto,
@@ -38,6 +54,7 @@ const REPLAYED_KINDS = new Set<HostToWebview['kind']>([
   'downgraded',
   'notice',
   'failover',
+  'review',
   'done',
   'error',
 ]);
@@ -107,6 +124,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       lastPrompt?: string;
       lastFinishedAt?: number;
       lastMetricId?: string;
+      /** Files this thread has touched, and what last went wrong — brief material. */
+      touchedFiles?: string[];
+      lastFailure?: string;
     }
   >();
 
@@ -119,6 +139,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private adapters: AdapterRegistry,
     private rules: RulesManager,
     private metrics: MetricsStore,
+    private preferences: PreferenceStore,
+    private workspaceContext: WorkspaceContext,
+    private verifier: Verifier,
     private output: vscode.OutputChannel,
   ) {
     const offQuota = quota.onDidChange(() => this.pushAccounts());
@@ -156,6 +179,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   setTargetListener(cb: (target: Target) => void): void {
     this.onTargetChosen = cb;
+  }
+
+  /** What this thread has already done, for the workspace brief. */
+  threadFiles(conversationId: string): { touchedFiles?: string[]; lastFailure?: string } {
+    const ctx = this.threadContext.get(conversationId);
+    return { touchedFiles: ctx?.touchedFiles, lastFailure: ctx?.lastFailure };
   }
 
   /** Conversation memory for the router: same thread → same model unless work escalates. */
@@ -745,6 +774,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       const live = this.liveRuns.get(conversationId);
       if (live?.handle.inject?.(text)) {
         this.steeredRuns.add(conversationId);
+        // A message sent into a running task is a correction; repeated ones
+        // become standing rules the user can accept.
+        void this.preferences.recordCorrection({
+          text,
+          timestamp: Date.now(),
+          provider: live.lastTarget?.provider ?? 'unknown',
+          kind: this.threadContext.get(conversationId)?.peakComplexity,
+        });
         if (live.handle.injectMode === 'inline') {
           // The agent folds this into the turn already streaming — no new block.
           this.toConversation(conversationId, {
@@ -836,10 +873,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         (this.panels.get(conversationId)!.title = rec.title);
     }
 
+    // Snapshot the workspace before the run so the brief describes where the
+    // user actually is, not where they were when the panel opened.
+    await this.workspaceContext.refresh();
+    const filesBefore = new Set(await this.verifier.changedFiles());
+
     const messageId = shortId();
     const startedAt = Date.now();
     let gotResult = false;
     let escalated = false;
+    let briefLineIds: string[] | undefined;
+    let answerText = '';
+    let autoPlanned = false;
     const usageBefore = this.accountUsagePct(conversationId);
     const controller = new AbortController();
     this.tasks.set(conversationId, controller);
@@ -908,6 +953,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               }
               this.threadContext.set(conversationId, ctx);
             }
+            autoPlanned = ev.decision.suggestPermission === 'safe';
             if (ev.decision.escalated) {
               escalated = true;
               post({
@@ -1020,7 +1066,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             });
             break;
           }
+          case 'brief':
+            briefLineIds = ev.lineIds;
+            break;
           case 'result': {
+            answerText = ev.text;
             const turnUser = live.userTexts[live.turnIdx] ?? text;
             rec.turns.push({ role: 'user', text: turnUser }, { role: 'assistant', text: ev.text });
             if (live.turnIdx > 0) {
@@ -1068,10 +1118,30 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             break;
         }
       }
+      // The run produced an answer; now find out whether it is true.
+      if (gotResult && !controller.signal.aborted) {
+        const outcome = await this.checkAndImprove({
+          conversationId,
+          task: text,
+          answer: answerText,
+          target: live.lastTarget,
+          kind: metric.kind,
+          complexity: metric.complexity,
+          permissionMode,
+          filesBefore,
+          post,
+          messageId: currentId(),
+          signal: controller.signal,
+        });
+        metric = { ...metric, verified: outcome.verified, reviewedBy: outcome.reviewedBy };
+      }
     } catch (e) {
       metric = { ...metric, status: 'error', errorMessage: (e as Error).message };
       post({ kind: 'error', messageId: currentId(), message: (e as Error).message });
       this.output.appendLine(`[error] ${(e as Error).stack ?? e}`);
+      const ctx = this.threadContext.get(conversationId) ?? { turnCount: 0 };
+      ctx.lastFailure = (e as Error).message.slice(0, 300);
+      this.threadContext.set(conversationId, ctx);
     } finally {
       if (metric.status && metric.provider && metric.account) {
         const steered = this.steeredRuns.delete(conversationId);
@@ -1100,6 +1170,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           failoverReason: metric.failoverReason,
           steered,
           escalated,
+          briefLineIds,
+          verified: metric.verified,
+          reviewedBy: metric.reviewedBy,
         });
       }
       // Remember where this thread ran so the next turn stays put, and what it
@@ -1118,11 +1191,298 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       if (!controller.signal.aborted) {
         this.notifyFinished(conversationId, gotResult, startedAt, live.lastTarget);
       }
+      // Asked between runs, never during one.
+      if (autoPlanned && gotResult && live.lastTarget && !controller.signal.aborted) {
+        void this.offerPlanExecution(conversationId, text, answerText, live.lastTarget);
+      } else {
+        void this.preferences.offerTopSuggestion();
+      }
       rec.log = compactLog(rec.log);
       this.toConversation(conversationId, { kind: 'busy', running: false }, { log: false });
       this.pushAccounts();
       this.sendConversations();
       this.persistSoon();
+    }
+  }
+
+  /**
+   * After an answer arrives: check it against reality, let the model fix what
+   * the checks caught, and — for hard work — have a different provider look
+   * for what the checks cannot see.
+   *
+   * Every step is skippable and none of them may block the user seeing the
+   * answer: the answer is already on screen when this runs.
+   */
+  private async checkAndImprove(args: {
+    conversationId: string;
+    task: string;
+    answer: string;
+    target?: Target;
+    kind?: string;
+    complexity?: string;
+    permissionMode: PermissionMode;
+    filesBefore: Set<string>;
+    post: (msg: HostToWebview) => void;
+    messageId: string;
+    signal: AbortSignal;
+  }): Promise<{ verified?: 'passed' | 'repaired' | 'failed'; reviewedBy?: string }> {
+    const config = vscode.workspace.getConfiguration('usturlab');
+    const outcome: { verified?: 'passed' | 'repaired' | 'failed'; reviewedBy?: string } = {};
+    if (!args.target) return outcome;
+
+    const changedNow = await this.verifier.changedFiles();
+    const touched = changedNow.filter((f) => !args.filesBefore.has(f));
+    if (touched.length > 0) {
+      const ctx = this.threadContext.get(args.conversationId) ?? { turnCount: 0 };
+      ctx.touchedFiles = [...new Set([...(ctx.touchedFiles ?? []), ...touched])].slice(-20);
+      this.threadContext.set(args.conversationId, ctx);
+    }
+
+    // ── verification ────────────────────────────────────────
+    if (config.get<boolean>('verifyChanges', true) && !args.signal.aborted) {
+      const report = await this.verifier.verify(
+        {
+          kind: args.kind,
+          complexity: args.complexity,
+          wroteCode: touched.length > 0,
+          permissionMode: args.permissionMode,
+        },
+        args.signal,
+      );
+      if (report) {
+        if (report.ok) {
+          outcome.verified = 'passed';
+          args.post({ kind: 'notice', text: `verified — ${describeReport(report)}` });
+        } else {
+          args.post({
+            kind: 'notice',
+            text: `${describeReport(report)} — asking ${formatTarget(args.target)} to fix it`,
+          });
+          const repaired = await this.followUp(
+            args.conversationId,
+            repairPrompt(report, touched),
+            args.target,
+            args.messageId,
+            args.signal,
+          );
+          if (repaired) {
+            const recheck = await this.verifier.verify(
+              {
+                kind: args.kind,
+                complexity: args.complexity,
+                wroteCode: true,
+                permissionMode: args.permissionMode,
+              },
+              args.signal,
+            );
+            outcome.verified = !recheck || recheck.ok ? 'repaired' : 'failed';
+            args.post({
+              kind: 'notice',
+              text:
+                outcome.verified === 'repaired'
+                  ? 'fixed itself — checks pass now'
+                  : 'still failing after one repair attempt; over to you',
+            });
+          } else {
+            outcome.verified = 'failed';
+          }
+          if (outcome.verified === 'failed') {
+            const ctx = this.threadContext.get(args.conversationId) ?? { turnCount: 0 };
+            ctx.lastFailure = report.failureText?.slice(0, 300);
+            this.threadContext.set(args.conversationId, ctx);
+          }
+        }
+      }
+    }
+
+    // ── second opinion ──────────────────────────────────────
+    const policy = config.get<'never' | 'hard' | 'always'>('secondOpinion', 'hard');
+    if (policy === 'never' || args.signal.aborted) return outcome;
+
+    const headroom: Record<string, number> = {};
+    for (const account of this.accounts.all()) {
+      headroom[`${account.provider}:${account.label}`] = accountHeadroom(account.id, this.quota);
+    }
+    const candidates: Target[] = this.accounts
+      .all()
+      .filter((a) => !a.disabled)
+      .map((a) => ({ provider: a.provider, account: a.label }));
+
+    const reviewer = pickReviewer({
+      author: args.target,
+      candidates,
+      classification: {
+        kind: (args.kind ?? 'edit') as never,
+        complexity: (args.complexity ?? 'moderate') as never,
+        writesCode: touched.length > 0,
+        signals: [],
+      },
+      headroom,
+      policy,
+    });
+    if (!reviewer) return outcome;
+
+    args.post({ kind: 'notice', text: reviewer.reason });
+    const diff = touched.length > 0 ? await this.diffFor(touched) : undefined;
+    const review = await this.askOffThread(
+      reviewer.target,
+      reviewPrompt({
+        task: args.task,
+        answer: args.answer,
+        diff,
+        authorProvider: args.target.provider,
+      }),
+      args.signal,
+    );
+    if (!review) return outcome;
+    outcome.reviewedBy = `${reviewer.target.provider}:${reviewer.target.account}`;
+
+    if (isClean(review)) {
+      args.post({ kind: 'notice', text: `${outcome.reviewedBy} found no problems` });
+      return outcome;
+    }
+    args.post({ kind: 'review', messageId: args.messageId, by: outcome.reviewedBy, text: review });
+    await this.followUp(
+      args.conversationId,
+      revisionPrompt(review),
+      args.target,
+      args.messageId,
+      args.signal,
+    );
+    return outcome;
+  }
+
+  /**
+   * The other half of auto-plan: a plan specific enough to follow does not
+   * need the model that wrote it. Authoring the plan was the hard part — the
+   * typing can go to a cheaper account, which is the whole reason to own
+   * several subscriptions.
+   */
+  private async offerPlanExecution(
+    conversationId: string,
+    task: string,
+    planText: string,
+    planner: Target,
+  ): Promise<void> {
+    const plan = parsePlan(planText);
+    if (!plan.executable) return;
+
+    const headroom: Record<string, number> = {};
+    for (const account of this.accounts.all()) {
+      headroom[`${account.provider}:${account.label}`] = accountHeadroom(account.id, this.quota);
+    }
+    const candidates: Target[] = this.accounts
+      .all()
+      .filter((a) => !a.disabled)
+      .sort((a, b) => a.priority - b.priority)
+      .map((a) => ({ provider: a.provider, account: a.label }));
+
+    const executor = pickExecutor(planner, candidates, headroom);
+    if (!executor) return;
+
+    const tier = executorTier('heavy');
+    const target: Target = { ...executor, model: AUTO_TIER_MODELS[executor.provider][tier] };
+    const label = formatTarget(target);
+    const choice = await vscode.window.showInformationMessage(
+      `${plan.steps.length}-step plan ready. Carry it out on ${label} and keep ${formatTarget(planner)} free?`,
+      'Run it',
+      'Not now',
+    );
+    if (choice !== 'Run it') return;
+
+    // An @mention is how the router is told to obey; it is stripped before the
+    // model sees the prompt, so no plumbing is needed to force the target.
+    const mention = `@${target.provider}:${target.account}${target.model ? `/${target.model}` : ''}`;
+    await this.runTask(
+      conversationId,
+      `${mention} ${executePrompt(task, plan, formatTarget(planner))}`,
+      [],
+      {
+        permissionMode: vscode.workspace
+          .getConfiguration('usturlab')
+          .get<PermissionMode>('permissionMode', 'edits'),
+      },
+    );
+  }
+
+  /** `git diff` for the files a run touched, budgeted for a prompt. */
+  private async diffFor(files: string[]): Promise<string | undefined> {
+    const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!cwd) return undefined;
+    return new Promise((resolve) => {
+      execFile(
+        'git',
+        ['diff', '--', ...files.slice(0, 20)],
+        { cwd, timeout: 5000, maxBuffer: 4 * 1024 * 1024 },
+        (err, stdout) => resolve(err || !stdout.trim() ? undefined : stdout.slice(0, 12_000)),
+      );
+    });
+  }
+
+  /**
+   * Continues the same conversation on the same account — the model keeps its
+   * session, so a repair or revision costs one turn, not a fresh context.
+   */
+  private async followUp(
+    conversationId: string,
+    prompt: string,
+    target: Target,
+    messageId: string,
+    signal: AbortSignal,
+  ): Promise<boolean> {
+    const text = await this.askOffThread(target, prompt, signal, conversationId);
+    if (!text) return false;
+    this.toConversation(conversationId, { kind: 'delta', messageId, text: `\n\n${text}` });
+    return true;
+  }
+
+  /**
+   * One-shot request to a specific account, outside the visible turn loop.
+   * Reuses the conversation's session when one is given so the model has the
+   * context; otherwise it is a clean, cheap ask.
+   */
+  private async askOffThread(
+    target: Target,
+    prompt: string,
+    signal: AbortSignal,
+    conversationId?: string,
+  ): Promise<string | undefined> {
+    const adapter = this.adapters.get(target.provider);
+    if (!adapter) return undefined;
+    const account = await this.accounts.resolve(target);
+    if (!account) return undefined;
+    const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? homedir();
+    const resumeSessionId =
+      conversationId && adapter.supportsNativeResume
+        ? this.sessions.getNativeSession(conversationId, target, cwd)
+        : undefined;
+
+    try {
+      let text = '';
+      for await (const ev of adapter.run(
+        {
+          prompt,
+          cwd,
+          model: target.model,
+          resumeSessionId,
+          // A reviewer must never edit; a repair runs under the user's own mode.
+          permissionMode: conversationId
+            ? vscode.workspace
+                .getConfiguration('usturlab')
+                .get<PermissionMode>('permissionMode', 'safe')
+            : 'safe',
+        },
+        account,
+        signal,
+      )) {
+        if (signal.aborted) return undefined;
+        if (ev.type === 'result') text = ev.text;
+        if (ev.type === 'error' || ev.type === 'limit') return undefined;
+      }
+      return text.trim() || undefined;
+    } catch (e) {
+      this.output.appendLine(`[off-thread] ${formatTarget(target)}: ${(e as Error).message}`);
+      return undefined;
     }
   }
 

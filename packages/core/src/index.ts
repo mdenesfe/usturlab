@@ -23,6 +23,13 @@ export * from './adapters/jsonRpc.js';
 export * from './adapters/acp.js';
 export * from './adapters/limits.js';
 export * from './adapters/toolDetail.js';
+export * from './context/brief.js';
+export * from './context/providerBrief.js';
+export * from './verify/checks.js';
+export * from './review/secondOpinion.js';
+export * from './review/planExecute.js';
+export * from './router/instructionLearning.js';
+
 export * from './adapters/claude.js';
 export * from './adapters/codex.js';
 export * from './adapters/gemini.js';

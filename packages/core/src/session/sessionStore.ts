@@ -14,6 +14,7 @@ export interface ConversationTurn {
 export class SessionStore {
   private native = new Map<string, string>();
   private history = new Map<string, ConversationTurn[]>();
+  private briefs = new Map<string, string>();
 
   private key(conversationId: string, target: Target, cwd: string): string {
     return `${conversationId}::${targetKey(target)}::${cwd}`;
@@ -25,6 +26,19 @@ export class SessionStore {
 
   setNativeSession(conversationId: string, target: Target, cwd: string, sessionId: string): void {
     this.native.set(this.key(conversationId, target, cwd), sessionId);
+  }
+
+  /**
+   * The brief a session was last told. Transports without a system-prompt slot
+   * only need to restate it when it actually changed.
+   */
+  briefChanged(conversationId: string, target: Target, cwd: string, brief: string): boolean {
+    const key = this.key(conversationId, target, cwd);
+    return this.briefs.get(key) !== brief;
+  }
+
+  rememberBrief(conversationId: string, target: Target, cwd: string, brief: string): void {
+    this.briefs.set(this.key(conversationId, target, cwd), brief);
   }
 
   appendTurn(conversationId: string, turn: ConversationTurn): void {
@@ -41,6 +55,9 @@ export class SessionStore {
     this.history.delete(conversationId);
     for (const key of [...this.native.keys()]) {
       if (key.startsWith(`${conversationId}::`)) this.native.delete(key);
+    }
+    for (const key of [...this.briefs.keys()]) {
+      if (key.startsWith(`${conversationId}::`)) this.briefs.delete(key);
     }
   }
 

@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.6.0 — 2026-08-01
+
+Until now the router only improved **who** ran your task. Nothing improved **how well** they ran it. This release is that half: context, constraints, and someone checking the work.
+
+### The model now knows what you know
+
+`activeFile` was being captured and used only for rule matching — the model never saw it. Now a task brief carries what you would have told a colleague looking over your shoulder:
+
+- the file you have open, your **selection with its line range**, the language, other open files
+- the branch, uncommitted files, and the diff stat when it is small enough to be worth sending
+- the project's convention files — `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md` — normalized so every provider gets them, deduplicated when they are copies of each other
+- what this conversation already touched, and what last went wrong
+
+Nothing is sent twice: Claude already loads `CLAUDE.md` and Codex `AGENTS.md`, so their briefs omit those and carry only what they cannot know. The brief has a character budget and drops whole sections rather than truncating mid-sentence.
+
+### Every CLI gets the instructions it is missing
+
+There was no system-prompt mechanism anywhere in the codebase. Now each provider gets standing instructions through **its own real channel** — Claude `--append-system-prompt`, Codex `thread/start developerInstructions` (which adds to its base prompt rather than replacing it), and for Gemini/Copilot, which have no ACP system slot, prepended to the session's first prompt and restated only when it changes.
+
+The content is compensation, not a generic preamble: what does *this* CLI not do that Claude does. Claude's list is the shortest — that is the point.
+
+### The work gets checked
+
+After a run changes files, the project's **own** typecheck/test script runs and, on failure, the model gets one chance to fix it with the real output in hand.
+
+- Commands are never invented — only what `package.json` or a `Makefile` declares
+- Nothing runs in Plan mode
+- A typo fix gets a typecheck; a refactor gets the suite
+- A timed-out check is not a verdict
+- The repair prompt says to fix the cause, not to weaken the check
+
+### A different model looks for what the checks cannot see
+
+For hard work, a **different provider** reviews the diff adversarially and is told that finding nothing is a valid answer (`LGTM`). Its critique appears as a collapsible block, and the author gets to answer it — including pushing back where the reviewer is wrong. A different provider is preferred over a different account of the same one, and it is skipped entirely when no reviewer has the headroom.
+
+### Plan with the expensive model, execute with the cheap one
+
+Auto-plan produced a plan and stopped. Now the plan is parsed, and if it is specific enough to follow — a step list that names real files — you are offered to carry it out on a cheaper account one tier down. Prose and vague lists are refused rather than handed off. The executor is told to stop and say which step is wrong rather than improvise a different solution.
+
+### It learns what to tell them, not just where to send them
+
+Every message you type into a running task is a correction. Those words used to be discarded; now they are collected, and when the same correction recurs it is **offered** (never silently applied) as a standing rule that enters every provider's brief.
+
+Brief lines also have to earn their place: runs record which lines they carried, and a line whose clean-run rate is measurably worse than runs without it is dropped automatically.
+
+### New settings
+
+`usturlab.sendWorkspaceContext`, `usturlab.standingInstructions`, `usturlab.verifyChanges` (all on), `usturlab.secondOpinion` (`never` / `hard` / `always`, default `hard`).
+
+- 175 core tests
+
 ## 0.5.1 — 2026-08-01
 
 - The assistant's answer takes the **full column width** — only your own message stays a right-aligned bubble. Errors span the full width too

@@ -254,6 +254,19 @@ export function Transcript({
               </div>
             );
           }
+          case 'review':
+            return (
+              <details key={i} class="review-block">
+                <summary class="review-summary">
+                  <span class="review-badge">review</span>
+                  <span class="review-by">{item.by}</span>
+                  <span class="review-hint">found something worth checking</span>
+                </summary>
+                <div class="review-body">
+                  <Markdown text={item.text} />
+                </div>
+              </details>
+            );
           case 'failover':
             return (
               <div key={i} class="failover-banner">

@@ -77,4 +77,5 @@ export type HostToWebview =
   | { kind: 'modes'; permissionMode: string; routingMode: 'auto' | 'manual' }
   | { kind: 'attachments'; paths: string[] }
   | { kind: 'conversationReset' }
+  | { kind: 'review'; messageId: string; by: string; text: string }
   | { kind: 'analytics'; metrics: TaskMetric[]; accounts: AccountStatusDto[] };

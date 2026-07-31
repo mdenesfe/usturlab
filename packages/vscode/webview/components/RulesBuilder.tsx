@@ -41,7 +41,7 @@ export function RulesBuilder({ rules, accounts }: RulesBuilderProps) {
     return (
       <div class="default-chain-editor">
         <div class="editor-header">
-          <h2>Edit Default Chain</h2>
+          <h2>Edit default chain</h2>
           <div class="editor-actions">
             <button
               type="button"
@@ -66,70 +66,72 @@ export function RulesBuilder({ rules, accounts }: RulesBuilderProps) {
           </div>
         </div>
 
-        <div class="default-list">
-          {defaultChain.map((t, idx) => (
-            <div key={idx} class="target-item">
-              <div class="target-label">
-                {t.provider}:{t.account}
-                {t.model && <span class="target-model"> / {t.model}</span>}
+        <div class="editor-form">
+          <div class="default-list">
+            {defaultChain.map((t, idx) => (
+              <div key={idx} class="target-item">
+                <div class="target-label">
+                  {t.provider}:{t.account}
+                  {t.model && <span class="target-model"> / {t.model}</span>}
+                </div>
+                <button type="button" class="target-remove" onClick={() => setDefaultChain(defaultChain.filter((_, i) => i !== idx))}>
+                  Remove
+                </button>
               </div>
-              <button type="button" class="target-remove" onClick={() => setDefaultChain(defaultChain.filter((_, i) => i !== idx))}>
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        <div class="add-target">
-          <select
-            value={newDefaultProvider}
-            onChange={(e) => setNewDefaultProvider((e.target as HTMLSelectElement).value as any)}
-          >
-            <option value="claude">Claude</option>
-            <option value="codex">Codex</option>
-            <option value="gemini">Gemini</option>
-            <option value="copilot">Copilot</option>
-          </select>
+          <div class="add-target">
+            <select
+              value={newDefaultProvider}
+              onChange={(e) => setNewDefaultProvider((e.target as HTMLSelectElement).value as any)}
+            >
+              <option value="claude">Claude</option>
+              <option value="codex">Codex</option>
+              <option value="gemini">Gemini</option>
+              <option value="copilot">Copilot</option>
+            </select>
 
-          <select
-            value={newDefaultAccount}
-            onChange={(e) => setNewDefaultAccount((e.target as HTMLSelectElement).value)}
-          >
-            <option value="">Select account</option>
-            {accounts
-              .filter((a) => a.provider === newDefaultProvider)
-              .map((a) => (
-                <option key={a.id} value={a.label}>
-                  {a.label}
-                </option>
-              ))}
-          </select>
+            <select
+              value={newDefaultAccount}
+              onChange={(e) => setNewDefaultAccount((e.target as HTMLSelectElement).value)}
+            >
+              <option value="">Select account</option>
+              {accounts
+                .filter((a) => a.provider === newDefaultProvider)
+                .map((a) => (
+                  <option key={a.id} value={a.label}>
+                    {a.label}
+                  </option>
+                ))}
+            </select>
 
-          <input
-            type="text"
-            placeholder="Model (optional)"
-            value={newDefaultModel}
-            onInput={(e) => setNewDefaultModel((e.target as HTMLInputElement).value)}
-          />
+            <input
+              type="text"
+              placeholder="Model (optional)"
+              value={newDefaultModel}
+              onInput={(e) => setNewDefaultModel((e.target as HTMLInputElement).value)}
+            />
 
-          <button
-            type="button"
-            class="add-btn"
-            onClick={() => {
-              if (newDefaultAccount.trim()) {
-                const newTarget: RuleTarget = {
-                  provider: newDefaultProvider,
-                  account: newDefaultAccount.trim(),
-                  ...(newDefaultModel.trim() && { model: newDefaultModel.trim() }),
-                };
-                setDefaultChain([...defaultChain, newTarget]);
-                setNewDefaultAccount('');
-                setNewDefaultModel('');
-              }
-            }}
-          >
-            Add to Chain
-          </button>
+            <button
+              type="button"
+              class="add-btn"
+              onClick={() => {
+                if (newDefaultAccount.trim()) {
+                  const newTarget: RuleTarget = {
+                    provider: newDefaultProvider,
+                    account: newDefaultAccount.trim(),
+                    ...(newDefaultModel.trim() && { model: newDefaultModel.trim() }),
+                  };
+                  setDefaultChain([...defaultChain, newTarget]);
+                  setNewDefaultAccount('');
+                  setNewDefaultModel('');
+                }
+              }}
+            >
+              Add
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -140,14 +142,14 @@ export function RulesBuilder({ rules, accounts }: RulesBuilderProps) {
       <div class="builder-header">
         <h1>Routing Rules</h1>
         <button class="new-rule-btn" onClick={() => setEditingRule({} as Rule)}>
-          + New Rule
+          + New
         </button>
       </div>
 
       <div class="rules-list">
         {rules.rules.length === 0 ? (
           <div class="empty-state">
-            <p>No routing rules yet. Create one to get started.</p>
+            Create a routing rule to direct tasks to specific accounts or models
           </div>
         ) : (
           rules.rules.map((rule) => (
@@ -160,7 +162,7 @@ export function RulesBuilder({ rules, accounts }: RulesBuilderProps) {
               <div class="rule-content">
                 {rule.match.keywords && rule.match.keywords.length > 0 && (
                   <div class="match-chips">
-                    <span class="chip-label">Keywords:</span>
+                    <span class="chip-label">Keywords</span>
                     {rule.match.keywords.map((kw) => (
                       <span key={kw} class="chip">
                         {kw}
@@ -171,7 +173,7 @@ export function RulesBuilder({ rules, accounts }: RulesBuilderProps) {
 
                 {rule.match.globs && rule.match.globs.length > 0 && (
                   <div class="match-chips">
-                    <span class="chip-label">Files:</span>
+                    <span class="chip-label">Files</span>
                     {rule.match.globs.map((g) => (
                       <span key={g} class="chip mono">
                         {g}
@@ -182,7 +184,7 @@ export function RulesBuilder({ rules, accounts }: RulesBuilderProps) {
 
                 {rule.match.tags && rule.match.tags.length > 0 && (
                   <div class="match-chips">
-                    <span class="chip-label">Tags:</span>
+                    <span class="chip-label">Tags</span>
                     {rule.match.tags.map((t) => (
                       <span key={t} class="chip">
                         #{t}
@@ -217,8 +219,10 @@ export function RulesBuilder({ rules, accounts }: RulesBuilderProps) {
 
       <div class="default-chain-section">
         <div class="section-header">
-          <h2>Default Failover Chain</h2>
-          <p class="section-desc">Used when no rule matches</p>
+          <div>
+            <h2>Default failover</h2>
+            <p class="section-desc">When no rule matches</p>
+          </div>
           <button class="edit-btn small" onClick={() => setEditingDefault(true)}>
             Edit
           </button>
@@ -226,15 +230,14 @@ export function RulesBuilder({ rules, accounts }: RulesBuilderProps) {
 
         {(rules.defaultChain ?? []).length === 0 ? (
           <div class="empty-chain">
-            <p>No default chain configured</p>
+            No default chain configured
           </div>
         ) : (
           <div class="chain-display">
             {rules.defaultChain.map((t, idx) => (
-              <span key={idx} class="chain-pill large">
+              <span key={idx} class="chain-pill">
                 {t.provider}:{t.account}
                 {t.model && <span class="model-suffix">/{t.model}</span>}
-                {idx < (rules.defaultChain?.length ?? 0) - 1 && <span class="chain-arrow"> → </span>}
               </span>
             ))}
           </div>

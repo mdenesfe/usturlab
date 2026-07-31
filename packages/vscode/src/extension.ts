@@ -4,6 +4,9 @@ import { homedir } from 'node:os';
 import { delimiter, join as joinPath } from 'node:path';
 import {
   AdapterRegistry,
+  buildProviderBrief,
+  briefLinesFor,
+  disqualifiedLines,
   ClaudeAdapter,
   CodexAdapter,
   CopilotAdapter,
@@ -17,6 +20,9 @@ import { refreshUsage } from './usage.js';
 import { migrateFromUsrouter } from './migration.js';
 import { AccountStore } from './storage/accountStore.js';
 import { MetricsStore } from './storage/metricsStore.js';
+import { PreferenceStore } from './storage/preferenceStore.js';
+import { WorkspaceContext } from './context/workspaceContext.js';
+import { Verifier } from './verify/verifier.js';
 import { globalStateQuotaPersistence } from './storage/quotaPersistence.js';
 import { RulesManager } from './rules/rulesFile.js';
 import { ChatViewProvider } from './panel/chatViewProvider.js';
@@ -56,7 +62,23 @@ export function activate(ctx: vscode.ExtensionContext): void {
   const sessions = new SessionStore();
   const rules = new RulesManager();
   const metrics = new MetricsStore(ctx);
+  const preferences = new PreferenceStore(ctx);
+  const workspaceContext = new WorkspaceContext(output);
+  const verifier = new Verifier(output);
   ctx.subscriptions.push(rules);
+
+  /** Standing instructions, minus any line the evidence says to stop sending. */
+  const providerBrief = (provider: Parameters<typeof buildProviderBrief>[0]['provider'], mode: 'safe' | 'edits' | 'full') => {
+    const all = briefLinesFor({ provider, permissionMode: mode });
+    const disabled = disqualifiedLines(all.map((l) => l.id), metrics.all());
+    const options = {
+      provider,
+      permissionMode: mode,
+      preferences: preferences.preferences(),
+      disabledLineIds: disabled,
+    };
+    return { text: buildProviderBrief(options), lineIds: briefLinesFor(options).map((l) => l.id) };
+  };
 
   // Declared before the orchestrator so routing can read thread memory.
   let chatRef: ChatViewProvider | undefined;
@@ -75,12 +97,36 @@ export function activate(ctx: vscode.ExtensionContext): void {
       vscode.workspace.getConfiguration('usturlab').get<'auto' | 'manual'>('routingMode', 'auto'),
     getAccounts: () => accounts.all(),
     resolveAccount: (target) => accounts.resolve(target),
+    getBrief: (task, provider) =>
+      vscode.workspace.getConfiguration('usturlab').get<boolean>('sendWorkspaceContext', true)
+        ? workspaceContext.buildFor(task, provider, {
+            preferences: preferences.preferences(),
+            ...chatRef?.threadFiles(task.conversationId),
+          })
+        : '',
+    getProviderBrief: (provider, mode) =>
+      vscode.workspace.getConfiguration('usturlab').get<boolean>('standingInstructions', true)
+        ? providerBrief(provider, mode)
+        : { text: '', lineIds: [] },
   });
 
   const statusBar = new RouterStatusBar();
   ctx.subscriptions.push(statusBar);
 
-  const chat = new ChatViewProvider(ctx, orchestrator, sessions, accounts, quota, adapters, rules, metrics, output);
+  const chat = new ChatViewProvider(
+    ctx,
+    orchestrator,
+    sessions,
+    accounts,
+    quota,
+    adapters,
+    rules,
+    metrics,
+    preferences,
+    workspaceContext,
+    verifier,
+    output,
+  );
   chatRef = chat;
   chat.setTargetListener((target) => statusBar.routed(target));
   ctx.subscriptions.push(

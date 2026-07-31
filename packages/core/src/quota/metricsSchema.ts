@@ -46,6 +46,14 @@ export interface TaskMetric {
   retried?: boolean;
   /** This turn escalated to a heavier tier because the work got harder. */
   escalated?: boolean;
+
+  // ── what the run was told, so instructions can be A/B tested ──
+  /** Brief line ids this run carried. */
+  briefLineIds?: string[];
+  /** Reality checks that ran afterwards, and whether they passed. */
+  verified?: 'passed' | 'repaired' | 'failed';
+  /** A different provider reviewed this run's output. */
+  reviewedBy?: string;
 }
 
 export interface MetricsFile {
