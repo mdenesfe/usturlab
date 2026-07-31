@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1 — 2026-08-01
+
+- Closed Accounts/Rules/chat tabs reopen reliably: a stale panel handle no longer swallows the click; webview handler errors now land in the output channel instead of dying silently
+- Release workflow gets `contents: write` so tagged releases actually publish; marketplace publish stays optional until `VSCE_PAT` is set
+
 ## 0.1.0 — 2026-07-31
 
 First release of **usturlab** — route every AI coding task to the best subscription you own.

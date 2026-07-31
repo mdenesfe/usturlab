@@ -161,16 +161,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  /** reveal() throws once a panel is disposed under us; treat that as gone. */
+  private safeReveal(panel: vscode.WebviewPanel | undefined): boolean {
+    if (!panel) return false;
+    try {
+      panel.reveal();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** Opens (or reveals) the editor tab bound to a conversation. */
   openConversationTab(id: string): void {
     const rec = this.conversations.get(id);
     if (!rec) return;
 
     const existing = this.panels.get(id);
-    if (existing) {
-      existing.reveal();
-      return;
-    }
+    if (this.safeReveal(existing)) return;
+    if (existing) this.panels.delete(id);
 
     const panel = vscode.window.createWebviewPanel(
       'usturlab.chatTab',
@@ -201,10 +210,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   /** Opens (or reveals) the clean accounts management tab. */
   openAccountsTab(): void {
-    if (this.accountsPanel) {
-      this.accountsPanel.reveal();
-      return;
-    }
+    if (this.safeReveal(this.accountsPanel)) return;
+    this.accountsPanel = undefined;
     const panel = vscode.window.createWebviewPanel(
       'usturlab.accountsTab',
       'usturlab · Accounts',
@@ -226,10 +233,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   /** Opens (or reveals) the routing-rules tab. */
   openRulesTab(): void {
-    if (this.rulesPanel) {
-      this.rulesPanel.reveal();
-      return;
-    }
+    if (this.safeReveal(this.rulesPanel)) return;
+    this.rulesPanel = undefined;
     const panel = vscode.window.createWebviewPanel(
       'usturlab.rulesTab',
       'usturlab · Rules',
@@ -432,6 +437,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async onMessage(msg: WebviewToHost, webview: vscode.Webview): Promise<void> {
+    try {
+      await this.dispatchMessage(msg, webview);
+    } catch (e) {
+      this.output.appendLine(`[ui] ${msg.kind} failed: ${(e as Error).stack ?? e}`);
+    }
+  }
+
+  private async dispatchMessage(msg: WebviewToHost, webview: vscode.Webview): Promise<void> {
     const surface = this.surfaces.get(webview);
     if (!surface) return;
     switch (msg.kind) {
