@@ -9,3 +9,4 @@ packages/vscode/media/webview.js.map
 *.log
 .usturlab/
 .claude/settings.local.json
+.usrouter/
