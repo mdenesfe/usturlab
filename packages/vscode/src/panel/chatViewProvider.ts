@@ -20,6 +20,7 @@ import type {
   HostToWebview,
   WebviewToHost,
 } from './protocol.js';
+import { compactLog } from './transcript.js';
 
 const REPLAYED_KINDS = new Set<HostToWebview['kind']>([
   'userEcho',
@@ -352,20 +353,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }, 800);
   }
 
-  /** Merge consecutive delta events so stored logs stay small. */
-  private compactLog(rec: ConversationRecord): void {
-    const out: HostToWebview[] = [];
-    for (const msg of rec.log) {
-      const last = out[out.length - 1];
-      if (msg.kind === 'delta' && last?.kind === 'delta' && last.messageId === msg.messageId) {
-        last.text += msg.text;
-        continue;
-      }
-      out.push({ ...msg });
-    }
-    rec.log = out;
-  }
-
   // ── messaging ────────────────────────────────────────────────────
 
   private toConversation(
@@ -646,7 +633,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       this.output.appendLine(`[error] ${(e as Error).stack ?? e}`);
     } finally {
       if (this.tasks.get(conversationId) === controller) this.tasks.delete(conversationId);
-      this.compactLog(rec);
+      rec.log = compactLog(rec.log);
       this.toConversation(conversationId, { kind: 'busy', running: false }, { log: false });
       this.pushAccounts();
       this.sendConversations();

@@ -55,11 +55,11 @@ export class CodexAdapter implements ProviderAdapter {
     account: ResolvedAccount,
     signal: AbortSignal,
   ): AsyncGenerator<AdapterEvent> {
-    const args = req.resumeSessionId
-      ? ['exec', 'resume', req.resumeSessionId]
-      : ['exec'];
-    args.push('--json', '--skip-git-repo-check', '-s', SANDBOX[req.permissionMode]);
+    // The resume subcommand rejects exec-level flags after it; they parse
+    // fine when placed before `resume` (verified against codex CLI).
+    const args = ['exec', '--json', '--skip-git-repo-check', '-s', SANDBOX[req.permissionMode]];
     if (req.model) args.push('-m', req.model);
+    if (req.resumeSessionId) args.push('resume', req.resumeSessionId);
     args.push(req.prompt);
 
     const env = this.buildEnv(account, process.env);

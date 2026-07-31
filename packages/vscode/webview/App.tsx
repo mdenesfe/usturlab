@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { AccountStatusDto, ConversationMeta, HostToWebview } from '../src/panel/protocol.js';
 import { vscode } from './vscodeApi.js';
-import { Transcript, type TranscriptItem } from './components/Transcript.js';
+import { Transcript } from './components/Transcript.js';
+import { applyHostMessage, type TranscriptItem } from '../src/panel/transcript.js';
 import { Composer } from './components/Composer.js';
 import { HistoryList } from './components/HistoryList.js';
 import { AccountsView } from './components/AccountsView.js';
@@ -186,91 +187,4 @@ function ChatApp() {
       </div>
     </div>
   );
-}
-
-function applyHostMessage(items: TranscriptItem[], msg: HostToWebview): TranscriptItem[] {
-  const next = [...items];
-  const lastAssistant = (id: string) => {
-    for (let i = next.length - 1; i >= 0; i--) {
-      const item = next[i];
-      if (item?.kind === 'assistant' && item.messageId === id) return i;
-    }
-    return -1;
-  };
-  const ensureAssistant = (id: string) => {
-    let i = lastAssistant(id);
-    if (i === -1) {
-      next.push({ kind: 'assistant', messageId: id, text: '', tools: [], done: false });
-      i = next.length - 1;
-    }
-    return i;
-  };
-
-  switch (msg.kind) {
-    case 'userEcho': {
-      next.push({ kind: 'user', text: msg.text });
-      break;
-    }
-    case 'routing': {
-      const i = ensureAssistant(msg.messageId);
-      next[i] = {
-        ...(next[i] as Extract<TranscriptItem, { kind: 'assistant' }>),
-        target: msg.target,
-        ruleId: msg.ruleId,
-        reason: msg.reason,
-      };
-      break;
-    }
-    case 'delta': {
-      const i = ensureAssistant(msg.messageId);
-      const item = next[i] as Extract<TranscriptItem, { kind: 'assistant' }>;
-      next[i] = { ...item, text: item.text + msg.text };
-      break;
-    }
-    case 'toolUse': {
-      const i = ensureAssistant(msg.messageId);
-      const item = next[i] as Extract<TranscriptItem, { kind: 'assistant' }>;
-      next[i] = { ...item, tools: [...item.tools, msg.detail ? `${msg.name}: ${msg.detail}` : msg.name] };
-      break;
-    }
-    case 'downgraded': {
-      next.push({ kind: 'notice', text: `model downgraded upstream: ${msg.from} → ${msg.to}` });
-      break;
-    }
-    case 'notice': {
-      next.push({ kind: 'notice', text: msg.text });
-      break;
-    }
-    case 'failover': {
-      const reset = msg.resetAt ? ` · resets ${new Date(msg.resetAt).toLocaleTimeString()}` : '';
-      next.push({
-        kind: 'failover',
-        text: `${msg.reason}${reset} → ${msg.to.provider}:${msg.to.account}`,
-      });
-      next.push({
-        kind: 'assistant',
-        messageId: msg.messageId,
-        text: '',
-        tools: [],
-        done: false,
-        target: msg.to,
-      });
-      break;
-    }
-    case 'done': {
-      const i = lastAssistant(msg.messageId);
-      if (i !== -1) {
-        const item = next[i] as Extract<TranscriptItem, { kind: 'assistant' }>;
-        next[i] = { ...item, done: true, costUsd: msg.costUsd };
-      }
-      break;
-    }
-    case 'error': {
-      next.push({ kind: 'error', text: msg.message });
-      break;
-    }
-    default:
-      break;
-  }
-  return next;
 }

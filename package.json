@@ -8,7 +8,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "watch": "pnpm -C packages/vscode watch",
-    "test": "pnpm -C packages/core test",
+    "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "package": "pnpm -C packages/vscode package"
   },

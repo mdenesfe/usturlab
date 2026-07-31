@@ -1,24 +1,7 @@
-import type { Target } from '@usturlab/core';
+import type { TranscriptItem } from '../../src/panel/transcript.js';
 import { Markdown } from './Markdown.js';
 import { RoutingBadge } from './RoutingBadge.js';
 import { IconRoute } from './icons.js';
-
-export type TranscriptItem =
-  | { kind: 'user'; text: string }
-  | {
-      kind: 'assistant';
-      messageId: string;
-      text: string;
-      tools: string[];
-      done: boolean;
-      target?: Target;
-      ruleId?: string;
-      reason?: string;
-      costUsd?: number;
-    }
-  | { kind: 'failover'; text: string }
-  | { kind: 'notice'; text: string }
-  | { kind: 'error'; text: string };
 
 export function Transcript({
   items,
