@@ -72,7 +72,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private tasks = new Map<string, AbortController>();
   private queues = new Map<
     string,
-    Array<{ text: string; tags: string[]; modes?: { permissionMode?: PermissionMode; routingMode?: 'auto' | 'manual' } }>
+    Array<{
+      text: string;
+      tags: string[];
+      modes?: { permissionMode?: PermissionMode; routingMode?: 'auto' | 'manual'; attachments?: string[] };
+    }>
   >();
   private liveRuns = new Map<
     string,
@@ -517,9 +521,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           await this.handleSend(surface.conversationId, msg.text, msg.tags, {
             permissionMode: msg.permissionMode as PermissionMode | undefined,
             routingMode: msg.routingMode,
+            attachments: msg.attachments,
           });
         }
         break;
+      case 'pickAttachments': {
+        const picked = await vscode.window.showOpenDialog({
+          canSelectMany: true,
+          openLabel: 'Attach',
+          defaultUri: vscode.workspace.workspaceFolders?.[0]?.uri,
+        });
+        this.safePost(webview, {
+          kind: 'attachments',
+          paths: (picked ?? []).map((uri) => uri.fsPath),
+        });
+        break;
+      }
       case 'setModes': {
         const config = vscode.workspace.getConfiguration('usturlab');
         if (msg.permissionMode) {
@@ -568,9 +585,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     conversationId: string,
     text: string,
     tags: string[],
-    modes: { permissionMode?: PermissionMode; routingMode?: 'auto' | 'manual' } = {},
+    modes: {
+      permissionMode?: PermissionMode;
+      routingMode?: 'auto' | 'manual';
+      attachments?: string[];
+    } = {},
   ): Promise<void> {
     if (!this.conversations.has(conversationId)) return;
+    // Attachments travel as plain paths — every CLI can read files itself.
+    if (modes.attachments?.length) {
+      const ws = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const shown = modes.attachments.map((p) => (ws && p.startsWith(ws) ? relative(ws, p) : p));
+      text = `${text}\n\nAttached files:\n${shown.map((p) => `- ${p}`).join('\n')}`;
+    }
     this.toConversation(conversationId, { kind: 'userEcho', text });
     // Host actions (/accounts, /clear…) must never be injected or queued.
     const slashAction = matchSlashCommand(text, this.rules.getCustomCommands());
@@ -639,7 +666,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     conversationId: string,
     text: string,
     tags: string[],
-    modes: { permissionMode?: PermissionMode; routingMode?: 'auto' | 'manual' } = {},
+    modes: {
+      permissionMode?: PermissionMode;
+      routingMode?: 'auto' | 'manual';
+      attachments?: string[];
+    } = {},
   ): Promise<void> {
     const rec = this.conversations.get(conversationId);
     if (!rec) return;

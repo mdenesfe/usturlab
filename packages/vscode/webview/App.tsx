@@ -122,6 +122,7 @@ function ChatApp() {
   >([]);
   const [permissionMode, setPermissionMode] = useState('safe');
   const [routingMode, setRoutingMode] = useState<'auto' | 'manual'>('auto');
+  const [attachments, setAttachments] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -143,6 +144,9 @@ function ChatApp() {
         setPermissionMode(msg.permissionMode);
         setRoutingMode(msg.routingMode);
       }
+      if (msg.kind === 'attachments') {
+        setAttachments((prev) => [...new Set([...prev, ...msg.paths])]);
+      }
       if (msg.kind === 'conversationReset') setItems([]);
     };
     window.addEventListener('message', onMessage);
@@ -159,7 +163,15 @@ function ChatApp() {
     if (!trimmed) return;
     const tags = [...trimmed.matchAll(HASHTAG_RE)].map((m) => m[2]!);
     pinnedRef.current = true;
-    vscode.postMessage({ kind: 'send', text: trimmed, tags, permissionMode, routingMode });
+    vscode.postMessage({
+      kind: 'send',
+      text: trimmed,
+      tags,
+      permissionMode,
+      routingMode,
+      attachments,
+    });
+    setAttachments([]);
   };
 
   return (
@@ -189,6 +201,9 @@ function ChatApp() {
           running={running}
           permissionMode={permissionMode}
           routingMode={routingMode}
+          attachments={attachments}
+          onPickAttachments={() => vscode.postMessage({ kind: 'pickAttachments' })}
+          onRemoveAttachment={(path) => setAttachments((prev) => prev.filter((p) => p !== path))}
           onSend={send}
           onCancel={() => vscode.postMessage({ kind: 'cancel' })}
           onModeChange={(modes) => {

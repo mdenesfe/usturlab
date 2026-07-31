@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2 — 2026-08-01
+
+- Composer controls tidied into two compact dropdowns — routing (Auto / Manual) and permissions (Plan / Edit / Full) — instead of a row of chips
+- New **+** button attaches files: pick any files, they appear as removable chips above the input and travel with the message as paths every CLI can open
+
 ## 0.3.1 — 2026-08-01
 
 ### Gemini is now actually usable without a Google subscription

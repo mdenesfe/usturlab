@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 // Deep import: the core barrel pulls node built-ins the browser bundle can't take.
 import { SLASH_COMMANDS, type SlashCommand } from '../../../core/src/commands/slashCommands.js';
 import type { AccountStatusDto } from '../../src/panel/protocol.js';
-import { IconSend, IconStop } from './icons.js';
+import { IconPlus, IconSend, IconStop } from './icons.js';
 import { BrandMark } from './brandIcons.js';
 
 const MAX_TEXTAREA_HEIGHT = 180;
@@ -88,9 +88,12 @@ export function Composer({
   running,
   permissionMode,
   routingMode,
+  attachments,
   onSend,
   onCancel,
   onModeChange,
+  onPickAttachments,
+  onRemoveAttachment,
 }: {
   accounts: AccountStatusDto[];
   tags: string[];
@@ -98,9 +101,12 @@ export function Composer({
   running: boolean;
   permissionMode: string;
   routingMode: 'auto' | 'manual';
+  attachments: string[];
   onSend: (text: string) => void;
   onCancel: () => void;
   onModeChange: (modes: { permissionMode?: string; routingMode?: 'auto' | 'manual' }) => void;
+  onPickAttachments: () => void;
+  onRemoveAttachment: (path: string) => void;
 }) {
   const allCommands = [...customCommands, ...SLASH_COMMANDS];
   const [text, setText] = useState('');
@@ -231,31 +237,49 @@ export function Composer({
         }}
         onBlur={() => setTimeout(() => setSuggestions([]), 150)}
       />
-      <div class="mode-bar">
-        <button
-          class={`mode-chip ${routingMode === 'auto' ? 'on' : ''}`}
-          title={
-            routingMode === 'auto'
-              ? 'Auto: usturlab reads the task, judges difficulty and picks the model (your rules still win)'
-              : 'Manual: follow your rules and default chain exactly'
-          }
-          onClick={() => onModeChange({ routingMode: routingMode === 'auto' ? 'manual' : 'auto' })}
-        >
-          {routingMode === 'auto' ? '✦ Auto' : '⌘ Manual'}
-        </button>
-        <span class="mode-sep" />
-        {PERMISSION_MODES.map((m) => (
-          <button
-            key={m.id}
-            class={`mode-chip ${permissionMode === m.id ? 'on' : ''}`}
-            title={m.hint}
-            onClick={() => onModeChange({ permissionMode: m.id })}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
+      {attachments.length > 0 && (
+        <div class="attachment-strip">
+          {attachments.map((path) => (
+            <span key={path} class="attachment-chip" title={path}>
+              {path.split('/').pop()}
+              <button
+                class="attachment-x"
+                title="Remove"
+                onClick={() => onRemoveAttachment(path)}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       <div class="composer-bar">
+        <button class="icon-btn attach-btn" title="Attach files" onClick={onPickAttachments}>
+          <IconPlus size={13} />
+        </button>
+        <select
+          class="mode-select"
+          title="Routing: Auto reads the task and picks the model; Manual follows your chain. Rules always win."
+          value={routingMode}
+          onChange={(e) =>
+            onModeChange({ routingMode: (e.target as HTMLSelectElement).value as 'auto' | 'manual' })
+          }
+        >
+          <option value="auto">✦ Auto</option>
+          <option value="manual">Manual</option>
+        </select>
+        <select
+          class="mode-select"
+          title={PERMISSION_MODES.find((m) => m.id === permissionMode)?.hint}
+          value={permissionMode}
+          onChange={(e) => onModeChange({ permissionMode: (e.target as HTMLSelectElement).value })}
+        >
+          {PERMISSION_MODES.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </select>
         <div class="account-strip">
           {accounts.map((a) => (
             <button

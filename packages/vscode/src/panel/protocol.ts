@@ -23,7 +23,15 @@ export interface ConversationMeta {
 
 export type WebviewToHost =
   | { kind: 'ready' }
-  | { kind: 'send'; text: string; tags: string[]; permissionMode?: string; routingMode?: 'auto' | 'manual' }
+  | {
+      kind: 'send';
+      text: string;
+      tags: string[];
+      permissionMode?: string;
+      routingMode?: 'auto' | 'manual';
+      attachments?: string[];
+    }
+  | { kind: 'pickAttachments' }
   | { kind: 'setModes'; permissionMode?: string; routingMode?: 'auto' | 'manual' }
   | { kind: 'cancel' }
   | { kind: 'newConversation' }
@@ -52,4 +60,5 @@ export type HostToWebview =
   | { kind: 'conversations'; list: ConversationMeta[]; activeId: string }
   | { kind: 'rules'; rules: RulesFile; path: string; exists: boolean; error?: string; customCommands: SlashCommand[] }
   | { kind: 'modes'; permissionMode: string; routingMode: 'auto' | 'manual' }
+  | { kind: 'attachments'; paths: string[] }
   | { kind: 'conversationReset' };

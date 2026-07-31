@@ -670,42 +670,76 @@ body {
   transition: border-color 0.15s ease;
 }
 
-/* ── mode bar ───────────────────────────────────────────── */
+/* ── composer controls ──────────────────────────────────── */
 
-.mode-bar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 10px 0;
-}
-
-.mode-chip {
+.mode-select {
   font-family: var(--mono);
   font-size: 0.72em;
-  padding: 2px 9px;
-  border-radius: 9px;
+  padding: 2px 6px;
+  border-radius: 5px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--muted);
   cursor: pointer;
+  flex-shrink: 0;
 }
 
-.mode-chip:hover {
+.mode-select:hover {
   color: var(--vscode-foreground);
   border-color: var(--vscode-focusBorder);
 }
 
-.mode-chip.on {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  color: var(--vscode-foreground);
+.mode-select:focus {
+  outline: 1px solid var(--vscode-focusBorder);
 }
 
-.mode-sep {
-  width: 1px;
-  height: 14px;
-  background: var(--border);
-  margin: 0 4px;
+.attach-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.attach-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.attachment-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 10px 0;
+}
+
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 0.72em;
+  padding: 2px 4px 2px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.1));
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-x {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 1.2em;
+  line-height: 1;
+}
+
+.attachment-x:hover {
+  color: var(--vscode-errorForeground);
 }
 
 /* ── suggestion popup (@ / # / /) ───────────────────────── */
