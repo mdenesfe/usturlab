@@ -107,6 +107,7 @@ function AccountsApp() {
 function ChatApp() {
   const [items, setItems] = useState<TranscriptItem[]>([]);
   const [accounts, setAccounts] = useState<AccountStatusDto[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -120,6 +121,9 @@ function ChatApp() {
       setItems((prev) => applyHostMessage(prev, msg));
       if (msg.kind === 'busy') setRunning(msg.running);
       if (msg.kind === 'accounts') setAccounts(msg.accounts);
+      if (msg.kind === 'rules') {
+        setTags([...new Set(msg.rules.rules.flatMap((r) => r.match.tags ?? []))]);
+      }
       if (msg.kind === 'conversationReset') setItems([]);
     };
     window.addEventListener('message', onMessage);
@@ -161,6 +165,7 @@ function ChatApp() {
       <div class="chat-column composer-holder">
         <Composer
           accounts={accounts}
+          tags={tags}
           running={running}
           onSend={send}
           onCancel={() => vscode.postMessage({ kind: 'cancel' })}
@@ -217,6 +222,10 @@ function applyHostMessage(items: TranscriptItem[], msg: HostToWebview): Transcri
     }
     case 'downgraded': {
       next.push({ kind: 'notice', text: `model downgraded upstream: ${msg.from} → ${msg.to}` });
+      break;
+    }
+    case 'notice': {
+      next.push({ kind: 'notice', text: msg.text });
       break;
     }
     case 'failover': {

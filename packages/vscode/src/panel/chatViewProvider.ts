@@ -6,6 +6,8 @@ import {
   SessionStore,
   QuotaTracker,
   AdapterRegistry,
+  getAccountIdentity,
+  matchSlashCommand,
   shortId,
   type PermissionMode,
   type Target,
@@ -25,6 +27,7 @@ const REPLAYED_KINDS = new Set<HostToWebview['kind']>([
   'delta',
   'toolUse',
   'downgraded',
+  'notice',
   'failover',
   'done',
   'error',
@@ -67,6 +70,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private persistTimer?: NodeJS.Timeout;
   private onTargetChosen?: (target: Target) => void;
   private usageRefresher?: () => Promise<void>;
+  private identities = new Map<string, string>();
 
   constructor(
     private ctx: vscode.ExtensionContext,
@@ -246,7 +250,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private pushRules(): void {
     const msg = this.rulesMessage();
     for (const [webview, surface] of this.surfaces) {
-      if (surface.mode === 'rules') this.safePost(webview, msg);
+      // Chat tabs consume rules too (tag suggestions in the composer).
+      if (surface.mode === 'rules' || surface.mode === 'tab') this.safePost(webview, msg);
     }
   }
 
@@ -270,6 +275,28 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const newest = [...this.conversations.values()].sort((a, b) => b.updatedAt - a.updatedAt)[0];
     if (newest) this.openConversationTab(newest.id);
     else this.newConversation();
+  }
+
+  /** /clear — wipe transcript + engine context of one conversation, keep the tab. */
+  clearConversation(id: string): void {
+    const rec = this.conversations.get(id);
+    if (!rec) return;
+    this.tasks.get(id)?.abort();
+    this.tasks.delete(id);
+    rec.log = [];
+    rec.turns = [];
+    rec.title = '';
+    this.sessions.clearConversation(id);
+    const panel = this.panels.get(id);
+    if (panel) panel.title = 'New chat';
+    for (const [webview, surface] of this.surfaces) {
+      if (surface.mode === 'tab' && surface.conversationId === id) {
+        this.safePost(webview, { kind: 'conversationReset' });
+        this.safePost(webview, { kind: 'busy', running: false });
+      }
+    }
+    this.sendConversations();
+    this.persistSoon();
   }
 
   deleteConversation(id: string): void {
@@ -374,8 +401,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         kind: 'accounts',
         accounts: this.accountDtos(),
       } satisfies HostToWebview);
-      // Fresh usage on open; results fan out via the quota listener.
+      // Fresh usage + identities on open; results fan out via listeners.
       void this.usageRefresher?.();
+      void this.loadIdentities();
       return;
     }
     if (surface.mode === 'rules') {
@@ -390,6 +418,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       kind: 'accounts',
       accounts: this.accountDtos(),
     } satisfies HostToWebview);
+    this.safePost(webview, this.rulesMessage());
     if (rec) {
       for (const msg of rec.log) this.safePost(webview, msg);
       this.safePost(webview, {
@@ -427,6 +456,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       case 'removeAccount':
         void vscode.commands.executeCommand('usrouter.removeAccount', msg.id);
         break;
+      case 'renameAccount':
+        await this.renameAccount(msg.id);
+        break;
       case 'editRules':
         void vscode.commands.executeCommand('usrouter.editRules');
         break;
@@ -456,6 +488,37 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (!rec) return;
     if (this.tasks.has(conversationId)) {
       void vscode.window.showWarningMessage('usrouter: this chat already has a running task.');
+      return;
+    }
+
+    // Action slash commands run in the host, not on a model.
+    const slash = matchSlashCommand(text);
+    if (slash?.cmd.kind === 'action') {
+      const notice = (t: string) => this.toConversation(conversationId, { kind: 'notice', text: t });
+      switch (slash.cmd.action) {
+        case 'newChat':
+          this.newConversation();
+          break;
+        case 'clearChat':
+          this.clearConversation(conversationId);
+          break;
+        case 'openAccounts':
+          this.openAccountsTab();
+          notice('opened accounts');
+          break;
+        case 'openRules':
+          this.openRulesTab();
+          notice('opened routing rules');
+          break;
+        case 'refreshUsage':
+          void this.usageRefresher?.();
+          notice('refreshing usage…');
+          break;
+        case 'openTerminal':
+          void vscode.commands.executeCommand('usrouter.openInTerminal');
+          break;
+      }
+      this.sendConversations();
       return;
     }
     if (!rec.title) {
@@ -592,6 +655,53 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   // ── accounts ─────────────────────────────────────────────────────
 
+  private async renameAccount(id: string): Promise<void> {
+    const account = this.accounts.all().find((a) => a.id === id);
+    if (!account) return;
+    const label = await vscode.window.showInputBox({
+      title: `usrouter: rename ${account.provider}:${account.label}`,
+      value: account.label,
+      prompt: 'Label used in rules and @mentions',
+      validateInput: (value) => {
+        const trimmed = value.trim();
+        if (!trimmed) return 'Label is required';
+        if (!/^[a-zA-Z0-9][\w-]*$/.test(trimmed)) {
+          return 'Use letters, numbers, - or _ only';
+        }
+        if (
+          this.accounts
+            .all()
+            .some((a) => a.id !== id && a.provider === account.provider && a.label === trimmed)
+        ) {
+          return `A ${account.provider} account labeled "${trimmed}" already exists`;
+        }
+        return undefined;
+      },
+    });
+    if (!label || label.trim() === account.label) return;
+    const oldLabel = account.label;
+    await this.accounts.upsert({ ...account, label: label.trim() });
+    void vscode.window.showInformationMessage(
+      `usrouter: renamed to ${account.provider}:${label.trim()}. If your rules reference "${oldLabel}", update them.`,
+    );
+  }
+
+  private async loadIdentities(): Promise<void> {
+    const cliPath = vscode.workspace
+      .getConfiguration('usrouter')
+      .get<string>('cliPath.claude', 'claude');
+    let changed = false;
+    for (const account of this.accounts.all()) {
+      if (this.identities.has(account.id)) continue;
+      const identity = await getAccountIdentity(account, cliPath);
+      if (identity) {
+        this.identities.set(account.id, identity);
+        changed = true;
+      }
+    }
+    if (changed) this.pushAccounts();
+  }
+
   private accountDtos(): AccountStatusDto[] {
     const all = this.accounts.all();
     const snapshots = this.quota.snapshot(all.map((a) => a.id));
@@ -608,6 +718,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           resetAt: snap?.resetAt,
           usage: snap?.usage,
           models: this.adapters.get(a.provider)?.models ?? [],
+          identity: this.identities.get(a.id),
+          homeDir: a.homeDir,
         };
       });
   }

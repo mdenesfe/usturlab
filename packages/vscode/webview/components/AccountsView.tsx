@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { AccountStatusDto } from '../../src/panel/protocol.js';
 import { vscode } from '../vscodeApi.js';
-import { IconAccounts, IconPlus, IconTrash } from './icons.js';
+import { IconAccounts, IconEdit, IconPlus, IconTrash } from './icons.js';
 import { BRAND_COLOR, BrandMark, PROVIDER_NAME } from './brandIcons.js';
 
 const AUTH_LABEL: Record<string, string> = {
@@ -160,7 +160,16 @@ export function AccountsView({ accounts }: { accounts: AccountStatusDto[] }) {
               <BrandMark provider={selected.provider} size={26} />
             </span>
             <div class="detail-title">
-              <div class="detail-name">{selected.label}</div>
+              <div class="detail-name">
+                {selected.label}
+                <button
+                  class="icon-btn rename-btn"
+                  title="Rename account"
+                  onClick={() => vscode.postMessage({ kind: 'renameAccount', id: selected.id })}
+                >
+                  <IconEdit size={12} />
+                </button>
+              </div>
               <div class="detail-sub">
                 <span class="detail-provider" style={{ color: BRAND_COLOR[selected.provider] }}>
                   {PROVIDER_NAME[selected.provider]}
@@ -219,6 +228,38 @@ export function AccountsView({ accounts }: { accounts: AccountStatusDto[] }) {
             ) : (
               <div class="usage-hint">{usageHint(selected)}</div>
             )}
+          </div>
+
+          <div class="detail-section">
+            <div class="detail-section-title">Account</div>
+            <div class="info-rows">
+              {selected.identity && (
+                <div class="info-row">
+                  <span class="info-key">signed in as</span>
+                  <span class="info-val">{selected.identity}</span>
+                </div>
+              )}
+              <div class="info-row">
+                <span class="info-key">auth</span>
+                <span class="info-val">{AUTH_LABEL[selected.authMode] ?? selected.authMode}</span>
+              </div>
+              {selected.homeDir && (
+                <div class="info-row">
+                  <span class="info-key">profile</span>
+                  <span class="info-val" title={selected.homeDir}>
+                    {selected.homeDir.replace(/^.*\/(\.usrouter\/.*)$/, '~/$1')}
+                  </span>
+                </div>
+              )}
+              <div class="info-row">
+                <span class="info-key">rules ref</span>
+                <span class="info-val">
+                  <code>
+                    {selected.provider}:{selected.label}
+                  </code>
+                </span>
+              </div>
+            </div>
           </div>
 
           {selected.models.length > 0 && (

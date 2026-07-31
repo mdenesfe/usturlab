@@ -80,13 +80,13 @@ export class CopilotAdapter implements ProviderAdapter {
 
   loginFlow(profileDir: string): LoginFlow {
     return {
-      terminalCommand: [this.cliPath],
+      terminalCommand: [this.cliPath, 'login'],
       env: { COPILOT_HOME: profileDir },
-      // config.json can exist before auth completes, so no reliable file signal.
+      // Device flow needs the user to read a code from the terminal; no file signal.
       watch: { kind: 'manual-confirm' },
       instructions:
-        'Copilot CLI will start with an isolated profile. Run /login inside it and complete the ' +
-        'GitHub device flow with the account you want to add, then exit.',
+        'The terminal runs "copilot login": it shows a device code — enter it on the GitHub page ' +
+        'that opens, with the account you want to add. Then confirm here.',
       verify: async () => existsSync(join(profileDir, 'config.json')),
     };
   }

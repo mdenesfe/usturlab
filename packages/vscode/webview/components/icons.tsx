@@ -59,6 +59,12 @@ export const IconBack = ({ size }: IconProps) => (
   </svg>
 );
 
+export const IconEdit = ({ size }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M11.5 2.5l2 2L6 12l-2.7.7L4 10z" />
+  </svg>
+);
+
 export const IconAccounts = ({ size }: IconProps) => (
   <svg {...base(size)}>
     <circle cx="8" cy="5.5" r="2.5" />

@@ -2,6 +2,7 @@ import type { AdapterRegistry } from '../adapters/adapter.js';
 import type { QuotaTracker } from '../quota/quotaTracker.js';
 import { SessionStore, embedHistory } from '../session/sessionStore.js';
 import { route } from '../router/router.js';
+import { expandSlashCommand, matchSlashCommand } from '../commands/slashCommands.js';
 import type { RulesFile } from '../rules/schema.js';
 import type {
   AccountProfile,
@@ -43,6 +44,9 @@ export class Orchestrator {
 
     const tried: Target[] = [];
     const history = sessions.getHistory(task.conversationId);
+    // Slash prompts pass through raw to Claude (it runs its native command);
+    // every other provider gets the equivalent plain-English template.
+    const slash = matchSlashCommand(cleanedPrompt);
 
     for (let i = 0; i < decision.chain.length; i++) {
       if (signal.aborted) return;
@@ -66,10 +70,14 @@ export class Orchestrator {
         const nativeSid = adapter.supportsNativeResume
           ? sessions.getNativeSession(task.conversationId, target, task.cwd)
           : undefined;
+        const basePrompt =
+          slash && slash.cmd.kind === 'prompt' && !(target.provider === 'claude' && slash.cmd.claudeNative)
+            ? expandSlashCommand(slash.cmd, slash.args)
+            : cleanedPrompt;
         const prompt =
           adapter.supportsNativeResume && (nativeSid || history.length === 0)
-            ? cleanedPrompt
-            : embedHistory(history, cleanedPrompt);
+            ? basePrompt
+            : embedHistory(history, basePrompt);
 
         let limitEvent: (AdapterEvent & { type: 'limit' }) | undefined;
         let errorEvent: (AdapterEvent & { type: 'error' }) | undefined;

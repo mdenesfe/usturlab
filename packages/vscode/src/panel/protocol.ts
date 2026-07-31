@@ -9,6 +9,9 @@ export interface AccountStatusDto {
   resetAt?: number;
   usage?: UsageWindow[];
   models: Array<{ id: string; label: string }>;
+  /** Login identity (email/username) when detectable from CLI state. */
+  identity?: string;
+  homeDir?: string;
 }
 
 export interface ConversationMeta {
@@ -28,6 +31,7 @@ export type WebviewToHost =
   | { kind: 'openAccounts' }
   | { kind: 'addAccount' }
   | { kind: 'removeAccount'; id: string }
+  | { kind: 'renameAccount'; id: string }
   | { kind: 'openRules' }
   | { kind: 'editRules' }
   | { kind: 'refreshUsage' };
@@ -39,6 +43,7 @@ export type HostToWebview =
   | { kind: 'toolUse'; messageId: string; name: string; detail?: string }
   | { kind: 'failover'; messageId: string; from: Target; to: Target; reason: string; resetAt?: number }
   | { kind: 'downgraded'; messageId: string; from: string; to: string }
+  | { kind: 'notice'; text: string }
   | { kind: 'done'; messageId: string; costUsd?: number }
   | { kind: 'error'; messageId: string; message: string }
   | { kind: 'busy'; running: boolean }
