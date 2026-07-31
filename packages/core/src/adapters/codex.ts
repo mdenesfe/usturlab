@@ -242,6 +242,8 @@ export class CodexAdapter implements ProviderAdapter {
 
         // Live steering: a message sent while this turn runs reaches the model.
         if (req.handle) {
+          // turn/steer folds the message into the running turn.
+          req.handle.injectMode = 'inline';
           req.handle.inject = (injected: string) => {
             if (finished || !threadId || !activeTurnId) return false;
             void rpc

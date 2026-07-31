@@ -17,6 +17,7 @@ export * from './accounts/identity.js';
 export * from './adapters/adapter.js';
 export * from './adapters/spawn.js';
 export * from './adapters/jsonRpc.js';
+export * from './adapters/acp.js';
 export * from './adapters/limits.js';
 export * from './adapters/claude.js';
 export * from './adapters/codex.js';

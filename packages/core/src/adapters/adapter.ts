@@ -7,6 +7,12 @@ import type { AdapterEvent, PermissionMode, ProviderId, ResolvedAccount } from '
  */
 export interface LiveRunHandle {
   inject?: (text: string) => boolean;
+  /**
+   * How an injected message shows up:
+   * - 'turn'   → the agent answers it as a separate turn (its own reply block)
+   * - 'inline' → the agent folds it into the running turn (same reply block)
+   */
+  injectMode?: 'turn' | 'inline';
 }
 
 export interface RunRequest {

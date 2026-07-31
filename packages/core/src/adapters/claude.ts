@@ -66,7 +66,10 @@ export class ClaudeAdapter implements ProviderAdapter {
       );
       return true;
     };
-    if (req.handle) req.handle.inject = writeUser;
+    if (req.handle) {
+      req.handle.injectMode = 'turn';
+      req.handle.inject = writeUser;
+    }
 
     for await (const ev of spawnLines(this.cliPath, args, {
       cwd: req.cwd,

@@ -1,22 +1,21 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { LoginFlow, ProviderAdapter, RunRequest } from './adapter.js';
-import { spawnLines } from './spawn.js';
+import { runAcp } from './acp.js';
 import { detectCopilotLimit } from './limits.js';
 import { buildChildEnv } from '../accounts/env.js';
-import type { AdapterEvent, PermissionMode, ResolvedAccount } from '../types.js';
+import type { AdapterEvent, ResolvedAccount } from '../types.js';
 
-const PERMISSION_ARGS: Record<PermissionMode, string[]> = {
-  safe: [],
-  edits: ['--allow-all-tools'],
-  full: ['--allow-all'],
-};
-
+/**
+ * Copilot over the Agent Client Protocol (`copilot --acp`): one open session
+ * per run, so tool calls stream into the timeline, permission requests are
+ * answered by our permission mode, sessions resume natively, and a message
+ * sent mid-run reaches the agent live.
+ */
 export class CopilotAdapter implements ProviderAdapter {
   readonly id = 'copilot' as const;
-  readonly displayName = 'Copilot CLI';
-  // Programmatic mode is plain text; sessions continue via history embedding.
-  readonly supportsNativeResume = false;
+  readonly displayName = 'GitHub Copilot';
+  readonly supportsNativeResume = true;
   readonly models = [
     { id: 'claude-sonnet-4.6', label: 'Claude Sonnet 4.6' },
     { id: 'gpt-5.4', label: 'GPT-5.4' },
@@ -29,47 +28,21 @@ export class CopilotAdapter implements ProviderAdapter {
     return buildChildEnv(account, base);
   }
 
-  async *run(
+  run(
     req: RunRequest,
     account: ResolvedAccount,
     signal: AbortSignal,
   ): AsyncGenerator<AdapterEvent> {
-    const args = ['-p', req.prompt, '-s', '--no-ask-user', ...PERMISSION_ARGS[req.permissionMode]];
+    const args = ['--acp'];
     if (req.model) args.push(`--model=${req.model}`);
-
-    const env = this.buildEnv(account, process.env);
-    const lines: string[] = [];
-    let stderrTail = '';
-
-    for await (const ev of spawnLines(this.cliPath, args, { cwd: req.cwd, env, signal })) {
-      if (ev.kind === 'spawn-error') {
-        yield { type: 'error', message: ev.message, retryable: false };
-        return;
-      }
-      if (ev.kind === 'exit') {
-        const text = lines.join('\n');
-        const haystack = `${text}\n${stderrTail}`;
-        const limit = detectCopilotLimit(haystack);
-        if (limit) {
-          yield { type: 'limit', ...limit };
-        } else if (ev.code !== 0) {
-          yield {
-            type: 'error',
-            message: stderrTail.trim() || `copilot exited with code ${ev.code}`,
-            retryable: false,
-          };
-        } else {
-          yield { type: 'result', text };
-        }
-        return;
-      }
-      if (ev.stream === 'stderr') {
-        stderrTail = (stderrTail + '\n' + ev.line).slice(-4096);
-        continue;
-      }
-      lines.push(ev.line);
-      yield { type: 'text-delta', text: ev.line + '\n' };
-    }
+    return runAcp({
+      command: this.cliPath,
+      args,
+      env: this.buildEnv(account, process.env),
+      req,
+      signal,
+      detectLimit: detectCopilotLimit,
+    });
   }
 
   interactiveCommand(account: ResolvedAccount, model?: string) {

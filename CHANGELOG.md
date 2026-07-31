@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.0 — 2026-08-01
+
+### Every provider now runs a live session
+- **Copilot** and **Gemini** move to the **Agent Client Protocol** (`--acp`) — the same session transport both CLIs expose for editors. Sessions stay open, so tool calls stream into the timeline, permission requests are answered by your permission mode, sessions resume natively, and **a message sent mid-run reaches the agent live**
+- Injection semantics are modelled per provider instead of assumed: Claude and ACP agents answer an injected message as its **own reply block**; Codex `turn/steer` folds it **into the running block** and the UI says "delivered to the running task"
+- Verified against the real CLIs: Copilot answers the injected message in a second turn, Codex inlines it, both with the original session context intact
+
+### Result
+| | Claude | Codex | Gemini | Copilot |
+|---|---|---|---|---|
+| mid-run messages | live | live | live¹ | live |
+| native session resume | ✅ | ✅ | ✅ | ✅ |
+| streamed tool timeline | ✅ | ✅ | ✅ | ✅ |
+
+¹ Gemini's ACP handshake works, but Google now rejects free individual accounts (`IneligibleTierError`); a paid Google AI plan or an API key is required to run it.
+
 ## 0.2.0 — 2026-08-01
 
 ### Codex gets a live session (GPT is now steerable like Claude)

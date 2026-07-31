@@ -583,16 +583,24 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       // model sees the message immediately. Queue only when unsupported.
       const live = this.liveRuns.get(conversationId);
       if (live?.handle.inject?.(text)) {
-        const injectedId = shortId();
-        live.messageIds.push(injectedId);
-        live.userTexts.push(text);
-        if (live.lastTarget) {
+        if (live.handle.injectMode === 'inline') {
+          // The agent folds this into the turn already streaming — no new block.
           this.toConversation(conversationId, {
-            kind: 'routing',
-            messageId: injectedId,
-            target: live.lastTarget,
-            reason: 'continued in the running session',
+            kind: 'notice',
+            text: 'delivered to the running task',
           });
+        } else {
+          const injectedId = shortId();
+          live.messageIds.push(injectedId);
+          live.userTexts.push(text);
+          if (live.lastTarget) {
+            this.toConversation(conversationId, {
+              kind: 'routing',
+              messageId: injectedId,
+              target: live.lastTarget,
+              reason: 'continued in the running session',
+            });
+          }
         }
         return;
       }
