@@ -301,15 +301,112 @@ body {
   opacity: 0.8;
 }
 
-.tools-line {
+/* ── tool timeline (expandable) ─────────────────────────── */
+
+.tool-group {
+  margin: 6px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--vscode-sideBar-background);
   font-family: var(--mono);
-  font-size: 0.74em;
+  font-size: 0.78em;
+}
+
+.tool-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+  list-style: none;
   color: var(--muted);
-  opacity: 0.85;
-  margin-bottom: 6px;
+  user-select: none;
+}
+
+.tool-summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-summary::before {
+  content: '▸';
+  font-size: 0.85em;
+  transition: transform 0.15s ease;
+}
+
+.tool-group[open] .tool-summary::before {
+  transform: rotate(90deg);
+}
+
+.tool-summary:hover {
+  color: var(--vscode-foreground);
+}
+
+.tool-gear {
+  user-select: none;
+}
+
+.tool-gear.spin {
+  display: inline-block;
+  animation: spin 1.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tool-count {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+
+.tool-names {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.tool-running {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.tool-steps {
+  border-top: 1px solid var(--border);
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.tool-step {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tool-step-name {
+  color: var(--vscode-foreground);
+  flex-shrink: 0;
+}
+
+.tool-step-detail {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.1));
+  padding: 0 5px;
+  border-radius: 3px;
 }
 
 .assistant-body {

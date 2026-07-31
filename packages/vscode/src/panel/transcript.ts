@@ -4,15 +4,26 @@ import type { HostToWebview } from './protocol.js';
 /**
  * Pure transcript logic shared by the webview (live rendering) and the host
  * (stored-log compaction) — and unit-tested without VS Code.
+ *
+ * Assistant content is an ordered timeline: text segments interleaved with
+ * grouped tool activity, exactly in the order they happened.
  */
+
+export interface ToolStep {
+  name: string;
+  detail?: string;
+}
+
+export type Segment =
+  | { kind: 'text'; text: string }
+  | { kind: 'tools'; steps: ToolStep[] };
 
 export type TranscriptItem =
   | { kind: 'user'; text: string }
   | {
       kind: 'assistant';
       messageId: string;
-      text: string;
-      tools: string[];
+      segments: Segment[];
       done: boolean;
       target?: Target;
       ruleId?: string;
@@ -23,6 +34,13 @@ export type TranscriptItem =
   | { kind: 'failover'; text: string }
   | { kind: 'notice'; text: string }
   | { kind: 'error'; text: string };
+
+export function assistantText(item: Extract<TranscriptItem, { kind: 'assistant' }>): string {
+  return item.segments
+    .filter((s): s is Extract<Segment, { kind: 'text' }> => s.kind === 'text')
+    .map((s) => s.text)
+    .join('');
+}
 
 export function applyHostMessage(items: TranscriptItem[], msg: HostToWebview): TranscriptItem[] {
   const next = [...items];
@@ -36,7 +54,7 @@ export function applyHostMessage(items: TranscriptItem[], msg: HostToWebview): T
   const ensureAssistant = (id: string) => {
     let i = lastAssistant(id);
     if (i === -1) {
-      next.push({ kind: 'assistant', messageId: id, text: '', tools: [], done: false });
+      next.push({ kind: 'assistant', messageId: id, segments: [], done: false });
       i = next.length - 1;
     }
     return i;
@@ -60,16 +78,28 @@ export function applyHostMessage(items: TranscriptItem[], msg: HostToWebview): T
     case 'delta': {
       const i = ensureAssistant(msg.messageId);
       const item = next[i] as Extract<TranscriptItem, { kind: 'assistant' }>;
-      next[i] = { ...item, text: item.text + msg.text };
+      const segments = [...item.segments];
+      const last = segments[segments.length - 1];
+      if (last?.kind === 'text') {
+        segments[segments.length - 1] = { kind: 'text', text: last.text + msg.text };
+      } else {
+        segments.push({ kind: 'text', text: msg.text });
+      }
+      next[i] = { ...item, segments };
       break;
     }
     case 'toolUse': {
       const i = ensureAssistant(msg.messageId);
       const item = next[i] as Extract<TranscriptItem, { kind: 'assistant' }>;
-      next[i] = {
-        ...item,
-        tools: [...item.tools, msg.detail ? `${msg.name}: ${msg.detail}` : msg.name],
-      };
+      const segments = [...item.segments];
+      const last = segments[segments.length - 1];
+      const step: ToolStep = { name: msg.name, detail: msg.detail };
+      if (last?.kind === 'tools') {
+        segments[segments.length - 1] = { kind: 'tools', steps: [...last.steps, step] };
+      } else {
+        segments.push({ kind: 'tools', steps: [step] });
+      }
+      next[i] = { ...item, segments };
       break;
     }
     case 'downgraded': {
@@ -89,8 +119,7 @@ export function applyHostMessage(items: TranscriptItem[], msg: HostToWebview): T
       next.push({
         kind: 'assistant',
         messageId: msg.messageId,
-        text: '',
-        tools: [],
+        segments: [],
         done: false,
         target: msg.to,
       });

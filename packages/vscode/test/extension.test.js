@@ -33,4 +33,19 @@ suite('usturlab smoke', () => {
     await vscode.commands.executeCommand('usturlab.openAccounts');
     await vscode.commands.executeCommand('usturlab.openRules');
   });
+
+  test('tabs reopen after being closed (regression: stale panel handles)', async () => {
+    for (let round = 0; round < 2; round++) {
+      await vscode.commands.executeCommand('usturlab.openAccounts');
+      await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+      await vscode.commands.executeCommand('usturlab.openRules');
+      await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+      await vscode.commands.executeCommand('usturlab.newConversation');
+      await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    }
+    // A final open of each must still succeed.
+    await vscode.commands.executeCommand('usturlab.openAccounts');
+    await vscode.commands.executeCommand('usturlab.openRules');
+    await vscode.commands.executeCommand('usturlab.openChatInTab');
+  });
 });

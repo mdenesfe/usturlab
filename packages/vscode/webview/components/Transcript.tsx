@@ -1,4 +1,4 @@
-import type { TranscriptItem } from '../../src/panel/transcript.js';
+import type { Segment, ToolStep, TranscriptItem } from '../../src/panel/transcript.js';
 import { Markdown } from './Markdown.js';
 import { IconUsturlab } from './icons.js';
 import { BRAND_COLOR, BrandMark, PROVIDER_NAME } from './brandIcons.js';
@@ -10,6 +10,47 @@ function LiveDots() {
       <i />
       <i />
     </span>
+  );
+}
+
+/** "Bash ×36 · Read ×5 · Agent" style summary of a tool group. */
+function summarizeSteps(steps: ToolStep[]): string {
+  const counts = new Map<string, number>();
+  for (const step of steps) counts.set(step.name, (counts.get(step.name) ?? 0) + 1);
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([name, n]) => (n > 1 ? `${name} ×${n}` : name))
+    .join(' · ');
+}
+
+/** Collapsible timeline entry for consecutive tool activity. */
+function ToolGroup({ steps, running }: { steps: ToolStep[]; running: boolean }) {
+  const latest = steps[steps.length - 1];
+  return (
+    <details class="tool-group">
+      <summary class="tool-summary">
+        <span class={`tool-gear ${running ? 'spin' : ''}`}>⚙</span>
+        <span class="tool-count">
+          {steps.length} step{steps.length > 1 ? 's' : ''}
+        </span>
+        <span class="tool-names">{summarizeSteps(steps)}</span>
+        {running && latest && (
+          <span class="tool-running">
+            {latest.name}
+            <LiveDots />
+          </span>
+        )}
+      </summary>
+      <div class="tool-steps">
+        {steps.map((step, i) => (
+          <div key={i} class="tool-step">
+            <span class="tool-step-name">{step.name}</span>
+            {step.detail && <code class="tool-step-detail">{step.detail}</code>}
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -74,6 +115,7 @@ export function Transcript({
           case 'assistant': {
             const provider = item.target?.provider;
             const color = provider ? BRAND_COLOR[provider] : undefined;
+            const lastSegment: Segment | undefined = item.segments[item.segments.length - 1];
             return (
               <div
                 key={i}
@@ -109,22 +151,26 @@ export function Transcript({
                     )}
                   </div>
                 )}
-                {item.tools.length > 0 && (
-                  <div class="tools-line" title={item.tools.join('\n')}>
-                    ⚙ {item.tools.join(' · ')}
-                  </div>
-                )}
-                {item.text ? (
-                  <div class="assistant-body">
-                    <Markdown text={item.text} />
-                    {!item.done && <span class="type-cursor" />}
-                  </div>
-                ) : !item.done ? (
+                {item.segments.map((segment, j) => {
+                  const isLast = j === item.segments.length - 1;
+                  if (segment.kind === 'tools') {
+                    return (
+                      <ToolGroup key={j} steps={segment.steps} running={!item.done && isLast} />
+                    );
+                  }
+                  return (
+                    <div key={j} class="assistant-body">
+                      <Markdown text={segment.text} />
+                      {!item.done && isLast && <span class="type-cursor" />}
+                    </div>
+                  );
+                })}
+                {!item.done && !lastSegment && (
                   <div class="thinking-row">
                     thinking
                     <LiveDots />
                   </div>
-                ) : null}
+                )}
               </div>
             );
           }

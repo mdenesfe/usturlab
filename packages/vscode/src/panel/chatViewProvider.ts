@@ -103,7 +103,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.pushRules();
       }),
       { dispose: offQuota },
-      { dispose: () => this.persistTimer && clearTimeout(this.persistTimer) },
+      {
+        dispose: () => {
+          // Flush pending writes so a window close never loses the last turn.
+          if (this.persistTimer) clearTimeout(this.persistTimer);
+          this.persistNow();
+        },
+      },
       { dispose: () => this.cancelAll() },
     );
 
@@ -361,16 +367,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  private persistNow(): void {
+    const list = [...this.conversations.values()]
+      .filter((c) => c.log.length > 0)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, MAX_CONVERSATIONS);
+    void this.ctx.globalState.update(CONV_KEY, list);
+    void this.ctx.globalState.update(NATIVE_SESSIONS_KEY, this.sessions.serializeNative());
+  }
+
   private persistSoon(): void {
     if (this.persistTimer) clearTimeout(this.persistTimer);
-    this.persistTimer = setTimeout(() => {
-      const list = [...this.conversations.values()]
-        .filter((c) => c.log.length > 0)
-        .sort((a, b) => b.updatedAt - a.updatedAt)
-        .slice(0, MAX_CONVERSATIONS);
-      void this.ctx.globalState.update(CONV_KEY, list);
-      void this.ctx.globalState.update(NATIVE_SESSIONS_KEY, this.sessions.serializeNative());
-    }, 800);
+    this.persistTimer = setTimeout(() => this.persistNow(), 800);
   }
 
   // ── messaging ────────────────────────────────────────────────────
@@ -500,10 +508,44 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   // ── task lifecycle ───────────────────────────────────────────────
 
+  private performAction(conversationId: string, action: import('@usturlab/core').SlashAction): void {
+    const notice = (t: string) => this.toConversation(conversationId, { kind: 'notice', text: t });
+    switch (action) {
+      case 'newChat':
+        this.newConversation();
+        break;
+      case 'clearChat':
+        this.clearConversation(conversationId);
+        break;
+      case 'openAccounts':
+        this.openAccountsTab();
+        notice('opened accounts');
+        break;
+      case 'openRules':
+        this.openRulesTab();
+        notice('opened routing rules');
+        break;
+      case 'refreshUsage':
+        void this.usageRefresher?.();
+        notice('refreshing usage…');
+        break;
+      case 'openTerminal':
+        void vscode.commands.executeCommand('usturlab.openInTerminal');
+        break;
+    }
+    this.sendConversations();
+  }
+
   /** Entry point for user sends: echoes immediately; queues while a task runs. */
   private async handleSend(conversationId: string, text: string, tags: string[]): Promise<void> {
     if (!this.conversations.has(conversationId)) return;
     this.toConversation(conversationId, { kind: 'userEcho', text });
+    // Host actions (/accounts, /clear…) must never be injected or queued.
+    const slashAction = matchSlashCommand(text, this.rules.getCustomCommands());
+    if (slashAction?.cmd.kind === 'action' && slashAction.cmd.action) {
+      this.performAction(conversationId, slashAction.cmd.action);
+      return;
+    }
     if (this.tasks.has(conversationId)) {
       // Prefer real mid-run injection (Claude's streamed stdin); the running
       // model sees the message immediately. Queue only when unsupported.
@@ -558,34 +600,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (!rec) return;
     if (this.tasks.has(conversationId)) return;
 
-    // Action slash commands run in the host, not on a model.
+    // Safety net for actions that were queued before handleSend intercepted them.
     const slash = matchSlashCommand(text, this.rules.getCustomCommands());
-    if (slash?.cmd.kind === 'action') {
-      const notice = (t: string) => this.toConversation(conversationId, { kind: 'notice', text: t });
-      switch (slash.cmd.action) {
-        case 'newChat':
-          this.newConversation();
-          break;
-        case 'clearChat':
-          this.clearConversation(conversationId);
-          break;
-        case 'openAccounts':
-          this.openAccountsTab();
-          notice('opened accounts');
-          break;
-        case 'openRules':
-          this.openRulesTab();
-          notice('opened routing rules');
-          break;
-        case 'refreshUsage':
-          void this.usageRefresher?.();
-          notice('refreshing usage…');
-          break;
-        case 'openTerminal':
-          void vscode.commands.executeCommand('usturlab.openInTerminal');
-          break;
-      }
-      this.sendConversations();
+    if (slash?.cmd.kind === 'action' && slash.cmd.action) {
+      this.performAction(conversationId, slash.cmd.action);
       return;
     }
     if (!rec.title) {

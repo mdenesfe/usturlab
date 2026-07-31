@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyHostMessage,
+  assistantText,
   compactLog,
   reduceTranscript,
   type TranscriptItem,
@@ -22,17 +23,37 @@ describe('transcript reducer', () => {
       { kind: 'routing', messageId: 'm1', target: target('a'), ruleId: 'r1', reason: 'rule' },
       { kind: 'delta', messageId: 'm1', text: 'hi ' },
       { kind: 'delta', messageId: 'm1', text: 'there' },
-      { kind: 'done', messageId: 'm1', costUsd: 0.01 },
+      { kind: 'done', messageId: 'm1', costUsd: 0.01, durationMs: 1200 },
     ];
     const items = reduceTranscript(log);
     expect(items).toHaveLength(2);
     expect(items[0]).toEqual({ kind: 'user', text: 'hello' });
     const a = assistant(items);
-    expect(a.text).toBe('hi there');
+    expect(assistantText(a)).toBe('hi there');
+    expect(a.segments).toHaveLength(1);
     expect(a.target).toEqual(target('a'));
-    expect(a.ruleId).toBe('r1');
     expect(a.done).toBe(true);
-    expect(a.costUsd).toBe(0.01);
+    expect(a.durationMs).toBe(1200);
+  });
+
+  it('interleaves tool activity with text as an ordered timeline', () => {
+    const log: HostToWebview[] = [
+      { kind: 'delta', messageId: 'm1', text: 'let me check ' },
+      { kind: 'toolUse', messageId: 'm1', name: 'Bash', detail: 'git diff' },
+      { kind: 'toolUse', messageId: 'm1', name: 'Read' },
+      { kind: 'delta', messageId: 'm1', text: 'found it' },
+      { kind: 'toolUse', messageId: 'm1', name: 'Bash' },
+      { kind: 'done', messageId: 'm1' },
+    ];
+    const a = assistant(reduceTranscript(log));
+    expect(a.segments.map((s) => s.kind)).toEqual(['text', 'tools', 'text', 'tools']);
+    const firstGroup = a.segments[1];
+    if (firstGroup?.kind !== 'tools') throw new Error('expected tools segment');
+    expect(firstGroup.steps).toEqual([
+      { name: 'Bash', detail: 'git diff' },
+      { name: 'Read', detail: undefined },
+    ]);
+    expect(assistantText(a)).toBe('let me check found it');
   });
 
   it('failover opens a new bubble; later deltas and done land on it', () => {
@@ -45,23 +66,15 @@ describe('transcript reducer', () => {
       { kind: 'done', messageId: 'm1' },
     ];
     const items = reduceTranscript(log);
-    const kinds = items.map((i) => i.kind);
-    expect(kinds).toEqual(['user', 'assistant', 'failover', 'assistant']);
+    expect(items.map((i) => i.kind)).toEqual(['user', 'assistant', 'failover', 'assistant']);
 
     const first = assistant(items, 0);
     const second = assistant(items, 1);
-    expect(first.text).toBe('partial from a');
+    expect(assistantText(first)).toBe('partial from a');
     expect(first.done).toBe(false);
-    expect(second.text).toBe('answer from b');
+    expect(assistantText(second)).toBe('answer from b');
     expect(second.target).toEqual(target('b'));
     expect(second.done).toBe(true);
-  });
-
-  it('collects tool chips with details and retries', () => {
-    let items: TranscriptItem[] = [];
-    items = applyHostMessage(items, { kind: 'toolUse', messageId: 'm1', name: 'shell', detail: 'git diff' });
-    items = applyHostMessage(items, { kind: 'toolUse', messageId: 'm1', name: 'retry #2' });
-    expect(assistant(items).tools).toEqual(['shell: git diff', 'retry #2']);
   });
 
   it('renders notices, downgrades and errors as standalone rows', () => {
@@ -81,10 +94,17 @@ describe('transcript reducer', () => {
       { kind: 'delta', messageId: 'm1', text: ' more' },
       { kind: 'done', messageId: 'm2' },
     ]);
-    expect(assistant(items, 0).text).toBe('one more');
-    expect(assistant(items, 1).text).toBe('two');
+    expect(assistantText(assistant(items, 0))).toBe('one more');
+    expect(assistantText(assistant(items, 1))).toBe('two');
     expect(assistant(items, 1).done).toBe(true);
     expect(assistant(items, 0).done).toBe(false);
+  });
+
+  it('applyHostMessage does not mutate previous items', () => {
+    const before = reduceTranscript([{ kind: 'delta', messageId: 'm1', text: 'a' }]);
+    const snapshot = JSON.parse(JSON.stringify(before));
+    applyHostMessage(before, { kind: 'delta', messageId: 'm1', text: 'b' });
+    expect(before).toEqual(snapshot);
   });
 });
 
@@ -94,21 +114,21 @@ describe('log compaction (stored-conversation hydration)', () => {
     { kind: 'routing', messageId: 'm1', target: target('a'), reason: 'default' },
     { kind: 'delta', messageId: 'm1', text: 'a1 ' },
     { kind: 'delta', messageId: 'm1', text: 'a2' },
+    { kind: 'toolUse', messageId: 'm1', name: 'Bash' },
+    { kind: 'delta', messageId: 'm1', text: 'a3 ' },
     { kind: 'failover', messageId: 'm1', from: target('a'), to: target('b'), reason: 'limit' },
     { kind: 'delta', messageId: 'm1', text: 'b1 ' },
     { kind: 'delta', messageId: 'm1', text: 'b2' },
     { kind: 'done', messageId: 'm1' },
   ];
 
-  it('merges consecutive deltas but never across a failover boundary', () => {
+  it('merges consecutive deltas but never across tool or failover boundaries', () => {
     const compact = compactLog(failoverLog);
     const deltas = compact.filter((m) => m.kind === 'delta');
-    expect(deltas).toHaveLength(2);
-    expect(deltas[0]).toMatchObject({ text: 'a1 a2' });
-    expect(deltas[1]).toMatchObject({ text: 'b1 b2' });
+    expect(deltas.map((d) => (d as { text: string }).text)).toEqual(['a1 a2', 'a3 ', 'b1 b2']);
   });
 
-  it('replaying a compacted log reproduces the exact transcript', () => {
+  it('replaying a compacted log reproduces the exact transcript (timeline included)', () => {
     expect(reduceTranscript(compactLog(failoverLog))).toEqual(reduceTranscript(failoverLog));
   });
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.2 — 2026-08-01
+
+### Chat
+- Tool activity renders as an expandable timeline in the order it happened: a collapsed row summarizes the group (`36 steps · Bash ×30 · Read ×5`) with a spinning gear and the live step while running; expanding lists every call with its detail
+- Text and tool groups interleave as ordered segments, so long agentic answers read like a transcript instead of a wall
+
+### Stability
+- Verified Claude's live mid-run injection against the real CLI end to end (two turns, one session)
+- Host slash actions (`/accounts`, `/clear`, …) execute immediately instead of being injected into or queued behind a running task
+- Conversations flush to storage on window close — the last turn can no longer be lost inside the debounce window
+- Test suite grown to 78: env isolation/scrubbing per provider, Claude usage parsing (both shapes + failures), Codex offline usage reader, MCP sync for all four config formats (idempotent, preserves unrelated keys), custom command parsing/precedence, transcript timeline + compaction invariants, and a VS Code regression test that closes and reopens every tab twice
+
 ## 0.1.1 — 2026-08-01
 
 - Closed Accounts/Rules/chat tabs reopen reliably: a stale panel handle no longer swallows the click; webview handler errors now land in the output channel instead of dying silently
