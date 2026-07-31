@@ -6,7 +6,7 @@ import { Composer } from './components/Composer.js';
 import { HistoryList } from './components/HistoryList.js';
 import { AccountsView } from './components/AccountsView.js';
 import { RulesView } from './components/RulesView.js';
-import { IconPlus } from './components/icons.js';
+import { IconAccounts, IconPlus, IconRoute } from './components/icons.js';
 
 declare global {
   interface Window {
@@ -78,6 +78,14 @@ function SidebarApp() {
         onDelete={(id) => vscode.postMessage({ kind: 'deleteConversation', id })}
         onNewChat={() => vscode.postMessage({ kind: 'newConversation' })}
       />
+      <div class="sidebar-footer">
+        <button class="footer-btn" onClick={() => vscode.postMessage({ kind: 'openAccounts' })}>
+          <IconAccounts size={13} /> Accounts
+        </button>
+        <button class="footer-btn" onClick={() => vscode.postMessage({ kind: 'openRules' })}>
+          <IconRoute size={13} /> Rules
+        </button>
+      </div>
     </div>
   );
 }

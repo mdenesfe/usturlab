@@ -140,6 +140,36 @@ body {
   color: var(--vscode-errorForeground);
 }
 
+/* ── sidebar footer ─────────────────────────────────────── */
+
+.sidebar-footer {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.footer-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font-size: 0.82em;
+  cursor: pointer;
+}
+
+.footer-btn:hover {
+  background: var(--vscode-list-hoverBackground);
+  border-color: var(--accent);
+}
+
 /* ── transcript ─────────────────────────────────────────── */
 
 .scroll-area {
