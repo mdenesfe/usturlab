@@ -1,5 +1,14 @@
 import type { AdapterEvent, PermissionMode, ProviderId, ResolvedAccount } from '../types.js';
 
+/**
+ * Live handle for a run in flight. Adapters that can accept mid-run user
+ * input (Claude's stream-json stdin) set `inject`; it returns true when the
+ * message reached the running model. Callers fall back to queueing otherwise.
+ */
+export interface LiveRunHandle {
+  inject?: (text: string) => boolean;
+}
+
 export interface RunRequest {
   /** For providers without native resume the orchestrator pre-embeds history here. */
   prompt: string;
@@ -7,6 +16,8 @@ export interface RunRequest {
   model?: string;
   resumeSessionId?: string;
   permissionMode: PermissionMode;
+  /** Populated by adapters that support mid-run injection. */
+  handle?: LiveRunHandle;
 }
 
 /**

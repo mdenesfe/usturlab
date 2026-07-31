@@ -3,6 +3,7 @@ import type { QuotaTracker } from '../quota/quotaTracker.js';
 import { SessionStore, embedHistory } from '../session/sessionStore.js';
 import { route } from '../router/router.js';
 import { expandSlashCommand, matchSlashCommand, type SlashCommand } from '../commands/slashCommands.js';
+import type { LiveRunHandle } from '../adapters/adapter.js';
 import type { RulesFile } from '../rules/schema.js';
 import type {
   AccountProfile,
@@ -29,7 +30,11 @@ export interface OrchestratorDeps {
 export class Orchestrator {
   constructor(private deps: OrchestratorDeps) {}
 
-  async *run(task: TaskRequest, signal: AbortSignal): AsyncGenerator<RunEvent> {
+  async *run(
+    task: TaskRequest,
+    signal: AbortSignal,
+    handle?: LiveRunHandle,
+  ): AsyncGenerator<RunEvent> {
     const { adapters, quota, sessions } = this.deps;
     const { decision, cleanedPrompt } = route(
       task,
@@ -83,6 +88,8 @@ export class Orchestrator {
 
         let limitEvent: (AdapterEvent & { type: 'limit' }) | undefined;
         let errorEvent: (AdapterEvent & { type: 'error' }) | undefined;
+        let firstResultRecorded = false;
+        let gotResult = false;
 
         for await (const ev of adapter.run(
           {
@@ -91,6 +98,7 @@ export class Orchestrator {
             model: target.model,
             resumeSessionId: nativeSid,
             permissionMode: task.permissionMode,
+            handle,
           },
           account,
           signal,
@@ -106,13 +114,33 @@ export class Orchestrator {
             errorEvent = ev;
             break;
           } else if (ev.type === 'result') {
-            sessions.appendTurn(task.conversationId, { role: 'user', text: cleanedPrompt });
-            sessions.appendTurn(task.conversationId, { role: 'assistant', text: ev.text });
+            // Injection-capable adapters may answer several turns per run;
+            // keep consuming — the host tracks per-turn transcript state.
+            gotResult = true;
+            if (!firstResultRecorded) {
+              firstResultRecorded = true;
+              sessions.appendTurn(task.conversationId, { role: 'user', text: cleanedPrompt });
+              sessions.appendTurn(task.conversationId, { role: 'assistant', text: ev.text });
+            }
             yield ev;
-            return;
           } else {
             yield ev;
           }
+        }
+        if (gotResult) {
+          // A later injected turn may still hit a limit/error — surface it,
+          // but the run already produced answers so no failover.
+          if (limitEvent) {
+            quota.markLimitHit(account.id, {
+              resetAt: limitEvent.resetAt,
+              scope: limitEvent.scope,
+              provider: target.provider,
+            });
+            yield limitEvent;
+          } else if (errorEvent) {
+            yield errorEvent;
+          }
+          return;
         }
 
         if (limitEvent) {

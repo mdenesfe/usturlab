@@ -34,9 +34,12 @@ export class ClaudeAdapter implements ProviderAdapter {
     account: ResolvedAccount,
     signal: AbortSignal,
   ): AsyncGenerator<AdapterEvent> {
+    // stream-json input keeps stdin open, so additional user messages can be
+    // injected into the RUNNING session (Claude answers them as extra turns).
     const args = [
       '-p',
-      req.prompt,
+      '--input-format',
+      'stream-json',
       '--output-format',
       'stream-json',
       '--verbose',
@@ -53,7 +56,28 @@ export class ClaudeAdapter implements ProviderAdapter {
     let stderrTail = '';
     let lastText = '';
 
-    for await (const ev of spawnLines(this.cliPath, args, { cwd: req.cwd, env, signal })) {
+    let stdin: NodeJS.WritableStream | undefined;
+    let pendingTurns = 0;
+    const writeUser = (text: string): boolean => {
+      if (!stdin || !(stdin as NodeJS.WriteStream).writable) return false;
+      pendingTurns++;
+      stdin.write(
+        JSON.stringify({ type: 'user', message: { role: 'user', content: text } }) + '\n',
+      );
+      return true;
+    };
+    if (req.handle) req.handle.inject = writeUser;
+
+    for await (const ev of spawnLines(this.cliPath, args, {
+      cwd: req.cwd,
+      env,
+      signal,
+      stdinPipe: true,
+      onChild: (child) => {
+        stdin = child.stdin ?? undefined;
+        writeUser(req.prompt);
+      },
+    })) {
       if (ev.kind === 'spawn-error') {
         yield { type: 'error', message: ev.message, retryable: false };
         return;
@@ -166,6 +190,13 @@ export class ClaudeAdapter implements ProviderAdapter {
               outputTokens: getNumber(msg, 'usage', 'output_tokens'),
             },
           };
+        }
+        // One result per turn: keep the session open while injected turns
+        // are pending; close stdin when everything is answered.
+        pendingTurns--;
+        if (pendingTurns <= 0) {
+          if (req.handle) req.handle.inject = undefined;
+          stdin?.end();
         }
       }
     }

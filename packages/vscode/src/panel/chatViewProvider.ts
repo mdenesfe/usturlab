@@ -10,6 +10,7 @@ import {
   formatTarget,
   matchSlashCommand,
   shortId,
+  type LiveRunHandle,
   type PermissionMode,
   type Target,
 } from '@usturlab/core';
@@ -70,6 +71,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private conversations = new Map<string, ConversationRecord>();
   private tasks = new Map<string, AbortController>();
   private queues = new Map<string, Array<{ text: string; tags: string[] }>>();
+  private liveRuns = new Map<
+    string,
+    { handle: LiveRunHandle; messageIds: string[]; turnIdx: number; userTexts: string[]; lastTarget?: Target }
+  >();
   private persistTimer?: NodeJS.Timeout;
   private onTargetChosen?: (target: Target) => void;
   private usageRefresher?: () => Promise<void>;
@@ -482,9 +487,26 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (!this.conversations.has(conversationId)) return;
     this.toConversation(conversationId, { kind: 'userEcho', text });
     if (this.tasks.has(conversationId)) {
+      // Prefer real mid-run injection (Claude's streamed stdin); the running
+      // model sees the message immediately. Queue only when unsupported.
+      const live = this.liveRuns.get(conversationId);
+      if (live?.handle.inject?.(text)) {
+        const injectedId = shortId();
+        live.messageIds.push(injectedId);
+        live.userTexts.push(text);
+        if (live.lastTarget) {
+          this.toConversation(conversationId, {
+            kind: 'routing',
+            messageId: injectedId,
+            target: live.lastTarget,
+            reason: 'continued in the running session',
+          });
+        }
+        return;
+      }
       this.toConversation(conversationId, {
         kind: 'notice',
-        text: 'queued — runs when the current task finishes',
+        text: 'queued — this model cannot take mid-run input; runs next',
       });
       const queue = this.queues.get(conversationId) ?? [];
       queue.push({ text, tags });
@@ -537,10 +559,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     const messageId = shortId();
     const startedAt = Date.now();
-    let lastTarget: Target | undefined;
     let gotResult = false;
     const controller = new AbortController();
     this.tasks.set(conversationId, controller);
+    const live = {
+      handle: {} as LiveRunHandle,
+      messageIds: [messageId],
+      turnIdx: 0,
+      userTexts: [text],
+      lastTarget: undefined as Target | undefined,
+    };
+    this.liveRuns.set(conversationId, live);
+    const currentId = () => live.messageIds[Math.min(live.turnIdx, live.messageIds.length - 1)]!;
     const post = (msg: HostToWebview) => this.toConversation(conversationId, msg);
     this.toConversation(conversationId, { kind: 'busy', running: true }, { log: false });
     this.sendConversations();
@@ -567,6 +597,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           permissionMode,
         },
         controller.signal,
+        live.handle,
       );
 
       for await (const ev of events) {
@@ -576,7 +607,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             if (first) {
               post({
                 kind: 'routing',
-                messageId,
+                messageId: currentId(),
                 target: first,
                 ruleId: ev.decision.ruleId,
                 reason: ev.decision.reason,
@@ -587,7 +618,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 .join(', ');
               post({
                 kind: 'error',
-                messageId,
+                messageId: currentId(),
                 message: skipped
                   ? `No account available. Skipped: ${skipped}`
                   : 'No accounts configured yet — run "usturlab: Add Account" first.',
@@ -601,49 +632,63 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             break;
           }
           case 'attempt':
-            lastTarget = ev.target;
+            live.lastTarget = ev.target;
             this.onTargetChosen?.(ev.target);
             if (ev.attempt > 1) {
-              post({ kind: 'toolUse', messageId, name: `retry #${ev.attempt}` });
+              post({ kind: 'toolUse', messageId: currentId(), name: `retry #${ev.attempt}` });
             }
             break;
           case 'text-delta':
-            post({ kind: 'delta', messageId, text: ev.text });
+            post({ kind: 'delta', messageId: currentId(), text: ev.text });
             break;
           case 'tool-use':
-            post({ kind: 'toolUse', messageId, name: ev.name, detail: ev.detail });
+            post({ kind: 'toolUse', messageId: currentId(), name: ev.name, detail: ev.detail });
             break;
           case 'model-downgraded':
-            post({ kind: 'downgraded', messageId, from: ev.from, to: ev.to });
+            post({ kind: 'downgraded', messageId: currentId(), from: ev.from, to: ev.to });
             break;
           case 'failover':
             post({
               kind: 'failover',
-              messageId,
+              messageId: currentId(),
               from: ev.from,
               to: ev.to,
               reason: ev.reason,
               resetAt: ev.resetAt,
             });
             break;
-          case 'result':
-            rec.turns.push({ role: 'user', text }, { role: 'assistant', text: ev.text });
+          case 'result': {
+            const turnUser = live.userTexts[live.turnIdx] ?? text;
+            rec.turns.push({ role: 'user', text: turnUser }, { role: 'assistant', text: ev.text });
+            if (live.turnIdx > 0) {
+              // Injected turns: keep the engine history in sync too (the
+              // orchestrator records only the first pair).
+              this.sessions.appendTurn(conversationId, { role: 'user', text: turnUser });
+              this.sessions.appendTurn(conversationId, { role: 'assistant', text: ev.text });
+            }
             gotResult = true;
-            post({ kind: 'done', messageId, costUsd: ev.costUsd, durationMs: Date.now() - startedAt });
+            post({
+              kind: 'done',
+              messageId: currentId(),
+              costUsd: ev.costUsd,
+              durationMs: Date.now() - startedAt,
+            });
+            live.turnIdx++;
             break;
+          }
           case 'limit': {
             const reset = ev.resetAt ? ` Resets ${new Date(ev.resetAt).toLocaleString()}.` : '';
-            post({ kind: 'error', messageId, message: `Usage limit reached.${reset}` });
+            post({ kind: 'error', messageId: currentId(), message: `Usage limit reached.${reset}` });
             break;
           }
           case 'error':
-            post({ kind: 'error', messageId, message: ev.message });
+            post({ kind: 'error', messageId: currentId(), message: ev.message });
             break;
           case 'chain-exhausted':
             if (ev.tried.length > 0) {
               post({
                 kind: 'error',
-                messageId,
+                messageId: currentId(),
                 message: `All ${ev.tried.length} account(s) in the chain failed or hit limits.`,
               });
             }
@@ -653,12 +698,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
       }
     } catch (e) {
-      post({ kind: 'error', messageId, message: (e as Error).message });
+      post({ kind: 'error', messageId: currentId(), message: (e as Error).message });
       this.output.appendLine(`[error] ${(e as Error).stack ?? e}`);
     } finally {
       if (this.tasks.get(conversationId) === controller) this.tasks.delete(conversationId);
+      if (this.liveRuns.get(conversationId) === live) this.liveRuns.delete(conversationId);
       if (!controller.signal.aborted) {
-        this.notifyFinished(conversationId, gotResult, startedAt, lastTarget);
+        this.notifyFinished(conversationId, gotResult, startedAt, live.lastTarget);
       }
       rec.log = compactLog(rec.log);
       this.toConversation(conversationId, { kind: 'busy', running: false }, { log: false });

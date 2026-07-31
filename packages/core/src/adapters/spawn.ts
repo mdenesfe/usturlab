@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 
 export type SpawnEvent =
@@ -10,6 +10,10 @@ export interface SpawnOptions {
   cwd: string;
   env: NodeJS.ProcessEnv;
   signal: AbortSignal;
+  /** Open a writable stdin (for CLIs that accept streamed input). */
+  stdinPipe?: boolean;
+  /** Called once with the child so callers can grab stdin. */
+  onChild?: (child: ChildProcess) => void;
 }
 
 /** Spawns a CLI and yields stdout/stderr line-by-line, ending with exit info. */
@@ -21,8 +25,9 @@ export async function* spawnLines(
   const child = spawn(command, args, {
     cwd: opts.cwd,
     env: opts.env,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: [opts.stdinPipe ? 'pipe' : 'ignore', 'pipe', 'pipe'],
   });
+  opts.onChild?.(child);
 
   const queue: SpawnEvent[] = [];
   let done = false;
