@@ -92,11 +92,13 @@ export async function addAccountWizard(
     prompt: 'Short name used in rules, e.g. "personal", "work"',
     value: AUTH_OPTIONS[provider].indexOf(authPick) === 0 ? 'personal' : '',
     validateInput: (value) => {
-      if (!value.trim()) return 'Label is required';
-      const slug = slugify(value);
-      if (!slug) return 'Label must contain letters or numbers';
-      if (accounts.all().some((a) => a.provider === provider && a.label === value.trim())) {
-        return `A ${provider} account labeled "${value.trim()}" already exists`;
+      const trimmed = value.trim();
+      if (!trimmed) return 'Label is required';
+      if (!/^[a-zA-Z0-9][\w-]*$/.test(trimmed)) {
+        return 'Use letters, numbers, - or _ only (e.g. "personal", "work-2")';
+      }
+      if (accounts.all().some((a) => a.provider === provider && a.label === trimmed)) {
+        return `A ${provider} account labeled "${trimmed}" already exists`;
       }
       return undefined;
     },

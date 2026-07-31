@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { AccountStatusDto } from '../../src/panel/protocol.js';
 import { vscode } from '../vscodeApi.js';
 import { IconAccounts, IconPlus, IconTrash } from './icons.js';
@@ -21,26 +22,64 @@ function barClass(pct: number): string {
   return 'low';
 }
 
-export function AccountsView({ accounts }: { accounts: AccountStatusDto[] }) {
-  return (
-    <div class="accounts-page">
-      <div class="accounts-header">
-        <div class="accounts-title">
-          <IconAccounts size={16} />
-          <span>Accounts</span>
-          <span class="accounts-count">{accounts.length}</span>
-        </div>
-        <div class="accounts-actions">
-          <button class="ghost-btn" onClick={() => vscode.postMessage({ kind: 'refreshUsage' })}>
-            Refresh usage
-          </button>
-          <button class="run-btn send" onClick={() => vscode.postMessage({ kind: 'addAccount' })}>
-            <IconPlus size={12} /> Add account
-          </button>
-        </div>
-      </div>
+function worstPct(a: AccountStatusDto): number | undefined {
+  if (!a.usage || a.usage.length === 0) return undefined;
+  return Math.max(...a.usage.map((u) => u.utilizationPct));
+}
 
-      {accounts.length === 0 ? (
+function usageHint(a: AccountStatusDto): string {
+  switch (a.provider) {
+    case 'gemini':
+      return 'Gemini CLI does not expose usage data.';
+    case 'codex':
+      return 'Usage appears after the first task runs on this profile — Codex writes rate-limit snapshots into its session files.';
+    case 'claude':
+      return a.authMode === 'oauth-token'
+        ? 'No data yet — hit Refresh. Usage comes from the same endpoint Claude Code’s /usage screen uses.'
+        : 'Usage view needs a subscription-token account (re-add via "Claude subscription (recommended)").';
+    case 'copilot':
+      return a.authMode === 'api-key'
+        ? 'No data yet — the PAT needs the "Plan: read" permission.'
+        : 'Usage view needs a PAT account (fine-grained token with "Plan: read").';
+    default:
+      return 'No usage data.';
+  }
+}
+
+function fmtReset(ts?: number): string | undefined {
+  if (!ts) return undefined;
+  const d = new Date(ts);
+  const today = new Date().toDateString() === d.toDateString();
+  return today
+    ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+export function AccountsView({ accounts }: { accounts: AccountStatusDto[] }) {
+  const [selectedId, setSelectedId] = useState<string | undefined>();
+  const [listWidth, setListWidth] = useState(240);
+  const dragging = useRef(false);
+  const selected = accounts.find((a) => a.id === selectedId) ?? accounts[0];
+
+  useEffect(() => {
+    const move = (e: MouseEvent) => {
+      if (dragging.current) setListWidth(Math.min(420, Math.max(170, e.clientX)));
+    };
+    const up = () => {
+      dragging.current = false;
+      document.body.classList.remove('resizing');
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    return () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+  }, []);
+
+  if (accounts.length === 0) {
+    return (
+      <div class="accounts-page">
         <div class="accounts-empty">
           <IconAccounts size={28} />
           <div class="accounts-empty-title">No accounts yet</div>
@@ -52,67 +91,145 @@ export function AccountsView({ accounts }: { accounts: AccountStatusDto[] }) {
             <IconPlus size={12} /> Add your first account
           </button>
         </div>
-      ) : (
-        <div class="account-cards">
-          {accounts.map((a) => (
-            <div key={a.id} class={`account-card ${a.available ? '' : 'limited'}`}>
-              <div class={`provider-glyph p-${a.provider}`}>{PROVIDER_GLYPH[a.provider]}</div>
-              <div class="account-main">
-                <div class="account-name">
-                  <span class="account-id">
-                    {a.provider}:{a.label}
-                  </span>
-                  <span class="account-auth">{AUTH_LABEL[a.authMode] ?? a.authMode}</span>
-                </div>
-                <div class="account-status">
+      </div>
+    );
+  }
+
+  return (
+    <div class="accounts-split">
+      <div class="accounts-list" style={{ width: `${listWidth}px` }}>
+        <div class="accounts-list-head">
+          <span class="accounts-list-title">Accounts</span>
+          <span class="accounts-count">{accounts.length}</span>
+          <div class="header-gap" />
+          <button
+            class="icon-btn"
+            title="Add account"
+            onClick={() => vscode.postMessage({ kind: 'addAccount' })}
+          >
+            <IconPlus />
+          </button>
+        </div>
+        {accounts.map((a) => {
+          const pct = worstPct(a);
+          return (
+            <div
+              key={a.id}
+              class={`accounts-row ${selected?.id === a.id ? 'active' : ''}`}
+              onClick={() => setSelectedId(a.id)}
+            >
+              <div class={`provider-glyph small p-${a.provider}`}>{PROVIDER_GLYPH[a.provider]}</div>
+              <span class="accounts-row-name" title={`${a.provider}:${a.label}`}>
+                {a.provider}:{a.label}
+              </span>
+              <span class="accounts-row-state">
+                {pct !== undefined ? (
+                  <span class={`row-pct ${barClass(pct)}`}>{pct}%</span>
+                ) : (
                   <span class={`dot ${a.available ? 'ok' : 'off'}`} />
-                  {a.available
-                    ? 'ready'
-                    : `limited${a.resetAt ? ` · resets ${new Date(a.resetAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`}
-                </div>
-                {(a.usage ?? []).map((u) => (
-                  <div key={u.label} class="usage-row">
-                    <div class="usage-bar">
-                      <div
-                        class={`usage-fill ${barClass(u.utilizationPct)}`}
-                        style={{ width: `${Math.min(100, u.utilizationPct)}%` }}
-                      />
-                    </div>
-                    <span class="usage-label">
-                      {u.utilizationPct}% · {u.label}
-                      {u.resetAt &&
-                        ` · resets ${new Date(u.resetAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
-                    </span>
-                  </div>
-                ))}
-                {(a.usage ?? []).length === 0 && (
-                  <div class="usage-none">
-                    {a.provider === 'gemini'
-                      ? 'usage data not exposed by gemini'
-                      : 'no usage data yet — Refresh usage'}
-                  </div>
                 )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div
+        class="splitter"
+        onMouseDown={() => {
+          dragging.current = true;
+          document.body.classList.add('resizing');
+        }}
+      />
+
+      {selected && (
+        <div class="account-detail">
+          <div class="detail-header">
+            <div class={`provider-glyph big p-${selected.provider}`}>
+              {PROVIDER_GLYPH[selected.provider]}
+            </div>
+            <div class="detail-title">
+              <div class="detail-name">
+                {selected.provider}:{selected.label}
               </div>
+              <div class="detail-sub">
+                <span class="account-auth">{AUTH_LABEL[selected.authMode] ?? selected.authMode}</span>
+                <span class={`detail-status ${selected.available ? 'ok' : 'off'}`}>
+                  <span class={`dot ${selected.available ? 'ok' : 'off'}`} />
+                  {selected.available
+                    ? 'ready'
+                    : `limited${selected.resetAt ? ` · resets ${fmtReset(selected.resetAt)}` : ''}`}
+                </span>
+              </div>
+            </div>
+            <div class="detail-actions">
+              <button
+                class="ghost-btn"
+                onClick={() => vscode.postMessage({ kind: 'refreshUsage' })}
+              >
+                Refresh
+              </button>
               <button
                 class="icon-btn account-del"
                 title="Remove account"
-                onClick={() => vscode.postMessage({ kind: 'removeAccount', id: a.id })}
+                onClick={() => vscode.postMessage({ kind: 'removeAccount', id: selected.id })}
               >
                 <IconTrash size={13} />
               </button>
             </div>
-          ))}
+          </div>
+
+          <div class="detail-section">
+            <div class="detail-section-title">Usage</div>
+            {(selected.usage ?? []).length > 0 ? (
+              (selected.usage ?? []).map((u) => (
+                <div key={u.label} class="usage-block">
+                  <div class="usage-block-head">
+                    <span class="usage-block-label">{u.label}</span>
+                    <span class={`usage-block-pct ${barClass(u.utilizationPct)}`}>
+                      {u.utilizationPct}%
+                    </span>
+                  </div>
+                  <div class="usage-bar big">
+                    <div
+                      class={`usage-fill ${barClass(u.utilizationPct)}`}
+                      style={{ width: `${Math.min(100, u.utilizationPct)}%` }}
+                    />
+                  </div>
+                  {u.resetAt && <div class="usage-block-reset">resets {fmtReset(u.resetAt)}</div>}
+                </div>
+              ))
+            ) : (
+              <div class="usage-hint">{usageHint(selected)}</div>
+            )}
+          </div>
+
+          {selected.models.length > 0 && (
+            <div class="detail-section">
+              <div class="detail-section-title">Models</div>
+              <div class="detail-models">
+                {selected.models.map((m) => (
+                  <span key={m.id} class="chain-pill" title={m.id}>
+                    {m.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div class="detail-footer">
+            <button class="ghost-btn" onClick={() => vscode.postMessage({ kind: 'openRules' })}>
+              Routing rules
+            </button>
+            <span class="accounts-hint">
+              Reference this account in rules as{' '}
+              <code>
+                {selected.provider}:{selected.label}
+              </code>
+            </span>
+          </div>
         </div>
       )}
-
-      <div class="accounts-footer">
-        <button class="ghost-btn" onClick={() => vscode.postMessage({ kind: 'openRules' })}>
-          Routing rules
-        </button>
-        <span class="accounts-hint">
-          Rules decide which account gets each task · <code>.usrouter/rules.json</code>
-        </span>
-      </div>
     </div>
   );
 }

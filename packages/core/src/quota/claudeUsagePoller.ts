@@ -22,6 +22,8 @@ export async function fetchClaudeUsage(
     if (!res.ok) return [];
     const data = (await res.json()) as Record<string, unknown>;
     const windows: UsageWindow[] = [];
+    // Verified schema (2026-07): five_hour/seven_day objects with
+    // utilization on a 0..100 scale and an ISO resets_at string.
     for (const [key, label] of [
       ['five_hour', '5h window'],
       ['seven_day', 'weekly'],
@@ -32,18 +34,44 @@ export async function fetchClaudeUsage(
         const resets = (w as Record<string, unknown>).resets_at;
         if (typeof util === 'number') {
           windows.push({
-            // Some responses use 0..1, some 0..100.
-            utilizationPct: util <= 1 ? Math.round(util * 100) : Math.round(util),
-            resetAt: typeof resets === 'string' ? Date.parse(resets) : typeof resets === 'number' ? resets * 1000 : undefined,
+            utilizationPct: Math.round(util),
+            resetAt: parseResetsAt(resets),
             label,
           });
         }
+      }
+    }
+    if (windows.length > 0) return windows;
+
+    // Fallback: the response also carries a generic limits[] array
+    // ({kind, percent, resets_at, is_active}) — survive a key rename.
+    const limits = data.limits;
+    if (Array.isArray(limits)) {
+      for (const entry of limits.slice(0, 4)) {
+        if (entry === null || typeof entry !== 'object') continue;
+        const e = entry as Record<string, unknown>;
+        if (typeof e.percent !== 'number') continue;
+        const kind = typeof e.kind === 'string' ? e.kind : 'window';
+        windows.push({
+          utilizationPct: Math.round(e.percent),
+          resetAt: parseResetsAt(e.resets_at),
+          label: kind.replace(/_/g, ' '),
+        });
       }
     }
     return windows;
   } catch {
     return [];
   }
+}
+
+function parseResetsAt(value: unknown): number | undefined {
+  if (typeof value === 'string') {
+    const t = Date.parse(value);
+    return Number.isNaN(t) ? undefined : t;
+  }
+  if (typeof value === 'number') return value > 10_000_000_000 ? value : value * 1000;
+  return undefined;
 }
 
 export const CLAUDE_USAGE_MIN_INTERVAL_MS = 180_000;

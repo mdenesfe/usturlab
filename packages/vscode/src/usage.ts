@@ -6,14 +6,19 @@ import {
 } from '@usrouter/core';
 import type { AccountStore } from './storage/accountStore.js';
 
-/** Per-source minimum fetch intervals; the Claude endpoint is undocumented and rate-limits hard. */
-const MIN_INTERVAL_MS: Record<string, number> = {
+/**
+ * Per-source minimum intervals after a SUCCESSFUL fetch; failures retry after
+ * a short backoff so one hiccup doesn't freeze the display for minutes.
+ * The Claude endpoint is undocumented and rate-limits hard — keep it >= 180s.
+ */
+const SUCCESS_INTERVAL_MS: Record<string, number> = {
   claude: 180_000,
   copilot: 60_000,
-  codex: 10_000,
+  codex: 5_000,
 };
+const FAILURE_BACKOFF_MS = 20_000;
 
-const lastFetch = new Map<string, number>();
+const lastAttempt = new Map<string, { at: number; ok: boolean }>();
 
 /**
  * Refreshes usage windows for every account that has a data source:
@@ -22,33 +27,47 @@ const lastFetch = new Map<string, number>();
  * - copilot (PAT): GitHub AI-credits REST endpoint
  * Results land in the QuotaTracker, which fans out to all open surfaces.
  */
-export async function refreshUsage(accounts: AccountStore, quota: QuotaTracker): Promise<void> {
+export async function refreshUsage(
+  accounts: AccountStore,
+  quota: QuotaTracker,
+  log?: (line: string) => void,
+): Promise<void> {
   const now = Date.now();
   await Promise.all(
     accounts.all().map(async (account) => {
-      const minInterval = MIN_INTERVAL_MS[account.provider];
-      if (minInterval === undefined) return;
-      const last = lastFetch.get(account.id) ?? 0;
-      if (now - last < minInterval) return;
-      lastFetch.set(account.id, now);
+      const interval = SUCCESS_INTERVAL_MS[account.provider];
+      if (interval === undefined) return;
+      const prev = lastAttempt.get(account.id);
+      if (prev && now - prev.at < (prev.ok ? interval : FAILURE_BACKOFF_MS)) return;
+      lastAttempt.set(account.id, { at: now, ok: false });
 
       try {
+        let windows: Awaited<ReturnType<typeof fetchClaudeUsage>> = [];
         if (account.provider === 'claude' && account.authMode === 'oauth-token' && account.hasSecret) {
           const secret = await accounts.getSecret(account.id);
-          if (!secret) return;
-          const windows = await fetchClaudeUsage(secret);
-          if (windows.length > 0) quota.setUsage(account.id, windows);
+          if (secret) windows = await fetchClaudeUsage(secret);
         } else if (account.provider === 'codex' && account.homeDir) {
-          const windows = readCodexUsage(account.homeDir);
-          if (windows.length > 0) quota.setUsage(account.id, windows);
+          windows = readCodexUsage(account.homeDir);
         } else if (account.provider === 'copilot' && account.authMode === 'api-key' && account.hasSecret) {
           const secret = await accounts.getSecret(account.id);
-          if (!secret) return;
-          const windows = await fetchCopilotCredits(secret);
-          if (windows.length > 0) quota.setUsage(account.id, windows);
+          if (secret) windows = await fetchCopilotCredits(secret);
+        } else {
+          return;
         }
-      } catch {
-        // usage display is best-effort; never surface fetch noise
+
+        if (windows.length > 0) {
+          lastAttempt.set(account.id, { at: now, ok: true });
+          quota.setUsage(account.id, windows);
+          log?.(
+            `[usage] ${account.provider}:${account.label} → ${windows
+              .map((w) => `${w.utilizationPct}% ${w.label}`)
+              .join(', ')}`,
+          );
+        } else {
+          log?.(`[usage] ${account.provider}:${account.label} → no data (will retry)`);
+        }
+      } catch (e) {
+        log?.(`[usage] ${account.provider}:${account.label} → error: ${(e as Error).message}`);
       }
     }),
   );

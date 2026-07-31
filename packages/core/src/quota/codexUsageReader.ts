@@ -90,10 +90,13 @@ function toWindows(rl: Record<string, unknown>): UsageWindow[] {
     const pct = win.used_percent;
     if (typeof pct !== 'number') continue;
 
+    // Verified shapes: 300 (5h, paid plans) and 43200 (monthly, free plan).
     let label: string = fallbackLabel;
     if (typeof win.window_minutes === 'number') {
       const hours = Math.round(win.window_minutes / 60);
-      label = hours >= 24 * 6 ? 'weekly' : `${hours}h window`;
+      if (hours >= 24 * 25) label = 'monthly';
+      else if (hours >= 24 * 6) label = 'weekly';
+      else label = `${hours}h window`;
     }
     let resetAt: number | undefined;
     if (typeof win.resets_in_seconds === 'number') resetAt = Date.now() + win.resets_in_seconds * 1000;

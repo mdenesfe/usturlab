@@ -13,14 +13,36 @@ const SANDBOX: Record<PermissionMode, string> = {
   full: 'danger-full-access',
 };
 
+/** Codex wraps API errors as JSON-escaped strings, sometimes twice — dig out the human message. */
+function unwrapErrorMessage(raw: string): string {
+  let message = raw;
+  for (let i = 0; i < 3; i++) {
+    const trimmed = message.trim();
+    if (!trimmed.startsWith('{')) break;
+    try {
+      const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+      const nested =
+        (parsed.error as Record<string, unknown> | undefined)?.message ?? parsed.message;
+      if (typeof nested === 'string') {
+        message = nested;
+        continue;
+      }
+    } catch {
+      break;
+    }
+    break;
+  }
+  return message;
+}
+
 export class CodexAdapter implements ProviderAdapter {
   readonly id = 'codex' as const;
   readonly displayName = 'Codex CLI';
   readonly supportsNativeResume = true;
-  readonly models = [
-    { id: 'gpt-5.4', label: 'GPT-5.4' },
-    { id: 'gpt-5.3-codex', label: 'GPT-5.3 Codex' },
-  ];
+  // ChatGPT-account Codex accepts few model ids and rejects the rest with a
+  // 400; routing without a model (CLI default) is always safe. gpt-5.6-terra
+  // verified as the served default on 2026-07-31.
+  readonly models = [{ id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra (default)' }];
 
   constructor(private cliPath = 'codex') {}
 
@@ -119,8 +141,9 @@ export class CodexAdapter implements ProviderAdapter {
         case 'turn.failed':
         case 'error': {
           finished = true;
-          const message =
-            getString(msg, 'error', 'message') ?? getString(msg, 'message') ?? 'codex turn failed';
+          const message = unwrapErrorMessage(
+            getString(msg, 'error', 'message') ?? getString(msg, 'message') ?? 'codex turn failed',
+          );
           const limit = detectCodexLimit(message);
           if (limit) yield { type: 'limit', ...limit };
           else yield { type: 'error', message, retryable: false };

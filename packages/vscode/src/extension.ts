@@ -60,7 +60,7 @@ export function activate(ctx: vscode.ExtensionContext): void {
 
   registerCommands(ctx, { accounts, adapters, quota, rules, chat, statusBar });
 
-  const usageRefresher = () => refreshUsage(accounts, quota);
+  const usageRefresher = () => refreshUsage(accounts, quota, (line) => output.appendLine(line));
   chat.setUsageRefresher(usageRefresher);
   startUsagePolling(ctx, usageRefresher, output);
 

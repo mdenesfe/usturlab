@@ -74,7 +74,7 @@ export const RULES_TEMPLATE = `{
         "globs": ["**/*.test.*", "**/*.spec.*"]
       },
       "target": [
-        { "provider": "codex", "account": "work" },
+        { "provider": "codex", "account": "personal" },
         { "provider": "claude", "account": "personal", "model": "sonnet" }
       ]
     },

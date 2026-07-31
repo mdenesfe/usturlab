@@ -25,7 +25,7 @@
       "properties": {
         "provider": { "enum": ["claude", "codex", "gemini", "copilot"] },
         "account": { "type": "string", "minLength": 1, "description": "Account label as shown in the Accounts view." },
-        "model": { "type": "string", "description": "Optional model override (e.g. sonnet, haiku, gpt-5.4, gemini-2.5-flash)." }
+        "model": { "type": "string", "description": "Optional model override (e.g. sonnet, haiku, gemini-2.5-flash). Omit for codex — ChatGPT accounts only accept the CLI default." }
       }
     },
     "rule": {

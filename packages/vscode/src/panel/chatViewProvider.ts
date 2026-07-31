@@ -129,6 +129,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.surfaces.set(webview, surface);
   }
 
+  /**
+   * postMessage throws (sync or async) once a webview is disposed; disposal
+   * can race our quota/rules listeners, so every send goes through here and
+   * a dead surface is dropped instead of surfacing "Webview is disposed".
+   */
+  private safePost(webview: vscode.Webview, msg: HostToWebview): void {
+    try {
+      Promise.resolve(webview.postMessage(msg)).then(undefined, () => {
+        this.surfaces.delete(webview);
+      });
+    } catch {
+      this.surfaces.delete(webview);
+    }
+  }
+
   /** Opens (or reveals) the editor tab bound to a conversation. */
   openConversationTab(id: string): void {
     const rec = this.conversations.get(id);
@@ -231,7 +246,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private pushRules(): void {
     const msg = this.rulesMessage();
     for (const [webview, surface] of this.surfaces) {
-      if (surface.mode === 'rules') void webview.postMessage(msg);
+      if (surface.mode === 'rules') this.safePost(webview, msg);
     }
   }
 
@@ -293,7 +308,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private sendConversations(): void {
     const msg: HostToWebview = { kind: 'conversations', list: this.metas(), activeId: '' };
     for (const [webview, surface] of this.surfaces) {
-      if (surface.mode === 'sidebar') void webview.postMessage(msg);
+      if (surface.mode === 'sidebar') this.safePost(webview, msg);
     }
   }
 
@@ -340,22 +355,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     for (const [webview, surface] of this.surfaces) {
       if (surface.mode === 'tab' && surface.conversationId === conversationId) {
-        void webview.postMessage(msg);
+        this.safePost(webview, msg);
       }
     }
   }
 
   private hydrate(webview: vscode.Webview, surface: Surface): void {
     if (surface.mode === 'sidebar') {
-      void webview.postMessage({ kind: 'conversations', list: this.metas(), activeId: '' });
-      void webview.postMessage({
+      this.safePost(webview, { kind: 'conversations', list: this.metas(), activeId: '' });
+      this.safePost(webview, {
         kind: 'accounts',
         accounts: this.accountDtos(),
       } satisfies HostToWebview);
       return;
     }
     if (surface.mode === 'accounts') {
-      void webview.postMessage({
+      this.safePost(webview, {
         kind: 'accounts',
         accounts: this.accountDtos(),
       } satisfies HostToWebview);
@@ -364,20 +379,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     if (surface.mode === 'rules') {
-      void webview.postMessage(this.rulesMessage());
+      this.safePost(webview, this.rulesMessage());
       return;
     }
     const rec = surface.conversationId
       ? this.conversations.get(surface.conversationId)
       : undefined;
-    void webview.postMessage({ kind: 'conversationReset' } satisfies HostToWebview);
-    void webview.postMessage({
+    this.safePost(webview, { kind: 'conversationReset' } satisfies HostToWebview);
+    this.safePost(webview, {
       kind: 'accounts',
       accounts: this.accountDtos(),
     } satisfies HostToWebview);
     if (rec) {
-      for (const msg of rec.log) void webview.postMessage(msg);
-      void webview.postMessage({
+      for (const msg of rec.log) this.safePost(webview, msg);
+      this.safePost(webview, {
         kind: 'busy',
         running: this.tasks.has(rec.id),
       } satisfies HostToWebview);
@@ -600,7 +615,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   pushAccounts(): void {
     const msg: HostToWebview = { kind: 'accounts', accounts: this.accountDtos() };
     for (const [webview, surface] of this.surfaces) {
-      if (ChatViewProvider.ACCOUNT_MODES.has(surface.mode)) void webview.postMessage(msg);
+      if (ChatViewProvider.ACCOUNT_MODES.has(surface.mode)) this.safePost(webview, msg);
     }
   }
 
