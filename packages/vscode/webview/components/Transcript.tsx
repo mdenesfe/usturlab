@@ -74,8 +74,7 @@ export function Transcript({
           case 'user':
             return (
               <div key={i} class="msg-user">
-                <span class="msg-user-mark">❯</span>
-                <span class="msg-user-text">{item.text}</span>
+                <div class="msg-user-text">{item.text}</div>
               </div>
             );
           case 'assistant':
