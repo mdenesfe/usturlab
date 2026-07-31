@@ -169,7 +169,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         localResourceRoots: [vscode.Uri.joinPath(this.ctx.extensionUri, 'media')],
       },
     );
-    panel.iconPath = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon.svg');
+    panel.iconPath = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'tab-icon.svg');
     this.panels.set(id, panel);
     this.attach(panel.webview, { mode: 'tab', conversationId: id });
     panel.onDidDispose(() => {
@@ -202,7 +202,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         localResourceRoots: [vscode.Uri.joinPath(this.ctx.extensionUri, 'media')],
       },
     );
-    panel.iconPath = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon.svg');
+    panel.iconPath = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'tab-icon.svg');
     this.accountsPanel = panel;
     this.attach(panel.webview, { mode: 'accounts' });
     panel.onDidDispose(() => {
@@ -227,7 +227,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         localResourceRoots: [vscode.Uri.joinPath(this.ctx.extensionUri, 'media')],
       },
     );
-    panel.iconPath = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'icon.svg');
+    panel.iconPath = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'tab-icon.svg');
     this.rulesPanel = panel;
     this.attach(panel.webview, { mode: 'rules' });
     panel.onDidDispose(() => {

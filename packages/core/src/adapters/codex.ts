@@ -144,6 +144,13 @@ export class CodexAdapter implements ProviderAdapter {
           const message = unwrapErrorMessage(
             getString(msg, 'error', 'message') ?? getString(msg, 'message') ?? 'codex turn failed',
           );
+          // ChatGPT accounts reject explicit model ids; recover on the CLI
+          // default instead of burning the whole failover chain.
+          if (req.model && /model.*not supported/i.test(message)) {
+            yield { type: 'model-downgraded', from: req.model, to: 'CLI default' };
+            yield* this.run({ ...req, model: undefined }, account, signal);
+            return;
+          }
           const limit = detectCodexLimit(message);
           if (limit) yield { type: 'limit', ...limit };
           else yield { type: 'error', message, retryable: false };
