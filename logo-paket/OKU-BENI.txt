@@ -1,0 +1,8 @@
+USTURLAB LOGO PAKETI
+Renkler: Turk Kirmizisi #E30A17, Murekkep #1C1917, Kagit #FAF6F1
+SVG'ler vektoreldir, sinirsiz olceklenir.
+- usturlab-logo.svg: acik zemin icin (murekkep + kirmizi yildiz)
+- usturlab-logo-koyu-zemin.svg: koyu zemin icin
+- usturlab-logo-tek-renk-*.svg: tek renk kullanimlar
+- PNG'ler: 1024/512 seffaf zemin + app ikonlari
+Yazi tipi: IBM Plex Serif (baslik), IBM Plex Sans (govde), IBM Plex Mono (kod)

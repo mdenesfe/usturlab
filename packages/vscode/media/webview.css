@@ -201,7 +201,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--accent);
+  color: var(--vscode-foreground);
   font-family: var(--mono);
   font-size: 1.05em;
   letter-spacing: 0.02em;

@@ -1,7 +1,7 @@
 import type { TranscriptItem } from '../../src/panel/transcript.js';
 import { Markdown } from './Markdown.js';
 import { RoutingBadge } from './RoutingBadge.js';
-import { IconRoute } from './icons.js';
+import { IconUsturlab } from './icons.js';
 
 export function Transcript({
   items,
@@ -17,7 +17,7 @@ export function Transcript({
       <div class="transcript empty">
         <div class="empty-box">
           <div class="empty-logo">
-            <IconRoute size={22} />
+            <IconUsturlab size={22} />
             <span>usturlab</span>
           </div>
           {noAccounts ? (

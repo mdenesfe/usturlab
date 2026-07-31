@@ -72,6 +72,14 @@ export const IconAccounts = ({ size }: IconProps) => (
   </svg>
 );
 
+/** The usturlab mark: astrolabe bowl (currentColor) + sighted star (Türk kırmızısı). */
+export const IconUsturlab = ({ size = 16 }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path d="M2.8 13.2 A9.2 9.2 0 0 0 21.2 13.2 Z" fill="currentColor" />
+    <circle cx="12" cy="6.8" r="2" fill="#E30A17" />
+  </svg>
+);
+
 export const IconRoute = ({ size }: IconProps) => (
   <svg {...base(size)}>
     <path d="M2.5 4.5h4l3 7h4" />
