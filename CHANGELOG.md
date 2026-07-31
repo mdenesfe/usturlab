@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 — 2026-08-01
+
+- The assistant's answer takes the **full column width** — only your own message stays a right-aligned bubble. Errors span the full width too
+- The tool timeline is quieter: the decorative gear is gone, and the collapsed row now reads `▸ 7 steps · Read ×4 · Edit ×2` on the left with the files it touched right-aligned
+- Every step sits on **one grid** — glyph, tool name and path share the same columns down the whole list, so nothing is ragged. The disclosure arrow has its own reserved column, and an expanded preview starts exactly under the path column
+- Path chips lost their code-block background; a step is now plain aligned monospace
+
 ## 0.5.0 — 2026-08-01
 
 ### The timeline says which file, and what changed — on every provider

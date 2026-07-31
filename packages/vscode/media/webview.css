@@ -271,9 +271,10 @@ body {
   font-size: 0.95em;
 }
 
+/* The answer gets the whole column — only the user's own message is a bubble. */
 .msg-assistant {
-  align-self: flex-start;
-  max-width: 88%;
+  align-self: stretch;
+  width: 100%;
   padding: 12px 14px;
   border-radius: 8px;
   line-height: 1.6;
@@ -310,7 +311,7 @@ body {
   border-radius: 6px;
   background: var(--vscode-sideBar-background);
   font-family: var(--mono);
-  font-size: 0.78em;
+  font-size: 0.82em;
 }
 
 .tool-summary {
@@ -342,24 +343,10 @@ body {
   color: var(--vscode-foreground);
 }
 
-.tool-gear {
-  user-select: none;
-}
-
-.tool-gear.spin {
-  display: inline-block;
-  animation: spin 1.6s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .tool-count {
   color: var(--vscode-foreground);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .tool-names {
@@ -370,27 +357,22 @@ body {
   min-width: 0;
 }
 
-/* Mini preview of the files a collapsed group touched. */
+/* Mini preview of the files a collapsed group touched, right-aligned. */
 .tool-files {
-  flex: 1 1 40%;
+  margin-left: auto;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--muted);
-  font-family: var(--mono);
-  opacity: 0.85;
-}
-
-.tool-files::before {
-  content: '— ';
-  opacity: 0.6;
+  opacity: 0.75;
 }
 
 .tool-running {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   color: var(--accent);
   flex-shrink: 0;
   margin-left: auto;
@@ -398,30 +380,29 @@ body {
 
 .tool-steps {
   border-top: 1px solid var(--border);
-  padding: 6px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  padding: 5px 0;
   max-height: 420px;
   overflow-y: auto;
 }
 
-.tool-step {
-  display: flex;
+/* One grid keeps every glyph, name and path in the same column. */
+.tool-step:not(.expandable),
+.tool-step-summary {
+  display: grid;
+  grid-template-columns: 14px 58px minmax(0, 1fr) 10px;
   align-items: baseline;
   gap: 8px;
-  min-width: 0;
-  padding: 1px 0;
+  padding: 2px 10px;
+}
+
+/* An expandable row is the container for its own summary + preview. */
+.tool-step.expandable {
+  display: block;
 }
 
 .tool-step-summary {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
   cursor: pointer;
   list-style: none;
-  padding: 1px 0;
 }
 
 .tool-step-summary::-webkit-details-marker {
@@ -430,15 +411,15 @@ body {
 
 .tool-step.expandable > .tool-step-summary:hover {
   background: var(--vscode-list-hoverBackground);
-  border-radius: 3px;
 }
 
-/* Only expandable rows get the disclosure arrow. */
+/* Only expandable rows get a disclosure arrow, in the reserved last column. */
 .tool-step-summary::after {
-  content: '›';
+  content: '▸';
+  font-size: 0.85em;
   color: var(--muted);
-  opacity: 0.6;
-  transition: transform 0.12s;
+  opacity: 0.55;
+  transition: transform 0.15s ease;
 }
 
 .tool-step[open] > .tool-step-summary::after {
@@ -446,8 +427,6 @@ body {
 }
 
 .tool-step-action {
-  flex-shrink: 0;
-  width: 12px;
   text-align: center;
   opacity: 0.9;
 }
@@ -474,7 +453,9 @@ body {
 
 .tool-step-name {
   color: var(--vscode-foreground);
-  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tool-step-detail {
@@ -482,15 +463,13 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.1));
-  padding: 0 5px;
-  border-radius: 3px;
   min-width: 0;
 }
 
 .tool-step-preview {
-  margin: 2px 0 6px 20px;
-  padding: 6px 8px;
+  /* 10px padding + 14 glyph + 8 gap + 58 name + 8 gap — the detail column. */
+  margin: 3px 10px 7px 98px;
+  padding: 6px 9px;
   border-left: 2px solid var(--border);
   background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.08));
   border-radius: 0 3px 3px 0;
@@ -618,8 +597,7 @@ body {
 }
 
 .msg-error {
-  align-self: flex-start;
-  max-width: 88%;
+  align-self: stretch;
   padding: 6px 10px;
   border-left: 2px solid var(--vscode-errorForeground);
   background: var(--vscode-inputValidation-errorBackground, rgba(200, 60, 60, 0.12));

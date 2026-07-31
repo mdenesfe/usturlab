@@ -69,25 +69,23 @@ function touchedFiles(steps: ToolStep[]): string[] {
 /** One row: what was done, to which file, expandable to the content itself. */
 function ToolStepRow({ step }: { step: ToolStep }) {
   const action = step.action ?? 'other';
-  const label = ACTION_LABEL[action];
   const head = (
     <>
-      <span class={`tool-step-action ${action}`} title={label || undefined}>
+      <span class={`tool-step-action ${action}`} title={ACTION_LABEL[action] || undefined}>
         {ACTION_GLYPH[action] ?? '·'}
       </span>
       <span class="tool-step-name">{step.name}</span>
-      {step.detail && <code class="tool-step-detail">{step.detail}</code>}
+      <span class="tool-step-detail">{step.detail}</span>
     </>
   );
   if (!step.preview) {
     return <div class="tool-step">{head}</div>;
   }
-  const isDiff = action === 'edit';
   return (
     <details class="tool-step expandable">
       <summary class="tool-step-summary">{head}</summary>
       <pre class={`tool-step-preview ${action}`}>
-        {isDiff
+        {action === 'edit'
           ? step.preview.split('\n').map((line, i) => (
               <div
                 key={i}
@@ -109,22 +107,22 @@ function ToolGroup({ steps, running }: { steps: ToolStep[]; running: boolean }) 
   return (
     <details class="tool-group">
       <summary class="tool-summary">
-        <span class={`tool-gear ${running ? 'spin' : ''}`}>⚙</span>
         <span class="tool-count">
           {steps.length} step{steps.length > 1 ? 's' : ''}
         </span>
         <span class="tool-names">{summarizeSteps(steps)}</span>
-        {files.length > 0 && (
-          <span class="tool-files" title={steps.map((s) => s.path).filter(Boolean).join('\n')}>
-            {files.slice(0, 3).join(' · ')}
-            {files.length > 3 ? ` +${files.length - 3}` : ''}
-          </span>
-        )}
-        {running && latest && (
+        {running && latest ? (
           <span class="tool-running">
-            {latest.detail ? fileName(latest.detail) : latest.name}
+            {latest.path ? fileName(latest.path) : latest.name}
             <LiveDots />
           </span>
+        ) : (
+          files.length > 0 && (
+            <span class="tool-files" title={steps.map((s) => s.path).filter(Boolean).join('\n')}>
+              {files.slice(0, 3).join(' · ')}
+              {files.length > 3 ? ` +${files.length - 3}` : ''}
+            </span>
+          )
         )}
       </summary>
       <div class="tool-steps">
