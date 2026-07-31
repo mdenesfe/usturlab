@@ -3,6 +3,7 @@
 }
 
 :root {
+  --accent: #e30a17; /* Türk kırmızısı */
   --mono: var(--vscode-editor-font-family, 'SF Mono', Menlo, Consolas, monospace);
   --border: var(--vscode-widget-border, rgba(128, 128, 128, 0.22));
   --muted: var(--vscode-descriptionForeground);
@@ -170,6 +171,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  color: var(--accent);
   font-family: var(--mono);
   font-size: 1.05em;
   letter-spacing: 0.02em;
@@ -206,7 +208,7 @@ body {
   padding: 7px 12px;
   margin: 6px 8px 2px;
   background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.08));
-  border-left: 2px solid var(--vscode-focusBorder);
+  border-left: 2px solid var(--accent);
   border-radius: 3px;
   font-family: var(--mono);
   font-size: 0.92em;
@@ -216,7 +218,7 @@ body {
 }
 
 .msg-user-mark {
-  color: var(--vscode-focusBorder);
+  color: var(--accent);
   flex-shrink: 0;
   user-select: none;
 }
@@ -244,6 +246,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  --routing-icon: var(--accent);
   font-family: var(--mono);
   font-size: 0.75em;
   color: var(--muted);
@@ -404,7 +407,7 @@ body {
   max-height: 260px;
   overflow-y: auto;
   background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
-  border: 1px solid var(--vscode-focusBorder);
+  border: 1px solid var(--accent);
   border-radius: 6px;
   box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.25);
   z-index: 10;
@@ -459,7 +462,7 @@ body {
 }
 
 .chat-tab .composer:focus-within {
-  border-color: var(--vscode-focusBorder);
+  border-color: var(--accent);
 }
 
 .chat-tab .composer.running {
@@ -872,7 +875,7 @@ body.resizing {
 }
 
 .splitter:hover {
-  background: var(--vscode-focusBorder);
+  background: var(--accent);
 }
 
 .account-detail {
@@ -1351,12 +1354,12 @@ body.resizing {
   font-family: var(--vscode-font-family);
   cursor: pointer;
   flex-shrink: 0;
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
+  background: var(--accent);
+  color: #ffffff;
 }
 
 .run-btn.send:hover {
-  background: var(--vscode-button-hoverBackground);
+  background: #c40913;
 }
 
 .run-btn:disabled {

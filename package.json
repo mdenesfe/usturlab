@@ -1,5 +1,5 @@
 {
-  "name": "usrouter-monorepo",
+  "name": "usturlab-monorepo",
   "private": true,
   "version": "0.1.0",
   "description": "Route AI coding tasks across all your subscriptions (Claude, Codex, Gemini, Copilot) with user-defined rules and automatic quota failover.",

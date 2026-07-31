@@ -1,4 +1,4 @@
-import type { Target } from '@usrouter/core';
+import type { Target } from '@usturlab/core';
 import { Markdown } from './Markdown.js';
 import { RoutingBadge } from './RoutingBadge.js';
 import { IconRoute } from './icons.js';
@@ -35,7 +35,7 @@ export function Transcript({
         <div class="empty-box">
           <div class="empty-logo">
             <IconRoute size={22} />
-            <span>usrouter</span>
+            <span>usturlab</span>
           </div>
           {noAccounts ? (
             <>
@@ -58,7 +58,7 @@ export function Transcript({
                   <code>#tests</code> trigger tag rules
                 </div>
                 <div>
-                  <code>.usrouter/rules.json</code> edit routing rules
+                  <code>.usturlab/rules.json</code> edit routing rules
                 </div>
               </div>
             </>

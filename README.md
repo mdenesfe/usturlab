@@ -1,8 +1,8 @@
-# usrouter
+# usturlab
 
 **Route every AI coding task to the best subscription you own.**
 
-usrouter is an open-source VS Code extension for people who juggle multiple AI subscriptions — two Claude accounts, a ChatGPT plan for Codex, a Google AI subscription, GitHub Copilot. You register all of them once; usrouter then routes each task to the right account and model using **your own routing rules**, and **fails over automatically** when an account hits its usage limit.
+usturlab is an open-source VS Code extension for people who juggle multiple AI subscriptions — two Claude accounts, a ChatGPT plan for Codex, a Google AI subscription, GitHub Copilot. You register all of them once; usturlab then routes each task to the right account and model using **your own routing rules**, and **fails over automatically** when an account hits its usage limit.
 
 ```
             ┌──────────────────────────────┐
@@ -33,7 +33,7 @@ Conversations persist across VS Code restarts, including native CLI session ids,
 
 ## How it works (and why it's ToS-friendly)
 
-Consumer AI subscriptions can't be called directly over the API. usrouter therefore never touches provider APIs with subscription credentials — it **orchestrates the official CLIs** (`claude`, `codex`, `gemini`, `copilot`) as subprocesses, each authenticated with its own isolated profile:
+Consumer AI subscriptions can't be called directly over the API. usturlab therefore never touches provider APIs with subscription credentials — it **orchestrates the official CLIs** (`claude`, `codex`, `gemini`, `copilot`) as subprocesses, each authenticated with its own isolated profile:
 
 | Provider | Multi-account isolation | Auth options |
 |---|---|---|
@@ -42,7 +42,7 @@ Consumer AI subscriptions can't be called directly over the API. usrouter theref
 | Gemini CLI | `HOME` override per profile | Google login (paid tiers — see caveats), API key |
 | Copilot CLI | `COPILOT_HOME` per profile | GitHub login, fine-grained PAT |
 
-Secrets (tokens, API keys) live in the VS Code secret store. Profile directories live under `~/.usrouter/profiles/`. usrouter also scrubs hijacking env vars (e.g. a stray `ANTHROPIC_API_KEY` silently overrides Claude subscription auth) from every subprocess.
+Secrets (tokens, API keys) live in the VS Code secret store. Profile directories live under `~/.usturlab/profiles/`. usturlab also scrubs hijacking env vars (e.g. a stray `ANTHROPIC_API_KEY` silently overrides Claude subscription auth) from every subprocess.
 
 **Adding an account is one authorize click**: the wizard opens a login terminal per account and detects completion automatically — by watching for the auth file (Codex/Gemini), polling `claude auth status`, or capturing the token straight from terminal output (Claude `setup-token`). No copy-pasting.
 
@@ -59,9 +59,9 @@ Secrets (tokens, API keys) live in the VS Code secret store. Profile directories
 
 ## Quick start
 
-1. Click the usrouter icon in the activity bar → **Add account** (or `usrouter: Add Account` from the command palette). Each account gets an isolated profile, so two Claude accounts never collide.
+1. Click the usturlab icon in the activity bar → **Add account** (or `usturlab: Add Account` from the command palette). Each account gets an isolated profile, so two Claude accounts never collide.
 2. Click **+ New chat** — the chat opens as an editor tab. Type your task; the routing badge shows which account/model was picked and why.
-3. Open the **Rules** tab (or `usrouter: Routing Rules`) and create your rules file:
+3. Open the **Rules** tab (or `usturlab: Routing Rules`) and create your rules file:
 
 ```jsonc
 {
@@ -98,23 +98,23 @@ Secrets (tokens, API keys) live in the VS Code secret store. Profile directories
 
 ### Terminal mode
 
-`usrouter: Open Session in Terminal` opens the chosen CLI **interactively** in a VS Code terminal with the right account's environment injected — for long agentic sessions where you want the CLI's own UI.
+`usturlab: Open Session in Terminal` opens the chosen CLI **interactively** in a VS Code terminal with the right account's environment injected — for long agentic sessions where you want the CLI's own UI.
 
 ## Settings
 
 | Setting | Default | Description |
 |---|---|---|
-| `usrouter.permissionMode` | `safe` | `safe` (read/plan), `edits` (auto-accept edits), `full` (skip approvals) |
-| `usrouter.pollUsage` | `false` | Proactively poll quota (Claude 5h/weekly window, Copilot AI credits) |
-| `usrouter.cliPath.*` | CLI name | Override binary paths |
+| `usturlab.permissionMode` | `safe` | `safe` (read/plan), `edits` (auto-accept edits), `full` (skip approvals) |
+| `usturlab.pollUsage` | `false` | Proactively poll quota (Claude 5h/weekly window, Copilot AI credits) |
+| `usturlab.cliPath.*` | CLI name | Override binary paths |
 
 ## Commands
 
-- `usrouter: Add Account` / `Remove Account` / `Manage Accounts`
-- `usrouter: Routing Rules` / `Edit Routing Rules` (raw JSON)
-- `usrouter: New Conversation`, `Open Chat`, `Cancel Running Task`
-- `usrouter: Open Session in Terminal`
-- `usrouter: Simulate Usage Limit (debug)` — test failover without burning quota
+- `usturlab: Add Account` / `Remove Account` / `Manage Accounts`
+- `usturlab: Routing Rules` / `Edit Routing Rules` (raw JSON)
+- `usturlab: New Conversation`, `Open Chat`, `Cancel Running Task`
+- `usturlab: Open Session in Terminal`
+- `usturlab: Simulate Usage Limit (debug)` — test failover without burning quota
 
 ## Development
 

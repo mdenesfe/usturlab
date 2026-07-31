@@ -4,7 +4,7 @@ import {
   formatTarget,
   type AdapterRegistry,
   type Target,
-} from '@usrouter/core';
+} from '@usturlab/core';
 import type { AccountStore } from './storage/accountStore.js';
 
 export async function openInTerminal(
@@ -14,7 +14,7 @@ export async function openInTerminal(
 ): Promise<void> {
   const all = accounts.all().filter((a) => !a.disabled);
   if (all.length === 0) {
-    void vscode.window.showWarningMessage('usrouter: no accounts yet — run "usrouter: Add Account" first.');
+    void vscode.window.showWarningMessage('usturlab: no accounts yet — run "usturlab: Add Account" first.');
     return;
   }
 
@@ -26,7 +26,7 @@ export async function openInTerminal(
         description: a.authMode,
         account: a,
       })),
-    { title: 'usrouter: open an interactive session', placeHolder: 'Which account?' },
+    { title: 'usturlab: open an interactive session', placeHolder: 'Which account?' },
   );
   if (!pick) return;
 
@@ -37,7 +37,7 @@ export async function openInTerminal(
     [{ label: 'default model', id: undefined as string | undefined }].concat(
       adapter.models.map((m) => ({ label: m.label, id: m.id as string | undefined })),
     ),
-    { title: 'usrouter: model' },
+    { title: 'usturlab: model' },
   );
   if (!modelPick) return;
 
@@ -55,7 +55,7 @@ export async function openInTerminal(
   };
 
   const terminal = vscode.window.createTerminal({
-    name: `usrouter: ${formatTarget(target)}`,
+    name: `usturlab: ${formatTarget(target)}`,
     // Overrides merge into the shell env; scrubbed vars are removed (null).
     env: terminalEnvOverrides(resolved),
     cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,

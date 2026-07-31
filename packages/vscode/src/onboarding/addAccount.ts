@@ -12,7 +12,7 @@ import {
   type AuthMode,
   type LoginFlow,
   type ProviderId,
-} from '@usrouter/core';
+} from '@usturlab/core';
 import type { AccountStore } from '../storage/accountStore.js';
 import {
   captureOutputMatch,
@@ -78,19 +78,19 @@ export async function addAccountWizard(
 ): Promise<void> {
   const providerPick = await vscode.window.showQuickPick(
     adapters.all().map((a) => ({ label: a.displayName, id: a.id })),
-    { title: 'usrouter: which provider?', placeHolder: 'Provider of the subscription to add' },
+    { title: 'usturlab: which provider?', placeHolder: 'Provider of the subscription to add' },
   );
   if (!providerPick) return;
   const provider = providerPick.id;
   const adapter = adapters.get(provider)!;
 
   const authPick = await vscode.window.showQuickPick(AUTH_OPTIONS[provider], {
-    title: `usrouter: how do you sign in to ${adapter.displayName}?`,
+    title: `usturlab: how do you sign in to ${adapter.displayName}?`,
   });
   if (!authPick) return;
 
   const label = await vscode.window.showInputBox({
-    title: 'usrouter: account label',
+    title: 'usturlab: account label',
     prompt: 'Short name used in rules, e.g. "personal", "work"',
     value: AUTH_OPTIONS[provider].indexOf(authPick) === 0 ? 'personal' : '',
     validateInput: (value) => {
@@ -108,7 +108,7 @@ export async function addAccountWizard(
   if (!label) return;
 
   const id = `${provider}-${slugify(label)}`;
-  const profileDir = join(homedir(), '.usrouter', 'profiles', id);
+  const profileDir = join(homedir(), '.usturlab', 'profiles', id);
   mkdirSync(profileDir, { recursive: true });
 
   const profile: AccountProfile = {
@@ -123,7 +123,7 @@ export async function addAccountWizard(
 
   if (authPick.mode === 'api-key') {
     const key = await vscode.window.showInputBox({
-      title: `usrouter: ${adapter.displayName} API key / token`,
+      title: `usturlab: ${adapter.displayName} API key / token`,
       password: true,
       prompt: 'Stored in the VS Code secret store, never written to disk in plain text',
     });
@@ -131,7 +131,7 @@ export async function addAccountWizard(
     await accounts.setSecret(id, key.trim());
     profile.hasSecret = true;
     await accounts.upsert(profile);
-    void vscode.window.showInformationMessage(`usrouter: added ${provider}:${profile.label}`);
+    void vscode.window.showInformationMessage(`usturlab: added ${provider}:${profile.label}`);
     return;
   }
 
@@ -141,14 +141,14 @@ export async function addAccountWizard(
       : adapter.loginFlow(profileDir);
 
   const proceed = await vscode.window.showInformationMessage(
-    `usrouter — add ${adapter.displayName} account "${label}"`,
+    `usturlab — add ${adapter.displayName} account "${label}"`,
     { modal: true, detail: flow.instructions },
     'Open login terminal',
   );
   if (!proceed) return;
 
   const terminal = vscode.window.createTerminal({
-    name: `usrouter login: ${id}`,
+    name: `usturlab login: ${id}`,
     env: flow.env,
   });
   terminal.show();
@@ -171,7 +171,7 @@ export async function addAccountWizard(
       : await vscode.window.withProgress<Outcome>(
           {
             location: vscode.ProgressLocation.Notification,
-            title: `usrouter: authorize ${adapter.displayName} in the browser — connection is detected automatically`,
+            title: `usturlab: authorize ${adapter.displayName} in the browser — connection is detected automatically`,
             cancellable: true,
           },
           async (_progress, cancel) => {
@@ -208,26 +208,26 @@ export async function addAccountWizard(
 
   if (!outcome.ok && outcome.manualFallback) {
     const confirmed = await vscode.window.showInformationMessage(
-      `usrouter: complete the ${adapter.displayName} login in the terminal, then click here.`,
+      `usturlab: complete the ${adapter.displayName} login in the terminal, then click here.`,
       'I completed the login',
       'Cancel',
     );
     if (confirmed !== 'I completed the login') {
       void vscode.window.showWarningMessage(
-        `usrouter: account setup for ${provider}:${label} was canceled — nothing was saved.`,
+        `usturlab: account setup for ${provider}:${label} was canceled — nothing was saved.`,
       );
       return;
     }
     if (flow.postLoginSecretPrompt === 'oauth-token') {
       const token = await vscode.window.showInputBox({
-        title: 'usrouter: paste the token printed by the CLI',
+        title: 'usturlab: paste the token printed by the CLI',
         password: true,
         ignoreFocusOut: true,
         prompt: 'Copy the long token (sk-ant-oat…) printed in the terminal and paste it here',
       });
       if (!token) {
         void vscode.window.showWarningMessage(
-          `usrouter: no token pasted — ${provider}:${label} was NOT saved. Run "usrouter: Add Account" again; the terminal may still show the token.`,
+          `usturlab: no token pasted — ${provider}:${label} was NOT saved. Run "usturlab: Add Account" again; the terminal may still show the token.`,
         );
         return;
       }
@@ -237,13 +237,13 @@ export async function addAccountWizard(
       const ok = await flow.verify();
       if (!ok) {
         const retry = await vscode.window.showWarningMessage(
-          `usrouter could not verify the ${adapter.displayName} login for "${label}". Save the account anyway?`,
+          `usturlab could not verify the ${adapter.displayName} login for "${label}". Save the account anyway?`,
           'Save anyway',
           'Cancel',
         );
         if (retry !== 'Save anyway') {
           void vscode.window.showWarningMessage(
-            `usrouter: account setup for ${provider}:${label} was canceled — nothing was saved.`,
+            `usturlab: account setup for ${provider}:${label} was canceled — nothing was saved.`,
           );
           return;
         }
@@ -254,7 +254,7 @@ export async function addAccountWizard(
 
   if (!outcome.ok) {
     void vscode.window.showWarningMessage(
-      `usrouter: login was not detected — ${provider}:${label} was NOT saved. Run "usrouter: Add Account" to retry.`,
+      `usturlab: login was not detected — ${provider}:${label} was NOT saved. Run "usturlab: Add Account" to retry.`,
     );
     return;
   }
@@ -265,7 +265,7 @@ export async function addAccountWizard(
   }
   await accounts.upsert(profile);
   void vscode.window.showInformationMessage(
-    `usrouter: ${provider}:${profile.label} connected ✓ You can close the login terminal.`,
+    `usturlab: ${provider}:${profile.label} connected ✓ You can close the login terminal.`,
   );
 
   // Verify at login time whether this credential can also serve the usage
@@ -278,13 +278,13 @@ export async function addAccountWizard(
       const windows = token ? await fetchClaudeUsage(token) : [];
       if (windows.length > 0) {
         void vscode.window.showInformationMessage(
-          `usrouter: usage view enabled for ${provider}:${profile.label} (${windows
+          `usturlab: usage view enabled for ${provider}:${profile.label} (${windows
             .map((w) => `${w.utilizationPct}% ${w.label}`)
             .join(', ')})`,
         );
       } else {
         void vscode.window.showWarningMessage(
-          `usrouter: ${provider}:${profile.label} chat works, but usage data is not readable with this login${
+          `usturlab: ${provider}:${profile.label} chat works, but usage data is not readable with this login${
             profile.authMode === 'oauth-token'
               ? ' — re-add via "Claude subscription (recommended)" for quota bars'
               : ''
@@ -293,5 +293,5 @@ export async function addAccountWizard(
       }
     })();
   }
-  await vscode.commands.executeCommand('usrouter.openAccounts');
+  await vscode.commands.executeCommand('usturlab.openAccounts');
 }

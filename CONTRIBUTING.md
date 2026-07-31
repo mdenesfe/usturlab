@@ -1,4 +1,4 @@
-# Contributing to usrouter
+# Contributing to usturlab
 
 Thanks for helping! A few pointers:
 

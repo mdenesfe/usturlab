@@ -1,7 +1,7 @@
 {
-  "name": "@usrouter/core",
+  "name": "@usturlab/core",
   "version": "0.1.0",
-  "description": "Editor-agnostic engine of usrouter: rule-based routing, CLI adapters and quota failover across AI subscriptions.",
+  "description": "Editor-agnostic engine of usturlab: rule-based routing, CLI adapters and quota failover across AI subscriptions.",
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",

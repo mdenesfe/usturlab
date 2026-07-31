@@ -1,7 +1,7 @@
 import type * as vscode from 'vscode';
-import type { QuotaPersistence, QuotaState } from '@usrouter/core';
+import type { QuotaPersistence, QuotaState } from '@usturlab/core';
 
-const KEY = 'usrouter.quota';
+const KEY = 'usturlab.quota';
 
 export function globalStateQuotaPersistence(ctx: vscode.ExtensionContext): QuotaPersistence {
   return {

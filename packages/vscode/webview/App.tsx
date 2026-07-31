@@ -10,11 +10,11 @@ import { IconPlus } from './components/icons.js';
 
 declare global {
   interface Window {
-    __USROUTER_MODE__?: 'sidebar' | 'tab' | 'accounts' | 'rules';
+    __USTURLAB_MODE__?: 'sidebar' | 'tab' | 'accounts' | 'rules';
   }
 }
 
-const MODE: 'sidebar' | 'tab' | 'accounts' | 'rules' = window.__USROUTER_MODE__ ?? 'tab';
+const MODE: 'sidebar' | 'tab' | 'accounts' | 'rules' = window.__USTURLAB_MODE__ ?? 'tab';
 
 const HASHTAG_RE = /(^|\s)#([\w-]+)/g;
 

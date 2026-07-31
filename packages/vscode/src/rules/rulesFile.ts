@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { EMPTY_RULES, RULES_TEMPLATE, parseRulesFile, type RulesFile } from '@usrouter/core';
+import { EMPTY_RULES, RULES_TEMPLATE, parseRulesFile, type RulesFile } from '@usturlab/core';
 
 export interface RulesState {
   rules: RulesFile;
@@ -16,29 +16,34 @@ export class RulesManager implements vscode.Disposable {
   private lastError: string | undefined;
   private emitter = new vscode.EventEmitter<void>();
   readonly onDidChange = this.emitter.event;
-  private diagnostics = vscode.languages.createDiagnosticCollection('usrouter');
+  private diagnostics = vscode.languages.createDiagnosticCollection('usturlab');
   private watcher: vscode.FileSystemWatcher;
 
   constructor() {
-    this.watcher = vscode.workspace.createFileSystemWatcher('**/.usrouter/rules.json');
+    this.watcher = vscode.workspace.createFileSystemWatcher('**/.usturlab/rules.json');
     this.watcher.onDidChange(() => this.load());
     this.watcher.onDidCreate(() => this.load());
     this.watcher.onDidDelete(() => this.load());
     this.load();
   }
 
-  /** Workspace rules file wins; falls back to ~/.usrouter/rules.json. */
+  /** Workspace rules file wins; falls back to ~/.usturlab, then legacy .usrouter paths. */
   locate(): { path: string; exists: boolean } {
     const ws = vscode.workspace.workspaceFolders?.[0];
+    const candidates: string[] = [];
     if (ws) {
-      const wsPath = join(ws.uri.fsPath, '.usrouter', 'rules.json');
-      if (existsSync(wsPath)) return { path: wsPath, exists: true };
-      const homePath = join(homedir(), '.usrouter', 'rules.json');
-      if (existsSync(homePath)) return { path: homePath, exists: true };
-      return { path: wsPath, exists: false };
+      candidates.push(join(ws.uri.fsPath, '.usturlab', 'rules.json'));
+      candidates.push(join(homedir(), '.usturlab', 'rules.json'));
+      candidates.push(join(ws.uri.fsPath, '.usrouter', 'rules.json'));
+      candidates.push(join(homedir(), '.usrouter', 'rules.json'));
+    } else {
+      candidates.push(join(homedir(), '.usturlab', 'rules.json'));
+      candidates.push(join(homedir(), '.usrouter', 'rules.json'));
     }
-    const homePath = join(homedir(), '.usrouter', 'rules.json');
-    return { path: homePath, exists: existsSync(homePath) };
+    for (const path of candidates) {
+      if (existsSync(path)) return { path, exists: true };
+    }
+    return { path: candidates[0]!, exists: false };
   }
 
   getRules(): RulesFile {
@@ -79,7 +84,7 @@ export class RulesManager implements vscode.Disposable {
       this.diagnostics.set(uri, [
         new vscode.Diagnostic(
           new vscode.Range(0, 0, 0, 1),
-          `usrouter rules invalid (falling back to priority order): ${parsed.error}`,
+          `usturlab rules invalid (falling back to priority order): ${parsed.error}`,
           vscode.DiagnosticSeverity.Warning,
         ),
       ]);

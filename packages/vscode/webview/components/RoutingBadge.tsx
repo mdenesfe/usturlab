@@ -1,4 +1,4 @@
-import type { Target } from '@usrouter/core';
+import type { Target } from '@usturlab/core';
 import { IconRoute } from './icons.js';
 
 export function RoutingBadge({

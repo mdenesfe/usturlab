@@ -1,6 +1,6 @@
 {
-  "name": "usrouter",
-  "displayName": "usrouter — AI Subscription Router",
+  "name": "usturlab",
+  "displayName": "usturlab — AI Subscription Router",
   "description": "Add all your AI subscriptions (multiple Claude accounts, Codex, Gemini, Copilot) and route every task to the best account and model with user-defined rules and automatic quota failover.",
   "version": "0.1.0",
   "publisher": "mdenesfe",
@@ -8,7 +8,7 @@
   "icon": "media/marketplace-icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mdenesfe/usrouter"
+    "url": "https://github.com/mdenesfe/usturlab"
   },
   "engines": {
     "vscode": "^1.95.0"
@@ -33,83 +33,83 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "usrouter",
-          "title": "usrouter",
+          "id": "usturlab",
+          "title": "usturlab",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "usrouter": [
+      "usturlab": [
         {
           "type": "webview",
-          "id": "usrouter.chat",
+          "id": "usturlab.chat",
           "name": "Chats"
         }
       ]
     },
     "commands": [
       {
-        "command": "usrouter.addAccount",
-        "title": "usrouter: Add Account",
+        "command": "usturlab.addAccount",
+        "title": "usturlab: Add Account",
         "icon": "$(add)"
       },
       {
-        "command": "usrouter.removeAccount",
-        "title": "usrouter: Remove Account"
+        "command": "usturlab.removeAccount",
+        "title": "usturlab: Remove Account"
       },
       {
-        "command": "usrouter.editRules",
-        "title": "usrouter: Edit Routing Rules"
+        "command": "usturlab.editRules",
+        "title": "usturlab: Edit Routing Rules"
       },
       {
-        "command": "usrouter.newConversation",
-        "title": "usrouter: New Conversation",
+        "command": "usturlab.newConversation",
+        "title": "usturlab: New Conversation",
         "icon": "$(clear-all)"
       },
       {
-        "command": "usrouter.openChatInTab",
-        "title": "usrouter: Open Chat",
+        "command": "usturlab.openChatInTab",
+        "title": "usturlab: Open Chat",
         "icon": "$(comment-discussion)"
       },
       {
-        "command": "usrouter.openAccounts",
-        "title": "usrouter: Manage Accounts",
+        "command": "usturlab.openAccounts",
+        "title": "usturlab: Manage Accounts",
         "icon": "$(account)"
       },
       {
-        "command": "usrouter.openRules",
-        "title": "usrouter: Routing Rules",
+        "command": "usturlab.openRules",
+        "title": "usturlab: Routing Rules",
         "icon": "$(list-tree)"
       },
       {
-        "command": "usrouter.openInTerminal",
-        "title": "usrouter: Open Session in Terminal"
+        "command": "usturlab.openInTerminal",
+        "title": "usturlab: Open Session in Terminal"
       },
       {
-        "command": "usrouter.cancelTask",
-        "title": "usrouter: Cancel Running Task"
+        "command": "usturlab.cancelTask",
+        "title": "usturlab: Cancel Running Task"
       },
       {
-        "command": "usrouter.debug.simulateLimit",
-        "title": "usrouter: Simulate Usage Limit (debug)"
+        "command": "usturlab.debug.simulateLimit",
+        "title": "usturlab: Simulate Usage Limit (debug)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "usrouter.newConversation",
-          "when": "view == usrouter.chat",
+          "command": "usturlab.newConversation",
+          "when": "view == usturlab.chat",
           "group": "navigation@1"
         },
         {
-          "command": "usrouter.openAccounts",
-          "when": "view == usrouter.chat",
+          "command": "usturlab.openAccounts",
+          "when": "view == usturlab.chat",
           "group": "navigation@2"
         },
         {
-          "command": "usrouter.openRules",
-          "when": "view == usrouter.chat",
+          "command": "usturlab.openRules",
+          "when": "view == usturlab.chat",
           "group": "navigation@3"
         }
       ]
@@ -117,16 +117,16 @@
     "jsonValidation": [
       {
         "fileMatch": [
-          "**/.usrouter/rules.json",
+          "**/.usturlab/rules.json",
           "**/rules.json"
         ],
         "url": "./schemas/rules.schema.json"
       }
     ],
     "configuration": {
-      "title": "usrouter",
+      "title": "usturlab",
       "properties": {
-        "usrouter.permissionMode": {
+        "usturlab.permissionMode": {
           "type": "string",
           "enum": [
             "safe",
@@ -136,27 +136,27 @@
           "default": "safe",
           "markdownDescription": "How much autonomy routed CLIs get: `safe` (read/plan only), `edits` (auto-accept file edits), `full` (skip all approvals — use with care)."
         },
-        "usrouter.pollUsage": {
+        "usturlab.pollUsage": {
           "type": "boolean",
           "default": false,
           "markdownDescription": "Proactively poll provider usage endpoints (Claude 5h/weekly window, Copilot AI credits) to show quota in the Accounts view. Uses undocumented endpoints; off by default."
         },
-        "usrouter.cliPath.claude": {
+        "usturlab.cliPath.claude": {
           "type": "string",
           "default": "claude",
           "description": "Path to the claude CLI binary."
         },
-        "usrouter.cliPath.codex": {
+        "usturlab.cliPath.codex": {
           "type": "string",
           "default": "codex",
           "description": "Path to the codex CLI binary."
         },
-        "usrouter.cliPath.gemini": {
+        "usturlab.cliPath.gemini": {
           "type": "string",
           "default": "gemini",
           "description": "Path to the gemini CLI binary."
         },
-        "usrouter.cliPath.copilot": {
+        "usturlab.cliPath.copilot": {
           "type": "string",
           "default": "copilot",
           "description": "Path to the copilot CLI binary."
@@ -172,7 +172,7 @@
     "package": "node esbuild.mjs --production && vsce package --no-dependencies"
   },
   "dependencies": {
-    "@usrouter/core": "workspace:*",
+    "@usturlab/core": "workspace:*",
     "preact": "^10.24.0"
   },
   "devDependencies": {

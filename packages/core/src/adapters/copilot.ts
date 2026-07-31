@@ -98,7 +98,7 @@ export class CopilotAdapter implements ProviderAdapter {
       watch: { kind: 'poll', check: isLoggedIn, intervalMs: 2000 },
       instructions:
         'The terminal runs "copilot login": it shows a device code — enter it on the GitHub page ' +
-        'that opens, with the account you want to add. usrouter detects the completed login automatically.',
+        'that opens, with the account you want to add. usturlab detects the completed login automatically.',
       verify: isLoggedIn,
     };
   }

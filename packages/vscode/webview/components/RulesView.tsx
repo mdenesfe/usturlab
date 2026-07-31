@@ -1,4 +1,4 @@
-import type { Rule, RuleTarget, RulesFile } from '@usrouter/core';
+import type { Rule, RuleTarget, RulesFile } from '@usturlab/core';
 import { vscode } from '../vscodeApi.js';
 import { IconPlus, IconRoute } from './icons.js';
 

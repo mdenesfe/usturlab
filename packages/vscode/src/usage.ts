@@ -4,7 +4,7 @@ import {
   getClaudeProfileToken,
   readCodexUsage,
   type QuotaTracker,
-} from '@usrouter/core';
+} from '@usturlab/core';
 import type { AccountStore } from './storage/accountStore.js';
 
 /**

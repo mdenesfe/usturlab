@@ -33,8 +33,8 @@ const webviewConfig = {
 if (watch) {
   const contexts = await Promise.all([esbuild.context(extensionConfig), esbuild.context(webviewConfig)]);
   await Promise.all(contexts.map((c) => c.watch()));
-  console.log('[usrouter] watching...');
+  console.log('[usturlab] watching...');
 } else {
   await Promise.all([esbuild.build(extensionConfig), esbuild.build(webviewConfig)]);
-  console.log('[usrouter] build complete');
+  console.log('[usturlab] build complete');
 }

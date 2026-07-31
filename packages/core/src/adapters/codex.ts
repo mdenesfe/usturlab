@@ -166,7 +166,7 @@ export class CodexAdapter implements ProviderAdapter {
       watch: { kind: 'file', path: join(profileDir, 'auth.json') },
       instructions:
         'A browser window will open — sign in with the ChatGPT account you want to add. ' +
-        'usrouter detects the completed login automatically.',
+        'usturlab detects the completed login automatically.',
       verify: () =>
         new Promise<boolean>((resolve) => {
           const child = spawn(this.cliPath, ['login', 'status'], {

@@ -160,7 +160,7 @@ export class GeminiAdapter implements ProviderAdapter {
       watch: { kind: 'file', path: join(geminiDir, 'oauth_creds.json') },
       instructions:
         'Gemini CLI will start with an isolated profile. A browser opens — sign in with the Google ' +
-        'account you want to add. usrouter detects the completed login automatically; you can close the terminal afterwards.',
+        'account you want to add. usturlab detects the completed login automatically; you can close the terminal afterwards.',
       verify: async () => existsSync(join(geminiDir, 'oauth_creds.json')),
     };
   }

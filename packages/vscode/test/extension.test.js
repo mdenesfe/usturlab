@@ -1,10 +1,10 @@
 const assert = require('node:assert');
 const vscode = require('vscode');
 
-suite('usrouter smoke', () => {
+suite('usturlab smoke', () => {
   test('activates', async () => {
-    const ext = vscode.extensions.getExtension('mdenesfe.usrouter');
-    assert.ok(ext, 'extension mdenesfe.usrouter not found');
+    const ext = vscode.extensions.getExtension('mdenesfe.usturlab');
+    assert.ok(ext, 'extension mdenesfe.usturlab not found');
     await ext.activate();
     assert.ok(ext.isActive, 'extension did not activate');
   });
@@ -12,16 +12,16 @@ suite('usrouter smoke', () => {
   test('registers all commands', async () => {
     const commands = await vscode.commands.getCommands(true);
     const expected = [
-      'usrouter.addAccount',
-      'usrouter.removeAccount',
-      'usrouter.editRules',
-      'usrouter.newConversation',
-      'usrouter.openChatInTab',
-      'usrouter.openAccounts',
-      'usrouter.openRules',
-      'usrouter.openInTerminal',
-      'usrouter.cancelTask',
-      'usrouter.debug.simulateLimit',
+      'usturlab.addAccount',
+      'usturlab.removeAccount',
+      'usturlab.editRules',
+      'usturlab.newConversation',
+      'usturlab.openChatInTab',
+      'usturlab.openAccounts',
+      'usturlab.openRules',
+      'usturlab.openInTerminal',
+      'usturlab.cancelTask',
+      'usturlab.debug.simulateLimit',
     ];
     for (const cmd of expected) {
       assert.ok(commands.includes(cmd), `missing command: ${cmd}`);
@@ -29,8 +29,8 @@ suite('usrouter smoke', () => {
   });
 
   test('opens chat and accounts tabs without throwing', async () => {
-    await vscode.commands.executeCommand('usrouter.newConversation');
-    await vscode.commands.executeCommand('usrouter.openAccounts');
-    await vscode.commands.executeCommand('usrouter.openRules');
+    await vscode.commands.executeCommand('usturlab.newConversation');
+    await vscode.commands.executeCommand('usturlab.openAccounts');
+    await vscode.commands.executeCommand('usturlab.openRules');
   });
 });

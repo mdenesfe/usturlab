@@ -33,7 +33,7 @@ importers:
 
   packages/vscode:
     dependencies:
-      '@usrouter/core':
+      '@usturlab/core':
         specifier: workspace:*
         version: link:../core
       preact:

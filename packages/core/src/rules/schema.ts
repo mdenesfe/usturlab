@@ -63,7 +63,7 @@ export function parseRulesFile(content: string): ParseRulesResult {
 }
 
 export const RULES_TEMPLATE = `{
-  "$schema": "https://raw.githubusercontent.com/usrouter/usrouter/main/packages/vscode/schemas/rules.schema.json",
+  "$schema": "https://raw.githubusercontent.com/usturlab/usturlab/main/packages/vscode/schemas/rules.schema.json",
   "version": 1,
   "rules": [
     {

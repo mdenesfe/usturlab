@@ -88,7 +88,7 @@ export function AccountsView({ accounts }: { accounts: AccountStatusDto[] }) {
           <div class="accounts-empty-title">No accounts yet</div>
           <div class="accounts-empty-line">
             Add your AI subscriptions — multiple Claude accounts, Codex, Gemini, Copilot — and
-            usrouter routes every task to the best one.
+            usturlab routes every task to the best one.
           </div>
           <button class="run-btn send" onClick={() => vscode.postMessage({ kind: 'addAccount' })}>
             <IconPlus size={12} /> Add your first account
@@ -247,7 +247,7 @@ export function AccountsView({ accounts }: { accounts: AccountStatusDto[] }) {
                 <div class="info-row">
                   <span class="info-key">profile</span>
                   <span class="info-val" title={selected.homeDir}>
-                    {selected.homeDir.replace(/^.*\/(\.usrouter\/.*)$/, '~/$1')}
+                    {selected.homeDir.replace(/^.*\/(\.usturlab\/.*)$/, '~/$1')}
                   </span>
                 </div>
               )}

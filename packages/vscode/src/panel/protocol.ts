@@ -1,4 +1,4 @@
-import type { ProviderId, RulesFile, Target, UsageWindow } from '@usrouter/core';
+import type { ProviderId, RulesFile, Target, UsageWindow } from '@usturlab/core';
 
 export interface AccountStatusDto {
   id: string;

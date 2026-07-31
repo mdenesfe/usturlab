@@ -4,10 +4,10 @@ import {
   type AccountProfile,
   type ResolvedAccount,
   type Target,
-} from '@usrouter/core';
+} from '@usturlab/core';
 
-const KEY = 'usrouter.accounts';
-const secretKey = (id: string) => `usrouter.secret.${id}`;
+const KEY = 'usturlab.accounts';
+const secretKey = (id: string) => `usturlab.secret.${id}`;
 
 export class AccountStore {
   private emitter = new vscode.EventEmitter<void>();

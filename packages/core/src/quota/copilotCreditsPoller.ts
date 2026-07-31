@@ -12,7 +12,7 @@ export async function fetchCopilotCredits(
   const headers = {
     Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',
-    'User-Agent': 'usrouter',
+    'User-Agent': 'usturlab',
   };
   try {
     const userRes = await fetchImpl('https://api.github.com/user', { headers });

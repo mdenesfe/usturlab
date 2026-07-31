@@ -7,5 +7,5 @@ packages/vscode/media/webview.js
 packages/vscode/media/webview.js.map
 .DS_Store
 *.log
-.usrouter/
+.usturlab/
 .claude/settings.local.json

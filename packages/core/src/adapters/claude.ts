@@ -187,7 +187,7 @@ export class ClaudeAdapter implements ProviderAdapter {
       instructions:
         'The terminal will run "claude setup-token": a browser opens — log in with the Claude account you want to add. ' +
         'If the CLI asks for an authorization code, paste it INTO THE TERMINAL. ' +
-        'usrouter detects the token automatically when it appears.',
+        'usturlab detects the token automatically when it appears.',
       verify: async () => true,
     };
   }
@@ -209,7 +209,7 @@ export class ClaudeAdapter implements ProviderAdapter {
       watch: { kind: 'poll', check, intervalMs: 3000 },
       instructions:
         'The terminal will run "claude auth login": a browser opens — sign in with the Claude account you want to add. ' +
-        'usrouter detects the completed login automatically.',
+        'usturlab detects the completed login automatically.',
       verify: check,
     };
   }

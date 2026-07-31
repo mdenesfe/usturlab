@@ -11,7 +11,7 @@ import {
   shortId,
   type PermissionMode,
   type Target,
-} from '@usrouter/core';
+} from '@usturlab/core';
 import type { AccountStore } from '../storage/accountStore.js';
 import type { RulesManager } from '../rules/rulesFile.js';
 import type {
@@ -49,8 +49,8 @@ interface Surface {
   conversationId?: string;
 }
 
-const CONV_KEY = 'usrouter.conversations';
-const NATIVE_SESSIONS_KEY = 'usrouter.nativeSessions';
+const CONV_KEY = 'usturlab.conversations';
+const NATIVE_SESSIONS_KEY = 'usturlab.nativeSessions';
 const MAX_CONVERSATIONS = 50;
 
 /**
@@ -59,7 +59,7 @@ const MAX_CONVERSATIONS = 50;
  * revealed if already open). Conversations persist across reloads.
  */
 export class ChatViewProvider implements vscode.WebviewViewProvider {
-  static readonly viewType = 'usrouter.chat';
+  static readonly viewType = 'usturlab.chat';
 
   private surfaces = new Map<vscode.Webview, Surface>();
   private panels = new Map<string, vscode.WebviewPanel>();
@@ -160,7 +160,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     const panel = vscode.window.createWebviewPanel(
-      'usrouter.chatTab',
+      'usturlab.chatTab',
       rec.title || 'New chat',
       vscode.ViewColumn.Active,
       {
@@ -193,8 +193,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     const panel = vscode.window.createWebviewPanel(
-      'usrouter.accountsTab',
-      'usrouter · Accounts',
+      'usturlab.accountsTab',
+      'usturlab · Accounts',
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
@@ -218,8 +218,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     const panel = vscode.window.createWebviewPanel(
-      'usrouter.rulesTab',
-      'usrouter · Rules',
+      'usturlab.rulesTab',
+      'usturlab · Rules',
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
@@ -451,16 +451,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.openRulesTab();
         break;
       case 'addAccount':
-        void vscode.commands.executeCommand('usrouter.addAccount');
+        void vscode.commands.executeCommand('usturlab.addAccount');
         break;
       case 'removeAccount':
-        void vscode.commands.executeCommand('usrouter.removeAccount', msg.id);
+        void vscode.commands.executeCommand('usturlab.removeAccount', msg.id);
         break;
       case 'renameAccount':
         await this.renameAccount(msg.id);
         break;
       case 'editRules':
-        void vscode.commands.executeCommand('usrouter.editRules');
+        void vscode.commands.executeCommand('usturlab.editRules');
         break;
       case 'refreshUsage':
         void this.usageRefresher?.();
@@ -487,7 +487,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const rec = this.conversations.get(conversationId);
     if (!rec) return;
     if (this.tasks.has(conversationId)) {
-      void vscode.window.showWarningMessage('usrouter: this chat already has a running task.');
+      void vscode.window.showWarningMessage('usturlab: this chat already has a running task.');
       return;
     }
 
@@ -515,7 +515,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           notice('refreshing usage…');
           break;
         case 'openTerminal':
-          void vscode.commands.executeCommand('usrouter.openInTerminal');
+          void vscode.commands.executeCommand('usturlab.openInTerminal');
           break;
       }
       this.sendConversations();
@@ -542,7 +542,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       editor && ws ? relative(ws.uri.fsPath, editor.document.uri.fsPath) : editor?.document.uri.fsPath;
 
     const permissionMode = vscode.workspace
-      .getConfiguration('usrouter')
+      .getConfiguration('usturlab')
       .get<PermissionMode>('permissionMode', 'safe');
 
     try {
@@ -580,7 +580,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 messageId,
                 message: skipped
                   ? `No account available. Skipped: ${skipped}`
-                  : 'No accounts configured yet — run "usrouter: Add Account" first.',
+                  : 'No accounts configured yet — run "usturlab: Add Account" first.',
               });
             }
             for (const s of ev.decision.skipped) {
@@ -659,7 +659,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const account = this.accounts.all().find((a) => a.id === id);
     if (!account) return;
     const label = await vscode.window.showInputBox({
-      title: `usrouter: rename ${account.provider}:${account.label}`,
+      title: `usturlab: rename ${account.provider}:${account.label}`,
       value: account.label,
       prompt: 'Label used in rules and @mentions',
       validateInput: (value) => {
@@ -682,13 +682,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const oldLabel = account.label;
     await this.accounts.upsert({ ...account, label: label.trim() });
     void vscode.window.showInformationMessage(
-      `usrouter: renamed to ${account.provider}:${label.trim()}. If your rules reference "${oldLabel}", update them.`,
+      `usturlab: renamed to ${account.provider}:${label.trim()}. If your rules reference "${oldLabel}", update them.`,
     );
   }
 
   private async loadIdentities(): Promise<void> {
     const cliPath = vscode.workspace
-      .getConfiguration('usrouter')
+      .getConfiguration('usturlab')
       .get<string>('cliPath.claude', 'claude');
     let changed = false;
     for (const account of this.accounts.all()) {
@@ -746,11 +746,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="${styleUri}" rel="stylesheet">
-  <title>usrouter</title>
+  <title>usturlab</title>
 </head>
 <body>
   <div id="root"></div>
-  <script nonce="${nonce}">window.__USROUTER_MODE__ = '${mode}';</script>
+  <script nonce="${nonce}">window.__USTURLAB_MODE__ = '${mode}';</script>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
