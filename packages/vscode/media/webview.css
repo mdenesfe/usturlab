@@ -23,31 +23,7 @@ body {
   height: 100vh;
 }
 
-/* ── header ─────────────────────────────────────────────── */
-
-.header {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 6px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  min-height: 30px;
-}
-
-.header-title {
-  font-family: var(--mono);
-  font-size: 0.85em;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 0 2px;
-}
-
-.header-spacer {
-  flex: 1;
-}
+/* ── shared controls ────────────────────────────────────── */
 
 .icon-btn {
   display: inline-flex;
@@ -73,7 +49,7 @@ body {
 .history {
   flex: 1;
   overflow-y: auto;
-  padding: 6px;
+  padding: 8px 6px 6px;
 }
 
 .history-new {
@@ -414,6 +390,15 @@ body {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  transition: border-color 0.15s ease;
+}
+
+.chat-tab .composer:focus-within {
+  border-color: var(--vscode-focusBorder);
+}
+
+.chat-tab .composer.running {
+  border-color: var(--vscode-charts-yellow, #d0a54e);
 }
 
 .composer textarea {
@@ -427,6 +412,8 @@ body {
   font-family: var(--mono);
   font-size: 0.92em;
   line-height: 1.5;
+  max-height: 180px;
+  overflow-y: auto;
 }
 
 .composer textarea::placeholder {
@@ -508,8 +495,17 @@ body {
   padding: 0 12px;
 }
 
+.scroll-area .chat-column {
+  padding-bottom: 14px;
+}
+
 .composer-holder {
   padding-bottom: 10px;
+}
+
+.empty-cta {
+  align-self: flex-start;
+  margin-top: 2px;
 }
 
 .chat-tab .composer {

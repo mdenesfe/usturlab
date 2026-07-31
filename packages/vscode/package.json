@@ -101,6 +101,16 @@
           "command": "usrouter.newConversation",
           "when": "view == usrouter.chat",
           "group": "navigation@1"
+        },
+        {
+          "command": "usrouter.openAccounts",
+          "when": "view == usrouter.chat",
+          "group": "navigation@2"
+        },
+        {
+          "command": "usrouter.openRules",
+          "when": "view == usrouter.chat",
+          "group": "navigation@3"
         }
       ]
     },

@@ -20,7 +20,15 @@ export type TranscriptItem =
   | { kind: 'notice'; text: string }
   | { kind: 'error'; text: string };
 
-export function Transcript({ items }: { items: TranscriptItem[] }) {
+export function Transcript({
+  items,
+  noAccounts,
+  onAddAccount,
+}: {
+  items: TranscriptItem[];
+  noAccounts?: boolean;
+  onAddAccount?: () => void;
+}) {
   if (items.length === 0) {
     return (
       <div class="transcript empty">
@@ -29,18 +37,32 @@ export function Transcript({ items }: { items: TranscriptItem[] }) {
             <IconRoute size={22} />
             <span>usrouter</span>
           </div>
-          <div class="empty-line">Route every task to the best subscription you own.</div>
-          <div class="empty-hints">
-            <div>
-              <code>@claude:work/opus</code> route explicitly
-            </div>
-            <div>
-              <code>#tests</code> trigger tag rules
-            </div>
-            <div>
-              <code>.usrouter/rules.json</code> edit routing rules
-            </div>
-          </div>
+          {noAccounts ? (
+            <>
+              <div class="empty-line">
+                Connect your AI subscriptions — multiple Claude accounts, Codex, Gemini, Copilot —
+                and every task is routed to the best one.
+              </div>
+              <button class="run-btn send empty-cta" onClick={onAddAccount}>
+                Add your first account
+              </button>
+            </>
+          ) : (
+            <>
+              <div class="empty-line">Route every task to the best subscription you own.</div>
+              <div class="empty-hints">
+                <div>
+                  <code>@claude:work/opus</code> route explicitly
+                </div>
+                <div>
+                  <code>#tests</code> trigger tag rules
+                </div>
+                <div>
+                  <code>.usrouter/rules.json</code> edit routing rules
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
@@ -77,7 +99,12 @@ export function Transcript({ items }: { items: TranscriptItem[] }) {
                   <span class="thinking">thinking</span>
                 ) : null}
                 {item.done && item.costUsd !== undefined && (
-                  <div class="cost">${item.costUsd.toFixed(4)}</div>
+                  <div
+                    class="cost"
+                    title="API-equivalent value — subscription usage is not billed per request"
+                  >
+                    ≈ ${item.costUsd.toFixed(4)}
+                  </div>
                 )}
               </div>
             );

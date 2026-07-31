@@ -6,7 +6,7 @@ import { Composer } from './components/Composer.js';
 import { HistoryList } from './components/HistoryList.js';
 import { AccountsView } from './components/AccountsView.js';
 import { RulesView } from './components/RulesView.js';
-import { IconAccounts, IconPlus, IconRoute } from './components/icons.js';
+import { IconPlus } from './components/icons.js';
 
 declare global {
   interface Window {
@@ -64,31 +64,6 @@ function SidebarApp() {
 
   return (
     <div class="app">
-      <div class="header">
-        <span class="header-title">Chats</span>
-        <div class="header-spacer" />
-        <button
-          class="icon-btn"
-          title="Routing rules"
-          onClick={() => vscode.postMessage({ kind: 'openRules' })}
-        >
-          <IconRoute />
-        </button>
-        <button
-          class="icon-btn"
-          title="Accounts"
-          onClick={() => vscode.postMessage({ kind: 'openAccounts' })}
-        >
-          <IconAccounts />
-        </button>
-        <button
-          class="icon-btn"
-          title="New chat"
-          onClick={() => vscode.postMessage({ kind: 'newConversation' })}
-        >
-          <IconPlus />
-        </button>
-      </div>
       {accounts !== undefined && accounts.length === 0 && (
         <div class="setup-banner">
           <div class="setup-banner-text">Connect your AI subscriptions to start routing.</div>
@@ -133,7 +108,11 @@ function ChatApp() {
   const [items, setItems] = useState<TranscriptItem[]>([]);
   const [accounts, setAccounts] = useState<AccountStatusDto[]>([]);
   const [running, setRunning] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Follow the stream only while the user is already at the bottom —
+  // scrolling up to read must never be fought.
+  const pinnedRef = useRef(true);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent<HostToWebview>) => {
@@ -149,21 +128,33 @@ function ChatApp() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (pinnedRef.current) bottomRef.current?.scrollIntoView();
   }, [items]);
 
   const send = (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || running) return;
     const tags = [...trimmed.matchAll(HASHTAG_RE)].map((m) => m[2]!);
+    pinnedRef.current = true;
     vscode.postMessage({ kind: 'send', text: trimmed, tags });
   };
 
   return (
     <div class="app chat-tab">
-      <div class="scroll-area">
+      <div
+        class="scroll-area"
+        ref={scrollRef}
+        onScroll={() => {
+          const el = scrollRef.current;
+          if (el) pinnedRef.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 48;
+        }}
+      >
         <div class="chat-column">
-          <Transcript items={items} />
+          <Transcript
+            items={items}
+            noAccounts={accounts.length === 0}
+            onAddAccount={() => vscode.postMessage({ kind: 'addAccount' })}
+          />
           <div ref={bottomRef} />
         </div>
       </div>

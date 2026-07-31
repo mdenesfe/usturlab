@@ -59,7 +59,9 @@ export function HistoryList({
           {group.items.map((c) => (
             <div key={c.id} class="history-row" onClick={() => onOpen(c.id)}>
               {c.running && <span class="dot ok pulse" />}
-              <span class="history-title">{c.title}</span>
+              <span class="history-title" title={c.title}>
+                {c.title}
+              </span>
               <span class="history-time">{relTime(c.updatedAt)}</span>
               <button
                 class="icon-btn history-del"
