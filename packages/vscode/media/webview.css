@@ -279,25 +279,35 @@ body {
 .assistant-head {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-bottom: 7px;
+  gap: 6px;
+  margin-bottom: 6px;
   font-family: var(--mono);
-  font-size: 0.8em;
+  font-size: 0.76em;
   flex-wrap: wrap;
 }
 
-.assistant-name {
-  font-weight: 700;
+.assistant-mark {
+  display: inline-flex;
 }
 
-.assistant-provider {
-  color: var(--muted);
-  opacity: 0.8;
+.assistant-name {
+  font-weight: 600;
 }
 
 .assistant-meta {
   color: var(--muted);
+  opacity: 0.8;
+}
+
+.tools-line {
+  font-family: var(--mono);
+  font-size: 0.74em;
+  color: var(--muted);
   opacity: 0.85;
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .assistant-body {

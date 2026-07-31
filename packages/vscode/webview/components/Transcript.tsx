@@ -80,34 +80,38 @@ export function Transcript({
                 class="msg-assistant"
                 style={
                   color
-                    ? { borderLeftColor: `color-mix(in srgb, ${color} 55%, transparent)` }
+                    ? { borderLeftColor: `color-mix(in srgb, ${color} 32%, transparent)` }
                     : undefined
                 }
               >
                 {item.target && provider && (
                   <div class="assistant-head">
-                    <BrandMark provider={provider} size={14} />
+                    <span title={PROVIDER_NAME[provider]} class="assistant-mark">
+                      <BrandMark provider={provider} size={13} />
+                    </span>
                     <span class="assistant-name" style={{ color }}>
                       {item.target.account}
                     </span>
-                    <span class="assistant-meta" title={PROVIDER_NAME[provider]}>
-                      {provider}
-                      {item.target.model ? ` · ${item.target.model}` : ''}
+                    <span class="assistant-meta">
+                      {item.target.model ? `· ${item.target.model} ` : ''}
+                      {item.ruleId ? `· ${item.ruleId} ` : ''}
+                      {item.done && item.durationMs !== undefined
+                        ? `· ${(item.durationMs / 1000).toFixed(1)}s`
+                        : ''}
                     </span>
-                    {item.ruleId && (
-                      <span class="assistant-meta" title={item.reason}>
-                        · {item.ruleId}
+                    {item.done && item.costUsd !== undefined && (
+                      <span
+                        class="assistant-meta"
+                        title="API-equivalent value — subscription usage is not billed per request"
+                      >
+                        · ≈${item.costUsd.toFixed(2)}
                       </span>
                     )}
                   </div>
                 )}
                 {item.tools.length > 0 && (
-                  <div class="tools">
-                    {item.tools.map((t, j) => (
-                      <span key={j} class="tool-chip" title={t}>
-                        ⚙ {t}
-                      </span>
-                    ))}
+                  <div class="tools-line" title={item.tools.join('\n')}>
+                    ⚙ {item.tools.join(' · ')}
                   </div>
                 )}
                 {item.text ? (
@@ -121,19 +125,6 @@ export function Transcript({
                     <LiveDots />
                   </div>
                 ) : null}
-                {item.done && (item.durationMs !== undefined || item.costUsd !== undefined) && (
-                  <div class="assistant-foot">
-                    <span class="foot-check">✓</span>
-                    {item.durationMs !== undefined && (
-                      <span>{(item.durationMs / 1000).toFixed(1)}s</span>
-                    )}
-                    {item.costUsd !== undefined && (
-                      <span title="API-equivalent value — subscription usage is not billed per request">
-                        ≈ ${item.costUsd.toFixed(4)}
-                      </span>
-                    )}
-                  </div>
-                )}
               </div>
             );
           }
