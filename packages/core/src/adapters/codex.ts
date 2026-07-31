@@ -75,6 +75,18 @@ export class CodexAdapter implements ProviderAdapter {
       if (ev.kind === 'exit') {
         if (!finished) {
           const haystack = `${text}\n${stderrTail}`;
+          // Safety net for CLI arg drift: if the resume invocation is
+          // rejected by the parser, fall back to a fresh session instead of
+          // failing the whole target.
+          if (
+            req.resumeSessionId &&
+            ev.code !== 0 &&
+            /unexpected argument|unrecognized subcommand|invalid value/i.test(haystack)
+          ) {
+            yield { type: 'tool-use', name: 'resume unavailable → fresh session' };
+            yield* this.run({ ...req, resumeSessionId: undefined }, account, signal);
+            return;
+          }
           const limit = detectCodexLimit(haystack);
           if (limit) yield { type: 'limit', ...limit };
           else if (ev.code !== 0) {
