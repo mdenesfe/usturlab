@@ -157,6 +157,15 @@
           "type": "boolean",
           "default": true,
           "description": "Show a notification when a chat task finishes while its tab is not focused."
+        },
+        "usturlab.midRunStrategy": {
+          "type": "string",
+          "enum": [
+            "queue",
+            "restart"
+          ],
+          "default": "queue",
+          "markdownDescription": "What happens when you send a message while a task runs on a provider without live input (Codex/Gemini/Copilot). Claude always receives it live. `queue`: runs right after the current task. `restart`: cancels the in-flight task and re-asks with both messages merged — feels immediate, but discards unfinished tool work."
         }
       }
     }

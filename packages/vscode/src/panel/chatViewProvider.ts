@@ -504,6 +504,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
         return;
       }
+      const strategy = vscode.workspace
+        .getConfiguration('usturlab')
+        .get<'queue' | 'restart'>('midRunStrategy', 'queue');
+      if (strategy === 'restart') {
+        const inFlight = live?.userTexts[live.turnIdx] ?? '';
+        this.toConversation(conversationId, {
+          kind: 'notice',
+          text: 'restarting with both messages merged (this model cannot take mid-run input)',
+        });
+        this.tasks.get(conversationId)?.abort();
+        this.tasks.delete(conversationId);
+        const merged = inFlight
+          ? `${inFlight}\n\n[Additional message sent while you were working — address both]: ${text}`
+          : text;
+        // Let the aborted run finish its cleanup before starting the retry.
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        await this.runTask(conversationId, merged, tags);
+        return;
+      }
       this.toConversation(conversationId, {
         kind: 'notice',
         text: 'queued — this model cannot take mid-run input; runs next',
