@@ -12,6 +12,7 @@ import {
   shortId,
   observedBurn,
   isRetry,
+  isTransientFailure,
   type ConversationContext,
   type LiveRunHandle,
   type PermissionMode,
@@ -955,7 +956,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             live.lastTarget = ev.target;
             this.onTargetChosen?.(ev.target);
             if (ev.attempt > 1) {
-              post({ kind: 'toolUse', messageId: currentId(), name: `retry #${ev.attempt}` });
+              post({
+                kind: 'notice',
+                text: `connection dropped — retrying on ${formatTarget(ev.target)} (attempt ${ev.attempt})`,
+              });
             }
             break;
           case 'text-delta':
@@ -967,7 +971,37 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           case 'model-downgraded':
             post({ kind: 'downgraded', messageId: currentId(), from: ev.from, to: ev.to });
             break;
-          case 'failover':
+          case 'failover': {
+            // The account that could not finish is recorded on its own, or the
+            // learning loop would only ever see whoever cleaned up after it.
+            if (metric.provider && metric.account) {
+              void this.metrics.record({
+                id: `${metric.id}-${metric.provider}-${metric.account}`,
+                timestamp: metric.timestamp!,
+                conversationId,
+                provider: metric.provider,
+                account: metric.account,
+                model: metric.model,
+                ruleId: metric.ruleId,
+                routingReason: metric.routingReason,
+                kind: metric.kind,
+                complexity: metric.complexity,
+                durationMs: Date.now() - startedAt,
+                status: 'failover',
+                failoverReason: ev.reason,
+                transient: isTransientFailure(ev.reason),
+              });
+            }
+            metric = {
+              ...metric,
+              provider: ev.to.provider,
+              account: ev.to.account,
+              model: ev.to.model,
+              status: undefined,
+              errorMessage: undefined,
+              failedFrom: { provider: ev.from.provider, account: ev.from.account, model: ev.from.model },
+              failoverReason: ev.reason,
+            };
             post({
               kind: 'failover',
               messageId: currentId(),
@@ -977,6 +1011,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               resetAt: ev.resetAt,
             });
             break;
+          }
           case 'result': {
             const turnUser = live.userTexts[live.turnIdx] ?? text;
             rec.turns.push({ role: 'user', text: turnUser }, { role: 'assistant', text: ev.text });
@@ -1004,7 +1039,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             break;
           }
           case 'error':
-            metric = { ...metric, status: 'error', errorMessage: ev.message };
+            metric = {
+              ...metric,
+              status: 'error',
+              errorMessage: ev.message,
+              transient: isTransientFailure(ev.message),
+            };
             post({ kind: 'error', messageId: currentId(), message: ev.message });
             break;
           case 'chain-exhausted':
@@ -1047,6 +1087,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           burnPct: observedBurn(usageBefore, usageAfter),
           status: metric.status as 'success' | 'error' | 'failover',
           errorMessage: metric.errorMessage,
+          transient: metric.transient,
+          failedFrom: metric.failedFrom,
+          failoverReason: metric.failoverReason,
           steered,
           escalated,
         });

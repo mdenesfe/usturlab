@@ -8,6 +8,32 @@ import type { LimitInfo } from '../types.js';
 
 const CLAUDE_PIPE_EPOCH = /Claude AI usage limit reached\|(\d{5,})/i;
 
+/**
+ * Infrastructure failures — a dropped stream, an overloaded upstream, a socket
+ * reset. These say nothing about the account or the model, so the right answer
+ * is to try the same account again rather than spend another provider's quota.
+ */
+const TRANSIENT = [
+  /connection closed mid-?response/i,
+  /connection (error|reset|closed)/i,
+  /socket hang ?up/i,
+  /premature close/i,
+  /stream (disconnected|ended unexpectedly|closed)/i,
+  /fetch failed/i,
+  /network (error|timeout)/i,
+  /\b(ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|ENETUNREACH|EAI_AGAIN)\b/,
+  /\boverloaded(_error)?\b/i,
+  /\b(429|500|502|503|504)\b.*\b(error|gateway|unavailable|timeout)\b/i,
+  /(bad gateway|service unavailable|gateway timeout|internal server error)/i,
+  /request timed out/i,
+];
+
+/** True when an error is worth retrying on the same account. */
+export function isTransientFailure(text: string): boolean {
+  if (!text) return false;
+  return TRANSIENT.some((re) => re.test(text));
+}
+
 export function detectClaudeLimit(text: string): LimitInfo | undefined {
   const pipe = CLAUDE_PIPE_EPOCH.exec(text);
   if (pipe) {

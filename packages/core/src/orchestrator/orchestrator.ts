@@ -1,6 +1,11 @@
 import type { AdapterRegistry } from '../adapters/adapter.js';
 import type { QuotaTracker } from '../quota/quotaTracker.js';
-import { SessionStore, embedHistory } from '../session/sessionStore.js';
+import {
+  SessionStore,
+  embedHistory,
+  handoffPrompt,
+  resumeInterruptedPrompt,
+} from '../session/sessionStore.js';
 import { route } from '../router/router.js';
 import type { ConversationContext } from '../router/autoRoute.js';
 import type { TaskMetric } from '../quota/metricsSchema.js';
@@ -15,7 +20,23 @@ import type {
   Target,
   TaskRequest,
 } from '../types.js';
-import { formatTarget } from '../types.js';
+import { formatTarget, targetKey } from '../types.js';
+
+/** Transient failures get a second and third chance on the same account. */
+const RETRY_BACKOFF_MS = [1_000, 4_000];
+
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  if (ms <= 0 || signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(done, ms);
+    function done() {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', done);
+      resolve();
+    }
+    signal.addEventListener('abort', done, { once: true });
+  });
+}
 
 export interface OrchestratorDeps {
   adapters: AdapterRegistry;
@@ -35,6 +56,8 @@ export interface OrchestratorDeps {
   getConversationContext?: (conversationId: string) => ConversationContext | undefined;
   /** Plan heavy code-writing work before it edits. */
   getAutoPlan?: () => boolean;
+  /** Backoff between same-account retries; one entry per retry. */
+  retryBackoffMs?: number[];
 }
 
 export class Orchestrator {
@@ -70,6 +93,8 @@ export class Orchestrator {
 
     const tried: Target[] = [];
     const history = sessions.getHistory(task.conversationId);
+    // What a cut-off attempt already produced, so the next one continues it.
+    let interrupted: { target: Target; partial: string } | undefined;
     // Slash prompts pass through raw to Claude (it runs its native command);
     // every other provider gets the equivalent plain-English template.
     const slash = matchSlashCommand(cleanedPrompt, this.deps.getCustomCommands?.() ?? []);
@@ -87,7 +112,7 @@ export class Orchestrator {
 
       tried.push(target);
       let attempt = 0;
-      let retried = false;
+      let retries = 0;
 
       target: while (true) {
         attempt++;
@@ -96,10 +121,19 @@ export class Orchestrator {
         const nativeSid = adapter.supportsNativeResume
           ? sessions.getNativeSession(task.conversationId, target, task.cwd)
           : undefined;
-        const basePrompt =
+        const slashPrompt =
           slash && slash.cmd.kind === 'prompt' && !(target.provider === 'claude' && slash.cmd.claudeNative)
             ? expandSlashCommand(slash.cmd, slash.args)
             : cleanedPrompt;
+        // A cut-off attempt is handed over rather than thrown away. Resuming the
+        // same native session already has the text, so it only needs the nudge.
+        let basePrompt = slashPrompt;
+        if (interrupted) {
+          basePrompt =
+            nativeSid && targetKey(interrupted.target) === targetKey(target)
+              ? resumeInterruptedPrompt(slashPrompt)
+              : handoffPrompt(slashPrompt, interrupted.partial, formatTarget(interrupted.target));
+        }
         const prompt =
           adapter.supportsNativeResume && (nativeSid || history.length === 0)
             ? basePrompt
@@ -109,6 +143,7 @@ export class Orchestrator {
         let errorEvent: (AdapterEvent & { type: 'error' }) | undefined;
         let firstResultRecorded = false;
         let gotResult = false;
+        let partial = '';
 
         for await (const ev of adapter.run(
           {
@@ -143,6 +178,7 @@ export class Orchestrator {
             }
             yield ev;
           } else {
+            if (ev.type === 'text-delta') partial += ev.text;
             yield ev;
           }
         }
@@ -161,6 +197,9 @@ export class Orchestrator {
           }
           return;
         }
+
+        // Whatever the attempt managed to say is the starting point for the next one.
+        if (partial.trim()) interrupted = { target, partial };
 
         if (limitEvent) {
           quota.markLimitHit(account.id, {
@@ -183,8 +222,13 @@ export class Orchestrator {
         }
 
         if (errorEvent) {
-          if (errorEvent.retryable && !retried) {
-            retried = true;
+          // A dropped stream or an overloaded upstream says nothing about this
+          // account — retry it here instead of spending another provider's quota.
+          const backoff = this.deps.retryBackoffMs ?? RETRY_BACKOFF_MS;
+          if (errorEvent.retryable && retries < backoff.length) {
+            retries++;
+            await delay(backoff[retries - 1] ?? 0, signal);
+            if (signal.aborted) return;
             continue target;
           }
           if (nextTarget) {

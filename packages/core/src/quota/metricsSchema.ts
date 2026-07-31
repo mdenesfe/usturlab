@@ -30,6 +30,11 @@ export interface TaskMetric {
 
   status: 'success' | 'error' | 'failover';
   errorMessage?: string;
+  /**
+   * The failure was infrastructure (dropped stream, overloaded upstream), not
+   * the account's doing — excluded from capability measurement.
+   */
+  transient?: boolean;
 
   failedFrom?: { provider: ProviderId; account: string; model?: string };
   failoverReason?: string;

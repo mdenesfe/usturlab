@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import type { LoginFlow, ProviderAdapter, RunRequest } from './adapter.js';
 import { spawnLines } from './spawn.js';
 import { getNumber, getObject, getString, tryParseJson } from './ndjson.js';
-import { detectClaudeLimit } from './limits.js';
+import { detectClaudeLimit, isTransientFailure } from './limits.js';
 import { buildChildEnv } from '../accounts/env.js';
 import type { AdapterEvent, PermissionMode, ResolvedAccount } from '../types.js';
 
@@ -94,10 +94,11 @@ export class ClaudeAdapter implements ProviderAdapter {
           if (limit) {
             yield { type: 'limit', ...limit };
           } else {
+            const message = stderrTail.trim() || `claude exited with code ${ev.code}`;
             yield {
               type: 'error',
-              message: stderrTail.trim() || `claude exited with code ${ev.code}`,
-              retryable: false,
+              message,
+              retryable: isTransientFailure(`${message}\n${lastText}`),
             };
           }
         }
@@ -177,7 +178,8 @@ export class ClaudeAdapter implements ProviderAdapter {
         if (isError && limit) {
           yield { type: 'limit', ...limit };
         } else if (isError) {
-          yield { type: 'error', message: text || 'claude reported an error', retryable: false };
+          const message = text || 'claude reported an error';
+          yield { type: 'error', message, retryable: isTransientFailure(message) };
         } else {
           const sid = getString(msg, 'session_id');
           if (sid && !sessionEmitted) {

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.1 — 2026-08-01
+
+### A dropped connection no longer costs you a provider
+
+`API Error: Connection closed mid-response` used to fail straight over to another account, which then answered "where were we?" because it got none of the context.
+
+- **Transient failures are retried on the same account** — dropped streams, socket resets, overloaded upstreams, 502/503/504, timeouts. Two retries with 1s/4s backoff, and the native session is resumed so the model keeps everything it knows. Only after that does the chain move on. Previously nothing in the codebase ever marked an error retryable, so the retry path was dead code
+- **Interrupted work is handed over, not thrown away.** Whatever the cut-off attempt already produced is passed to whoever picks the task up, with instructions to continue from it rather than restart — and explicitly not to ask where to resume. When the same session is resumed the text isn't re-sent, only the nudge
+- **The failed account is now recorded.** A failover used to record only the account that cleaned up afterwards, so the one that failed was invisible to the learning loop
+- **Infrastructure doesn't count against capability.** A run marked transient is excluded from the clean-rate sample — a network blip shouldn't lower whichever provider happened to be running
+- The transcript says `connection dropped — retrying on claude:personal (attempt 2)` instead of a bare `retry #2` chip
+
+- 123 core tests
+
 ## 0.4.0 — 2026-08-01
 
 ### Auto routing now learns from what actually happened

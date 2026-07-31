@@ -54,6 +54,42 @@ export class SessionStore {
   }
 }
 
+const MAX_HANDOFF_CHARS = 8_000;
+
+/**
+ * Hands an interrupted answer to whoever picks the task up next.
+ *
+ * Without this the replacement model starts blind at exactly the moment
+ * continuity matters most — it asks "where were we?" while the user is
+ * watching half an answer sitting above it.
+ */
+export function handoffPrompt(prompt: string, partial: string, from: string): string {
+  const text = partial.trim();
+  if (!text) return prompt;
+  // The tail is what matters: it is where the work stopped.
+  const trimmed =
+    text.length > MAX_HANDOFF_CHARS
+      ? '[...earlier output truncated]\n' + text.slice(-MAX_HANDOFF_CHARS)
+      : text;
+  return (
+    `${from} was working on the request below and got cut off mid-answer. ` +
+    `This is everything it had produced:\n---\n${trimmed}\n---\n\n` +
+    `Pick up from there: keep what is already correct, do not repeat finished work, ` +
+    `and re-check anything the interrupted run may have left half-done. ` +
+    `Do not ask where to resume — the text above is the state.\n\n` +
+    `Original request:\n${prompt}`
+  );
+}
+
+/** Same account, resumed session: it already has the partial answer in context. */
+export function resumeInterruptedPrompt(prompt: string): string {
+  return (
+    'Your previous response to this request was cut off by a connection error. ' +
+    'Continue from where you stopped instead of starting over.\n\n' +
+    `Original request:\n${prompt}`
+  );
+}
+
 const MAX_EMBED_CHARS = 24_000;
 
 /** Prepends compacted conversation history for providers without native resume. */

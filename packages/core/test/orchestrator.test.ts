@@ -32,6 +32,7 @@ function setup(fake: FakeAdapter, quota = new QuotaTracker()) {
     getRules: () => rules,
     getAccounts: () => accounts,
     resolveAccount: async (t) => accounts.find((a) => a.provider === t.provider && a.label === t.account),
+    retryBackoffMs: [0, 0],
   });
   return { orchestrator, quota, sessions };
 }

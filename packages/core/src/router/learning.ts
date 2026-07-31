@@ -77,8 +77,10 @@ export function measurePerformance(
   provider: ProviderId,
   kind?: string,
 ): ProviderPerformance {
+  // A dropped connection is not a verdict on the account — it would otherwise
+  // punish whichever provider happened to be running when the network blipped.
   const relevant = metrics.filter(
-    (m) => m.provider === provider && (kind === undefined || m.kind === kind),
+    (m) => m.provider === provider && !m.transient && (kind === undefined || m.kind === kind),
   );
   const clean = relevant.filter(isCleanRun);
   return {

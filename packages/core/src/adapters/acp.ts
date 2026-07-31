@@ -1,5 +1,6 @@
 import { EventQueue, JsonRpcProcess } from './jsonRpc.js';
 import { getObject, getString } from './ndjson.js';
+import { isTransientFailure } from './limits.js';
 import type { AdapterEvent, LimitInfo, PermissionMode } from '../types.js';
 import type { RunRequest } from './adapter.js';
 
@@ -58,7 +59,7 @@ export async function* runAcp(opts: AcpOptions): AsyncGenerator<AdapterEvent> {
     outstanding = Math.max(0, outstanding - 1);
     if (outstanding > 0 || finished) return;
     if (error) {
-      finish({ type: 'error', message: error.message, retryable: false });
+      finish({ type: 'error', message: error.message, retryable: isTransientFailure(error.message) });
     } else if (refusal) {
       finish({ type: 'error', message: text || 'agent refused the request', retryable: false });
     } else {
@@ -131,12 +132,10 @@ export async function* runAcp(opts: AcpOptions): AsyncGenerator<AdapterEvent> {
       const limit = opts.detectLimit(haystack);
       if (limit) finish({ type: 'limit', ...limit });
       else if (text) finish({ type: 'result', text });
-      else
-        finish({
-          type: 'error',
-          message: stderrTail.trim() || `${opts.command} exited unexpectedly`,
-          retryable: false,
-        });
+      else {
+        const message = stderrTail.trim() || `${opts.command} exited unexpectedly`;
+        finish({ type: 'error', message, retryable: isTransientFailure(message) });
+      }
     },
     onSpawnError: (message) => finish({ type: 'error', message, retryable: false }),
   });
@@ -212,7 +211,7 @@ export async function* runAcp(opts: AcpOptions): AsyncGenerator<AdapterEvent> {
         return;
       }
       const limit = opts.detectLimit(message);
-      finish(limit ? { type: 'limit', ...limit } : { type: 'error', message, retryable: false });
+      finish(limit ? { type: 'limit', ...limit } : { type: 'error', message, retryable: isTransientFailure(message) });
     }
   })();
 

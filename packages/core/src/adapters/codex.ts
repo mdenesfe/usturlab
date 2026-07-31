@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { LoginFlow, ProviderAdapter, RunRequest } from './adapter.js';
 import { EventQueue, JsonRpcProcess, type RpcNotification } from './jsonRpc.js';
 import { getNumber, getObject, getString } from './ndjson.js';
-import { detectCodexLimit } from './limits.js';
+import { detectCodexLimit, isTransientFailure } from './limits.js';
 import { buildChildEnv } from '../accounts/env.js';
 import type { AdapterEvent, PermissionMode, ResolvedAccount } from '../types.js';
 
@@ -145,7 +145,7 @@ export class CodexAdapter implements ProviderAdapter {
               getString(turn, 'error', 'message') ?? 'codex turn failed',
             );
             const limit = detectCodexLimit(message);
-            finish(limit ? { type: 'limit', ...limit } : { type: 'error', message, retryable: false });
+            finish(limit ? { type: 'limit', ...limit } : { type: 'error', message, retryable: isTransientFailure(message) });
             break;
           }
           finish({
@@ -161,7 +161,7 @@ export class CodexAdapter implements ProviderAdapter {
         case 'error': {
           const message = unwrapErrorMessage(getString(n.params, 'message') ?? 'codex error');
           const limit = detectCodexLimit(message);
-          finish(limit ? { type: 'limit', ...limit } : { type: 'error', message, retryable: false });
+          finish(limit ? { type: 'limit', ...limit } : { type: 'error', message, retryable: isTransientFailure(message) });
           break;
         }
         default:
@@ -186,12 +186,10 @@ export class CodexAdapter implements ProviderAdapter {
           const limit = detectCodexLimit(haystack);
           if (limit) finish({ type: 'limit', ...limit });
           else if (text) finish({ type: 'result', text });
-          else
-            finish({
-              type: 'error',
-              message: stderrTail.trim() || 'codex app-server exited unexpectedly',
-              retryable: false,
-            });
+          else {
+            const message = stderrTail.trim() || 'codex app-server exited unexpectedly';
+            finish({ type: 'error', message, retryable: isTransientFailure(message) });
+          }
         }
       },
       onSpawnError: (message) => finish({ type: 'error', message, retryable: false }),
@@ -259,7 +257,7 @@ export class CodexAdapter implements ProviderAdapter {
       } catch (e) {
         const message = unwrapErrorMessage((e as Error).message);
         const limit = detectCodexLimit(message);
-        finish(limit ? { type: 'limit', ...limit } : { type: 'error', message, retryable: false });
+        finish(limit ? { type: 'limit', ...limit } : { type: 'error', message, retryable: isTransientFailure(message) });
       }
     })();
 
