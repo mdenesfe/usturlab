@@ -69,6 +69,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private rulesPanel?: vscode.WebviewPanel;
   private conversations = new Map<string, ConversationRecord>();
   private tasks = new Map<string, AbortController>();
+  private queues = new Map<string, Array<{ text: string; tags: string[] }>>();
   private persistTimer?: NodeJS.Timeout;
   private onTargetChosen?: (target: Target) => void;
   private usageRefresher?: () => Promise<void>;
@@ -284,6 +285,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   clearConversation(id: string): void {
     const rec = this.conversations.get(id);
     if (!rec) return;
+    this.queues.delete(id);
     this.tasks.get(id)?.abort();
     this.tasks.delete(id);
     rec.log = [];
@@ -305,6 +307,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   deleteConversation(id: string): void {
     const rec = this.conversations.get(id);
     if (!rec) return;
+    this.queues.delete(id);
     this.tasks.get(id)?.abort();
     this.tasks.delete(id);
     this.panels.get(id)?.dispose();
@@ -315,6 +318,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   cancelAll(): void {
+    this.queues.clear();
     for (const [id, controller] of this.tasks) {
       controller.abort();
       this.toConversation(id, { kind: 'busy', running: false }, { log: false });
@@ -456,6 +460,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
       case 'cancel':
         if (surface.conversationId) {
+          this.queues.delete(surface.conversationId);
           this.tasks.get(surface.conversationId)?.abort();
           this.tasks.delete(surface.conversationId);
           this.toConversation(surface.conversationId, { kind: 'busy', running: false }, { log: false });
@@ -464,7 +469,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
       case 'send':
         if (surface.conversationId) {
-          await this.runTask(surface.conversationId, msg.text, msg.tags);
+          await this.handleSend(surface.conversationId, msg.text, msg.tags);
         }
         break;
     }
@@ -472,13 +477,27 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   // ── task lifecycle ───────────────────────────────────────────────
 
+  /** Entry point for user sends: echoes immediately; queues while a task runs. */
+  private async handleSend(conversationId: string, text: string, tags: string[]): Promise<void> {
+    if (!this.conversations.has(conversationId)) return;
+    this.toConversation(conversationId, { kind: 'userEcho', text });
+    if (this.tasks.has(conversationId)) {
+      this.toConversation(conversationId, {
+        kind: 'notice',
+        text: 'queued — runs when the current task finishes',
+      });
+      const queue = this.queues.get(conversationId) ?? [];
+      queue.push({ text, tags });
+      this.queues.set(conversationId, queue);
+      return;
+    }
+    await this.runTask(conversationId, text, tags);
+  }
+
   private async runTask(conversationId: string, text: string, tags: string[]): Promise<void> {
     const rec = this.conversations.get(conversationId);
     if (!rec) return;
-    if (this.tasks.has(conversationId)) {
-      void vscode.window.showWarningMessage('usturlab: this chat already has a running task.');
-      return;
-    }
+    if (this.tasks.has(conversationId)) return;
 
     // Action slash commands run in the host, not on a model.
     const slash = matchSlashCommand(text, this.rules.getCustomCommands());
@@ -523,7 +542,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const controller = new AbortController();
     this.tasks.set(conversationId, controller);
     const post = (msg: HostToWebview) => this.toConversation(conversationId, msg);
-    post({ kind: 'userEcho', text });
     this.toConversation(conversationId, { kind: 'busy', running: true }, { log: false });
     this.sendConversations();
 

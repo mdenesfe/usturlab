@@ -133,7 +133,7 @@ export function Composer({
   };
 
   const submit = () => {
-    if (!text.trim() || running) return;
+    if (!text.trim()) return;
     onSend(text);
     setText('');
     setSuggestions([]);
@@ -176,7 +176,7 @@ export function Composer({
           accounts.length === 0
             ? 'No accounts yet — add one to start'
             : running
-              ? 'Task running… you can draft the next message (Esc stops the task)'
+              ? 'Task running… Enter queues your next message · Esc stops'
               : 'Describe the task…  @ account · # tag · / command'
         }
         rows={2}

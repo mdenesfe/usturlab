@@ -150,7 +150,7 @@ function ChatApp() {
 
   const send = (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed || running) return;
+    if (!trimmed) return;
     const tags = [...trimmed.matchAll(HASHTAG_RE)].map((m) => m[2]!);
     pinnedRef.current = true;
     vscode.postMessage({ kind: 'send', text: trimmed, tags });
