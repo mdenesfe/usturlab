@@ -11,7 +11,13 @@ export class FakeAdapter implements ProviderAdapter {
   readonly supportsNativeResume = true;
 
   private scripts = new Map<string, AdapterEvent[][]>();
-  readonly runs: Array<{ accountId: string; prompt: string; resumeSessionId?: string }> = [];
+  readonly runs: Array<{
+    accountId: string;
+    prompt: string;
+    resumeSessionId?: string;
+    systemBrief?: string;
+    restateBrief?: boolean;
+  }> = [];
 
   constructor(readonly id: ProviderId = 'claude') {}
 
@@ -30,7 +36,13 @@ export class FakeAdapter implements ProviderAdapter {
     account: ResolvedAccount,
     _signal: AbortSignal,
   ): AsyncGenerator<AdapterEvent> {
-    this.runs.push({ accountId: account.id, prompt: req.prompt, resumeSessionId: req.resumeSessionId });
+    this.runs.push({
+      accountId: account.id,
+      prompt: req.prompt,
+      resumeSessionId: req.resumeSessionId,
+      systemBrief: req.systemBrief,
+      restateBrief: req.restateBrief,
+    });
     const queue = this.scripts.get(account.id);
     const events = queue?.shift();
     if (!events) {

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 — 2026-08-01
+## 0.6.1 — 2026-08-01
 
 Until now the router only improved **who** ran your task. Nothing improved **how well** they ran it. This release is that half: context, constraints, and someone checking the work.
 
@@ -49,7 +49,22 @@ Brief lines also have to earn their place: runs record which lines they carried,
 
 `usturlab.sendWorkspaceContext`, `usturlab.standingInstructions`, `usturlab.verifyChanges` (all on), `usturlab.secondOpinion` (`never` / `hard` / `always`, default `hard`).
 
-- 175 core tests
+### Verified against the real CLIs
+
+`pnpm -C packages/core test:live` runs the intelligence layer against real logged-in accounts. The channel test and the comprehension test are kept separate on purpose — a model that skips a trailing-format instruction is not the same failure as a brief that never arrived.
+
+| | standing brief reaches it | describes the editor state |
+|---|---|---|
+| Claude (`--append-system-prompt`) | ✅ | ✅ |
+| Codex (`developerInstructions`) | ✅ | ✅ |
+| Copilot (ACP first prompt) | ✅ | ✅ |
+| Gemini | blocked¹ | blocked¹ |
+
+¹ `This client is no longer supported for Gemini Code Assist for individuals` — Google now requires a paid plan or an API key. Correctly classified as permanent, so it fails over instead of retrying.
+
+Also verified live: check discovery finds this repo's real commands (`pnpm run typecheck | test | build`) and nothing else; a Codex review of deliberately broken code caught both planted defects (`NaN` on empty input, mutating the caller's array) while returning `LGTM` for correct code without inventing problems; and a real Claude plan parsed as executable with concrete file paths.
+
+- 183 offline tests, 11 live
 
 ## 0.5.1 — 2026-08-01
 
