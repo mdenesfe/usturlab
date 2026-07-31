@@ -8,7 +8,7 @@ import type { UsageWindow } from './quotaTracker.js';
  */
 export async function fetchClaudeUsage(
   oauthToken: string,
-  opts: { userAgentVersion?: string; fetchImpl?: typeof fetch } = {},
+  opts: { userAgentVersion?: string; fetchImpl?: typeof fetch; debug?: (info: string) => void } = {},
 ): Promise<UsageWindow[]> {
   const fetchImpl = opts.fetchImpl ?? fetch;
   try {
@@ -16,10 +16,14 @@ export async function fetchClaudeUsage(
       headers: {
         Authorization: `Bearer ${oauthToken}`,
         'anthropic-beta': 'oauth-2025-04-20',
-        'User-Agent': `claude-code/${opts.userAgentVersion ?? '2.1.0'}`,
+        // The endpoint buckets by UA; stale versions get rate-limited hard.
+        'User-Agent': `claude-code/${opts.userAgentVersion ?? '2.1.216'}`,
       },
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      opts.debug?.(`usage endpoint HTTP ${res.status}`);
+      return [];
+    }
     const data = (await res.json()) as Record<string, unknown>;
     const windows: UsageWindow[] = [];
     // Verified schema (2026-07): five_hour/seven_day objects with

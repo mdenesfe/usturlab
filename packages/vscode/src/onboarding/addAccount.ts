@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
   ClaudeAdapter,
+  fetchClaudeUsage,
   slugify,
   type AccountProfile,
   type AdapterRegistry,
@@ -265,5 +266,23 @@ export async function addAccountWizard(
   void vscode.window.showInformationMessage(
     `usrouter: ${provider}:${profile.label} connected ✓ You can close the login terminal.`,
   );
+
+  // Verify at login time whether this credential can also serve the usage
+  // view, so the user learns immediately instead of staring at empty bars.
+  if (provider === 'claude' && outcome.secret) {
+    void fetchClaudeUsage(outcome.secret).then((windows) => {
+      if (windows.length > 0) {
+        void vscode.window.showInformationMessage(
+          `usrouter: usage view enabled for ${provider}:${profile.label} (${windows
+            .map((w) => `${w.utilizationPct}% ${w.label}`)
+            .join(', ')})`,
+        );
+      } else {
+        void vscode.window.showWarningMessage(
+          `usrouter: ${provider}:${profile.label} chat works, but this token cannot read usage data. The Accounts view will not show quota bars for it.`,
+        );
+      }
+    });
+  }
   await vscode.commands.executeCommand('usrouter.openAccounts');
 }

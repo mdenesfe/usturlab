@@ -45,7 +45,11 @@ export async function refreshUsage(
         let windows: Awaited<ReturnType<typeof fetchClaudeUsage>> = [];
         if (account.provider === 'claude' && account.authMode === 'oauth-token' && account.hasSecret) {
           const secret = await accounts.getSecret(account.id);
-          if (secret) windows = await fetchClaudeUsage(secret);
+          if (secret) {
+            windows = await fetchClaudeUsage(secret, {
+              debug: (info) => log?.(`[usage] ${account.provider}:${account.label} → ${info}`),
+            });
+          }
         } else if (account.provider === 'codex' && account.homeDir) {
           windows = readCodexUsage(account.homeDir);
         } else if (account.provider === 'copilot' && account.authMode === 'api-key' && account.hasSecret) {
