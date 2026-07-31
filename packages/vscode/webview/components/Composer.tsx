@@ -75,20 +75,32 @@ function computeSuggestions(
   return [];
 }
 
+const PERMISSION_MODES: Array<{ id: string; label: string; hint: string }> = [
+  { id: 'safe', label: 'Plan', hint: 'Read and plan only — no file changes' },
+  { id: 'edits', label: 'Edit', hint: 'Auto-accept file edits' },
+  { id: 'full', label: 'Full', hint: 'Skip all approvals — use with care' },
+];
+
 export function Composer({
   accounts,
   tags,
   customCommands = [],
   running,
+  permissionMode,
+  routingMode,
   onSend,
   onCancel,
+  onModeChange,
 }: {
   accounts: AccountStatusDto[];
   tags: string[];
   customCommands?: SlashCommand[];
   running: boolean;
+  permissionMode: string;
+  routingMode: 'auto' | 'manual';
   onSend: (text: string) => void;
   onCancel: () => void;
+  onModeChange: (modes: { permissionMode?: string; routingMode?: 'auto' | 'manual' }) => void;
 }) {
   const allCommands = [...customCommands, ...SLASH_COMMANDS];
   const [text, setText] = useState('');
@@ -219,6 +231,30 @@ export function Composer({
         }}
         onBlur={() => setTimeout(() => setSuggestions([]), 150)}
       />
+      <div class="mode-bar">
+        <button
+          class={`mode-chip ${routingMode === 'auto' ? 'on' : ''}`}
+          title={
+            routingMode === 'auto'
+              ? 'Auto: usturlab reads the task, judges difficulty and picks the model (your rules still win)'
+              : 'Manual: follow your rules and default chain exactly'
+          }
+          onClick={() => onModeChange({ routingMode: routingMode === 'auto' ? 'manual' : 'auto' })}
+        >
+          {routingMode === 'auto' ? '✦ Auto' : '⌘ Manual'}
+        </button>
+        <span class="mode-sep" />
+        {PERMISSION_MODES.map((m) => (
+          <button
+            key={m.id}
+            class={`mode-chip ${permissionMode === m.id ? 'on' : ''}`}
+            title={m.hint}
+            onClick={() => onModeChange({ permissionMode: m.id })}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
       <div class="composer-bar">
         <div class="account-strip">
           {accounts.map((a) => (

@@ -1,6 +1,8 @@
 import type { RulesFile } from '../rules/schema.js';
 import { builtinDefaultChain } from '../rules/defaults.js';
 import { matchesRule, parseMention } from './matcher.js';
+import { classifyTask, type Classification } from './classify.js';
+import { autoRoute } from './autoRoute.js';
 import type { QuotaTracker } from '../quota/quotaTracker.js';
 import type { AccountProfile, RoutingDecision, Target, TaskRequest } from '../types.js';
 import { targetKey } from '../types.js';
@@ -9,6 +11,11 @@ export interface RouteResult {
   decision: RoutingDecision;
   /** Prompt with any @mention stripped. */
   cleanedPrompt: string;
+}
+
+export interface RouteOptions {
+  /** 'auto': classify the task and pick a model; 'manual': follow the default chain as written. */
+  mode?: 'auto' | 'manual';
 }
 
 export function resolveTargetAccount(
@@ -25,18 +32,26 @@ export function route(
   rules: RulesFile,
   accounts: AccountProfile[],
   quota: QuotaTracker,
+  options: RouteOptions = {},
 ): RouteResult {
+  const mode = options.mode ?? 'auto';
   const { mention, cleaned } = parseMention(task.prompt);
-  const defaultChain = rules.defaultChain.length > 0 ? rules.defaultChain : builtinDefaultChain(accounts);
+  const defaultChain =
+    rules.defaultChain.length > 0 ? rules.defaultChain : builtinDefaultChain(accounts);
 
   let raw: Target[];
   let ruleId: string | undefined;
   let reason: string;
+  let classification: Classification | undefined;
 
   if (mention) {
     const mentionTargets: Target[] = [];
     if (mention.account) {
-      mentionTargets.push({ provider: mention.provider, account: mention.account, model: mention.model });
+      mentionTargets.push({
+        provider: mention.provider,
+        account: mention.account,
+        model: mention.model,
+      });
     } else {
       const candidates = accounts
         .filter((a) => a.provider === mention.provider && !a.disabled)
@@ -49,11 +64,17 @@ export function route(
     reason = `@${mention.provider}${mention.account ? ':' + mention.account : ''} mention`;
   } else {
     const matchTask = { ...task, prompt: cleaned };
+    // User rules stay primary — they always win over automatic choice.
     const rule = rules.rules.find((r) => matchesRule(r, matchTask));
     if (rule) {
       raw = [...rule.target, ...defaultChain];
       ruleId = rule.id;
       reason = rule.description ?? `rule: ${rule.id}`;
+    } else if (mode === 'auto') {
+      classification = classifyTask(matchTask);
+      const auto = autoRoute(classification, accounts, quota);
+      raw = [...auto.chain, ...defaultChain];
+      reason = auto.reason;
     } else {
       raw = defaultChain;
       reason = rules.defaultChain.length > 0 ? 'default chain' : 'priority order';
@@ -87,5 +108,5 @@ export function route(
     chain.push(target);
   }
 
-  return { decision: { chain, ruleId, reason, skipped }, cleanedPrompt: cleaned };
+  return { decision: { chain, ruleId, reason, skipped, classification }, cleanedPrompt: cleaned };
 }

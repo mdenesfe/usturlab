@@ -2,7 +2,7 @@
   "name": "usturlab",
   "displayName": "usturlab — AI Subscription Router",
   "description": "Add all your AI subscriptions (multiple Claude accounts, Codex, Gemini, Copilot) and route every task to the best account and model with user-defined rules and automatic quota failover.",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "publisher": "mdenesfe",
   "license": "MIT",
   "icon": "media/marketplace-icon.png",
@@ -166,6 +166,15 @@
           ],
           "default": "queue",
           "markdownDescription": "What happens when you send a message while a task runs on a provider without live input (Codex/Gemini/Copilot). Claude always receives it live. `queue`: runs right after the current task. `restart`: cancels the in-flight task and re-asks with both messages merged — feels immediate, but discards unfinished tool work."
+        },
+        "usturlab.routingMode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "manual"
+          ],
+          "default": "auto",
+          "markdownDescription": "`auto`: usturlab reads the task, judges its difficulty and picks the model — keeping nearly-exhausted accounts in reserve. `manual`: follow your rules and default chain exactly. Your rules always win in both modes."
         }
       }
     }

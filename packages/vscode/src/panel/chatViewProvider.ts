@@ -70,7 +70,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private rulesPanel?: vscode.WebviewPanel;
   private conversations = new Map<string, ConversationRecord>();
   private tasks = new Map<string, AbortController>();
-  private queues = new Map<string, Array<{ text: string; tags: string[] }>>();
+  private queues = new Map<
+    string,
+    Array<{ text: string; tags: string[]; modes?: { permissionMode?: PermissionMode; routingMode?: 'auto' | 'manual' } }>
+  >();
   private liveRuns = new Map<
     string,
     { handle: LiveRunHandle; messageIds: string[]; turnIdx: number; userTexts: string[]; lastTarget?: Target }
@@ -260,6 +263,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  private modesMessage(): HostToWebview {
+    const config = vscode.workspace.getConfiguration('usturlab');
+    return {
+      kind: 'modes',
+      permissionMode: config.get<string>('permissionMode', 'safe'),
+      routingMode: config.get<'auto' | 'manual'>('routingMode', 'auto'),
+    };
+  }
+
   private rulesMessage(): HostToWebview {
     const state = this.rules.getState();
     return {
@@ -424,6 +436,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     if (surface.mode === 'rules') {
       this.safePost(webview, this.rulesMessage());
+    this.safePost(webview, this.modesMessage());
       return;
     }
     const rec = surface.conversationId
@@ -435,6 +448,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       accounts: this.accountDtos(),
     } satisfies HostToWebview);
     this.safePost(webview, this.rulesMessage());
+    this.safePost(webview, this.modesMessage());
     if (rec) {
       for (const msg of rec.log) this.safePost(webview, msg);
       this.safePost(webview, {
@@ -500,9 +514,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
       case 'send':
         if (surface.conversationId) {
-          await this.handleSend(surface.conversationId, msg.text, msg.tags);
+          await this.handleSend(surface.conversationId, msg.text, msg.tags, {
+            permissionMode: msg.permissionMode as PermissionMode | undefined,
+            routingMode: msg.routingMode,
+          });
         }
         break;
+      case 'setModes': {
+        const config = vscode.workspace.getConfiguration('usturlab');
+        if (msg.permissionMode) {
+          await config.update('permissionMode', msg.permissionMode, vscode.ConfigurationTarget.Global);
+        }
+        if (msg.routingMode) {
+          await config.update('routingMode', msg.routingMode, vscode.ConfigurationTarget.Global);
+        }
+        break;
+      }
     }
   }
 
@@ -537,7 +564,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** Entry point for user sends: echoes immediately; queues while a task runs. */
-  private async handleSend(conversationId: string, text: string, tags: string[]): Promise<void> {
+  private async handleSend(
+    conversationId: string,
+    text: string,
+    tags: string[],
+    modes: { permissionMode?: PermissionMode; routingMode?: 'auto' | 'manual' } = {},
+  ): Promise<void> {
     if (!this.conversations.has(conversationId)) return;
     this.toConversation(conversationId, { kind: 'userEcho', text });
     // Host actions (/accounts, /clear…) must never be injected or queued.
@@ -580,7 +612,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           : text;
         // Let the aborted run finish its cleanup before starting the retry.
         await new Promise((resolve) => setTimeout(resolve, 200));
-        await this.runTask(conversationId, merged, tags);
+        await this.runTask(conversationId, merged, tags, modes);
         return;
       }
       this.toConversation(conversationId, {
@@ -588,14 +620,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         text: 'queued — this model cannot take mid-run input; runs next',
       });
       const queue = this.queues.get(conversationId) ?? [];
-      queue.push({ text, tags });
+      queue.push({ text, tags, modes });
       this.queues.set(conversationId, queue);
       return;
     }
-    await this.runTask(conversationId, text, tags);
+    await this.runTask(conversationId, text, tags, modes);
   }
 
-  private async runTask(conversationId: string, text: string, tags: string[]): Promise<void> {
+  private async runTask(
+    conversationId: string,
+    text: string,
+    tags: string[],
+    modes: { permissionMode?: PermissionMode; routingMode?: 'auto' | 'manual' } = {},
+  ): Promise<void> {
     const rec = this.conversations.get(conversationId);
     if (!rec) return;
     if (this.tasks.has(conversationId)) return;
@@ -636,9 +673,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const activeFile =
       editor && ws ? relative(ws.uri.fsPath, editor.document.uri.fsPath) : editor?.document.uri.fsPath;
 
-    const permissionMode = vscode.workspace
-      .getConfiguration('usturlab')
-      .get<PermissionMode>('permissionMode', 'safe');
+    const permissionMode =
+      modes.permissionMode ??
+      vscode.workspace.getConfiguration('usturlab').get<PermissionMode>('permissionMode', 'safe');
+    const routingMode =
+      modes.routingMode ??
+      vscode.workspace.getConfiguration('usturlab').get<'auto' | 'manual'>('routingMode', 'auto');
 
     try {
       const events = this.orchestrator.run(
@@ -650,6 +690,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           languageId: editor?.document.languageId,
           tags,
           permissionMode,
+          routingMode,
         },
         controller.signal,
         live.handle,

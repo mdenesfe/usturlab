@@ -120,6 +120,8 @@ function ChatApp() {
   const [customCommands, setCustomCommands] = useState<
     import('../../core/src/commands/slashCommands.js').SlashCommand[]
   >([]);
+  const [permissionMode, setPermissionMode] = useState('safe');
+  const [routingMode, setRoutingMode] = useState<'auto' | 'manual'>('auto');
   const [running, setRunning] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -137,6 +139,10 @@ function ChatApp() {
         setTags([...new Set(msg.rules.rules.flatMap((r) => r.match.tags ?? []))]);
         setCustomCommands(msg.customCommands ?? []);
       }
+      if (msg.kind === 'modes') {
+        setPermissionMode(msg.permissionMode);
+        setRoutingMode(msg.routingMode);
+      }
       if (msg.kind === 'conversationReset') setItems([]);
     };
     window.addEventListener('message', onMessage);
@@ -153,7 +159,7 @@ function ChatApp() {
     if (!trimmed) return;
     const tags = [...trimmed.matchAll(HASHTAG_RE)].map((m) => m[2]!);
     pinnedRef.current = true;
-    vscode.postMessage({ kind: 'send', text: trimmed, tags });
+    vscode.postMessage({ kind: 'send', text: trimmed, tags, permissionMode, routingMode });
   };
 
   return (
@@ -181,8 +187,15 @@ function ChatApp() {
           tags={tags}
           customCommands={customCommands}
           running={running}
+          permissionMode={permissionMode}
+          routingMode={routingMode}
           onSend={send}
           onCancel={() => vscode.postMessage({ kind: 'cancel' })}
+          onModeChange={(modes) => {
+            if (modes.permissionMode) setPermissionMode(modes.permissionMode);
+            if (modes.routingMode) setRoutingMode(modes.routingMode);
+            vscode.postMessage({ kind: 'setModes', ...modes });
+          }}
         />
       </div>
     </div>

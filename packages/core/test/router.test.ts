@@ -133,7 +133,7 @@ describe('route', () => {
   it('skips accounts on cooldown and records the reason', () => {
     const quota = new QuotaTracker();
     quota.markLimitHit('claude-personal', { resetAt: Date.now() + 60_000 });
-    const r = route(task(), rules(), accounts, quota);
+    const r = route(task(), rules(), accounts, quota, { mode: 'manual' });
     expect(r.decision.chain.map((t) => `${t.provider}:${t.account}`)).toEqual(['codex:work']);
     expect(r.decision.skipped.some((s) => s.reason.includes('cooldown'))).toBe(true);
   });
@@ -145,6 +145,7 @@ describe('route', () => {
       rules({ defaultChain: [{ provider: 'gemini', account: 'nope' }, { provider: 'codex', account: 'work' }] }),
       accounts,
       quota,
+      { mode: 'manual' },
     );
     expect(r.decision.chain).toHaveLength(1);
     expect(r.decision.skipped[0]?.reason).toContain('no account');
@@ -152,7 +153,7 @@ describe('route', () => {
 
   it('falls back to priority order when no defaultChain configured', () => {
     const quota = new QuotaTracker();
-    const r = route(task(), rules({ defaultChain: [] }), accounts, quota);
+    const r = route(task(), rules({ defaultChain: [] }), accounts, quota, { mode: 'manual' });
     expect(r.decision.chain.map((t) => `${t.provider}:${t.account}`)).toEqual([
       'claude:personal',
       'claude:work',

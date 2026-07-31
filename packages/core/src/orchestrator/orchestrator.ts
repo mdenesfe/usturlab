@@ -25,6 +25,8 @@ export interface OrchestratorDeps {
   resolveAccount: (target: Target) => Promise<ResolvedAccount | undefined>;
   /** User-defined slash commands (.usturlab/commands.json). */
   getCustomCommands?: () => SlashCommand[];
+  /** 'auto' lets the router classify and choose; 'manual' follows the chain as written. */
+  getRoutingMode?: () => 'auto' | 'manual';
 }
 
 export class Orchestrator {
@@ -41,6 +43,7 @@ export class Orchestrator {
       this.deps.getRules(),
       this.deps.getAccounts(),
       quota,
+      { mode: task.routingMode ?? this.deps.getRoutingMode?.() ?? 'auto' },
     );
     yield { type: 'routing', decision };
 

@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import type { LoginFlow, ProviderAdapter, RunRequest } from './adapter.js';
-import { spawnLines } from './spawn.js';
-import { getNumber, getObject, getString, tryParseJson } from './ndjson.js';
+import { EventQueue, JsonRpcProcess, type RpcNotification } from './jsonRpc.js';
+import { getNumber, getObject, getString } from './ndjson.js';
 import { detectCodexLimit } from './limits.js';
 import { buildChildEnv } from '../accounts/env.js';
 import type { AdapterEvent, PermissionMode, ResolvedAccount } from '../types.js';
@@ -11,6 +11,19 @@ const SANDBOX: Record<PermissionMode, string> = {
   safe: 'read-only',
   edits: 'workspace-write',
   full: 'danger-full-access',
+};
+
+/** Item types worth showing in the tool timeline, mapped to display names. */
+const TOOL_ITEM_NAMES: Record<string, string> = {
+  commandExecution: 'Shell',
+  fileChange: 'Edit',
+  mcpToolCall: 'MCP',
+  dynamicToolCall: 'Tool',
+  webSearch: 'WebSearch',
+  imageView: 'ViewImage',
+  subAgentActivity: 'Agent',
+  collabAgentToolCall: 'Agent',
+  contextCompaction: 'Compact',
 };
 
 /** Codex wraps API errors as JSON-escaped strings, sometimes twice — dig out the human message. */
@@ -35,13 +48,18 @@ function unwrapErrorMessage(raw: string): string {
   return message;
 }
 
+/**
+ * Codex over its app-server protocol (line-delimited JSON-RPC) — the same
+ * transport its editor integrations use. Unlike `codex exec`, the thread
+ * stays open, so `turn/steer` can push a message into the RUNNING turn and
+ * the model reacts immediately.
+ */
 export class CodexAdapter implements ProviderAdapter {
   readonly id = 'codex' as const;
   readonly displayName = 'Codex CLI';
   readonly supportsNativeResume = true;
-  // ChatGPT-account Codex accepts few model ids and rejects the rest with a
-  // 400; routing without a model (CLI default) is always safe. gpt-5.6-terra
-  // verified as the served default on 2026-07-31.
+  // ChatGPT-account Codex rejects most explicit model ids with a 400;
+  // routing without a model (CLI default) is always safe.
   readonly models = [{ id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra (default)' }];
 
   constructor(private cliPath = 'codex') {}
@@ -55,120 +73,199 @@ export class CodexAdapter implements ProviderAdapter {
     account: ResolvedAccount,
     signal: AbortSignal,
   ): AsyncGenerator<AdapterEvent> {
-    // The resume subcommand rejects exec-level flags after it; they parse
-    // fine when placed before `resume` (verified against codex CLI).
-    const args = ['exec', '--json', '--skip-git-repo-check', '-s', SANDBOX[req.permissionMode]];
-    if (req.model) args.push('-m', req.model);
-    if (req.resumeSessionId) args.push('resume', req.resumeSessionId);
-    args.push(req.prompt);
-
+    const events = new EventQueue<AdapterEvent>();
     const env = this.buildEnv(account, process.env);
+
+    let threadId: string | undefined;
+    let activeTurnId: string | undefined;
     let text = '';
-    let stderrTail = '';
     let finished = false;
+    let stderrTail = '';
+    const openItems = new Map<string, string>();
 
-    for await (const ev of spawnLines(this.cliPath, args, { cwd: req.cwd, env, signal })) {
-      if (ev.kind === 'spawn-error') {
-        yield { type: 'error', message: ev.message, retryable: false };
-        return;
-      }
-      if (ev.kind === 'exit') {
-        if (!finished) {
-          const haystack = `${text}\n${stderrTail}`;
-          // Safety net for CLI arg drift: if the resume invocation is
-          // rejected by the parser, fall back to a fresh session instead of
-          // failing the whole target.
-          if (
-            req.resumeSessionId &&
-            ev.code !== 0 &&
-            /unexpected argument|unrecognized subcommand|invalid value/i.test(haystack)
-          ) {
-            yield { type: 'tool-use', name: 'resume unavailable → fresh session' };
-            yield* this.run({ ...req, resumeSessionId: undefined }, account, signal);
-            return;
-          }
-          const limit = detectCodexLimit(haystack);
-          if (limit) yield { type: 'limit', ...limit };
-          else if (ev.code !== 0) {
-            yield {
-              type: 'error',
-              message: stderrTail.trim() || `codex exited with code ${ev.code}`,
-              retryable: false,
-            };
-          } else if (text) {
-            yield { type: 'result', text };
-          }
-        }
-        return;
-      }
-      if (ev.stream === 'stderr') {
-        stderrTail = (stderrTail + '\n' + ev.line).slice(-4096);
-        continue;
-      }
+    const finish = (event?: AdapterEvent) => {
+      if (finished) return;
+      finished = true;
+      if (event) events.push(event);
+      events.end();
+      rpc.dispose();
+    };
 
-      const msg = tryParseJson(ev.line);
-      if (!msg) continue;
-
-      switch (msg.type) {
-        case 'thread.started': {
-          const sid = getString(msg, 'thread_id') ?? getString(msg, 'session_id');
-          if (sid) yield { type: 'session', sessionId: sid };
-          break;
-        }
-        case 'item.started': {
-          const item = getObject(msg, 'item');
-          if (item?.item_type === 'command_execution' || item?.type === 'command_execution') {
-            yield {
-              type: 'tool-use',
-              name: 'shell',
-              detail: getString(item, 'command'),
-            };
+    const onNotification = (n: RpcNotification) => {
+      switch (n.method) {
+        case 'thread/started': {
+          const id = getString(n.params, 'thread', 'id') ?? getString(n.params, 'threadId');
+          if (id && !threadId) {
+            threadId = id;
+            events.push({ type: 'session', sessionId: id });
           }
           break;
         }
-        case 'item.completed': {
-          const item = getObject(msg, 'item');
-          const itemType = item?.item_type ?? item?.type;
-          if (itemType === 'agent_message') {
-            const t = getString(item, 'text') ?? '';
-            if (t) {
-              text += (text ? '\n' : '') + t;
-              yield { type: 'text-delta', text: t };
-            }
+        case 'turn/started': {
+          activeTurnId =
+            getString(n.params, 'turn', 'id') ?? getString(n.params, 'turnId') ?? activeTurnId;
+          break;
+        }
+        case 'item/agentMessage/delta': {
+          const delta = getString(n.params, 'delta');
+          if (delta) {
+            text += delta;
+            events.push({ type: 'text-delta', text: delta });
           }
           break;
         }
-        case 'turn.completed': {
-          finished = true;
-          yield {
+        case 'item/started': {
+          const item = getObject(n.params, 'item');
+          const type = getString(item, 'type');
+          const itemId = getString(item, 'id');
+          if (!type) break;
+          const name = TOOL_ITEM_NAMES[type];
+          if (name) {
+            if (itemId) openItems.set(itemId, name);
+            const detail =
+              getString(item, 'command') ??
+              getString(item, 'query') ??
+              getString(item, 'toolName') ??
+              getString(item, 'path');
+            events.push({ type: 'tool-use', name, detail });
+          }
+          break;
+        }
+        case 'item/completed': {
+          const item = getObject(n.params, 'item');
+          const itemId = getString(item, 'id');
+          if (itemId) openItems.delete(itemId);
+          break;
+        }
+        case 'turn/completed': {
+          const turn = getObject(n.params, 'turn');
+          const status = getString(turn, 'status');
+          if (status === 'failed') {
+            const message = unwrapErrorMessage(
+              getString(turn, 'error', 'message') ?? 'codex turn failed',
+            );
+            const limit = detectCodexLimit(message);
+            finish(limit ? { type: 'limit', ...limit } : { type: 'error', message, retryable: false });
+            break;
+          }
+          finish({
             type: 'result',
             text,
             usage: {
-              inputTokens: getNumber(msg, 'usage', 'input_tokens'),
-              outputTokens: getNumber(msg, 'usage', 'output_tokens'),
+              inputTokens: getNumber(n.params, 'turn', 'usage', 'input_tokens'),
+              outputTokens: getNumber(n.params, 'turn', 'usage', 'output_tokens'),
             },
-          };
+          });
           break;
         }
-        case 'turn.failed':
         case 'error': {
-          finished = true;
-          const message = unwrapErrorMessage(
-            getString(msg, 'error', 'message') ?? getString(msg, 'message') ?? 'codex turn failed',
-          );
-          // ChatGPT accounts reject explicit model ids; recover on the CLI
-          // default instead of burning the whole failover chain.
-          if (req.model && /model.*not supported/i.test(message)) {
-            yield { type: 'model-downgraded', from: req.model, to: 'CLI default' };
-            yield* this.run({ ...req, model: undefined }, account, signal);
-            return;
-          }
+          const message = unwrapErrorMessage(getString(n.params, 'message') ?? 'codex error');
           const limit = detectCodexLimit(message);
-          if (limit) yield { type: 'limit', ...limit };
-          else yield { type: 'error', message, retryable: false };
+          finish(limit ? { type: 'limit', ...limit } : { type: 'error', message, retryable: false });
           break;
         }
+        default:
+          break;
       }
+    };
+
+    const rpc = new JsonRpcProcess(this.cliPath, ['app-server'], {
+      cwd: req.cwd,
+      env,
+      signal,
+      onNotification,
+      // Approval requests are pre-answered by the permission mode we start
+      // the thread with; approve so a run never hangs waiting on a dialog.
+      onServerRequest: () => ({ decision: 'approved' }),
+      onStderr: (line) => {
+        if (!line.includes('models cache')) stderrTail = (stderrTail + '\n' + line).slice(-4096);
+      },
+      onExit: () => {
+        if (!finished) {
+          const haystack = `${text}\n${stderrTail}`;
+          const limit = detectCodexLimit(haystack);
+          if (limit) finish({ type: 'limit', ...limit });
+          else if (text) finish({ type: 'result', text });
+          else
+            finish({
+              type: 'error',
+              message: stderrTail.trim() || 'codex app-server exited unexpectedly',
+              retryable: false,
+            });
+        }
+      },
+      onSpawnError: (message) => finish({ type: 'error', message, retryable: false }),
+    });
+
+    rpc.start();
+
+    void (async () => {
+      try {
+        await rpc.request('initialize', {
+          clientInfo: { name: 'usturlab', version: '0.1.0' },
+        });
+        rpc.notify('initialized', {});
+
+        const threadParams: Record<string, unknown> = {
+          cwd: req.cwd,
+          approvalPolicy: 'never',
+          sandbox: SANDBOX[req.permissionMode],
+        };
+        if (req.model) threadParams.model = req.model;
+
+        let started: Record<string, unknown>;
+        if (req.resumeSessionId) {
+          try {
+            started = await rpc.request('thread/resume', {
+              ...threadParams,
+              threadId: req.resumeSessionId,
+            });
+          } catch {
+            // Thread rolled off disk or belongs to another cwd — start fresh.
+            started = await rpc.request('thread/start', threadParams);
+          }
+        } else {
+          started = await rpc.request('thread/start', threadParams);
+        }
+        const id = getString(started, 'thread', 'id') ?? getString(started, 'threadId');
+        if (id && !threadId) {
+          threadId = id;
+          events.push({ type: 'session', sessionId: id });
+        }
+        if (!threadId) throw new Error('codex app-server did not return a thread id');
+
+        const turn = await rpc.request('turn/start', {
+          threadId,
+          input: [{ type: 'text', text: req.prompt }],
+        });
+        activeTurnId = getString(turn, 'turn', 'id') ?? activeTurnId;
+
+        // Live steering: a message sent while this turn runs reaches the model.
+        if (req.handle) {
+          req.handle.inject = (injected: string) => {
+            if (finished || !threadId || !activeTurnId) return false;
+            void rpc
+              .request('turn/steer', {
+                threadId,
+                expectedTurnId: activeTurnId,
+                input: [{ type: 'text', text: injected }],
+              })
+              .catch(() => undefined);
+            return true;
+          };
+        }
+      } catch (e) {
+        const message = unwrapErrorMessage((e as Error).message);
+        const limit = detectCodexLimit(message);
+        finish(limit ? { type: 'limit', ...limit } : { type: 'error', message, retryable: false });
+      }
+    })();
+
+    try {
+      for await (const event of events) yield event;
+    } finally {
+      if (req.handle) req.handle.inject = undefined;
+      rpc.dispose();
     }
   }
 

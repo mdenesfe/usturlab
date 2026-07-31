@@ -38,6 +38,8 @@ export interface TaskRequest {
   languageId?: string;
   tags?: string[];
   permissionMode: PermissionMode;
+  /** Per-message override of the routing mode. */
+  routingMode?: 'auto' | 'manual';
 }
 
 export interface Usage {
@@ -67,6 +69,12 @@ export interface RoutingDecision {
   ruleId?: string;
   reason: string;
   skipped: Array<{ target: Target; reason: string }>;
+  /** Present when the router classified the task itself (auto mode). */
+  classification?: {
+    kind: string;
+    complexity: string;
+    signals: string[];
+  };
 }
 
 export type RunEvent =

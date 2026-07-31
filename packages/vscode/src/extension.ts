@@ -62,6 +62,8 @@ export function activate(ctx: vscode.ExtensionContext): void {
     sessions,
     getRules: () => rules.getRules(),
     getCustomCommands: () => rules.getCustomCommands(),
+    getRoutingMode: () =>
+      vscode.workspace.getConfiguration('usturlab').get<'auto' | 'manual'>('routingMode', 'auto'),
     getAccounts: () => accounts.all(),
     resolveAccount: (target) => accounts.resolve(target),
   });

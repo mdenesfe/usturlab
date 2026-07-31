@@ -670,6 +670,44 @@ body {
   transition: border-color 0.15s ease;
 }
 
+/* ── mode bar ───────────────────────────────────────────── */
+
+.mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px 0;
+}
+
+.mode-chip {
+  font-family: var(--mono);
+  font-size: 0.72em;
+  padding: 2px 9px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.mode-chip:hover {
+  color: var(--vscode-foreground);
+  border-color: var(--vscode-focusBorder);
+}
+
+.mode-chip.on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--vscode-foreground);
+}
+
+.mode-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
 /* ── suggestion popup (@ / # / /) ───────────────────────── */
 
 .suggest-popup {
