@@ -1,8 +1,10 @@
 # usturlab
 
-**Route every AI coding task to the best subscription you own.**
+**Route every AI coding task to the best subscription you own — and make every model behave like the best one.**
 
 usturlab is an open-source VS Code extension for people who juggle multiple AI subscriptions — two Claude accounts, a ChatGPT plan for Codex, a Google AI subscription, GitHub Copilot. You register all of them once; usturlab then routes each task to the right account and model using **your own routing rules**, and **fails over automatically** when an account hits its usage limit.
+
+It does not stop at picking who runs the task. Every provider is given the context it would otherwise lack, held to the same standing instructions through its own system-prompt channel, and — for hard work — checked by a *different* model before you rely on the answer.
 
 ```
             ┌──────────────────────────────┐
@@ -19,6 +21,20 @@ usturlab is an open-source VS Code extension for people who juggle multiple AI s
         │  limit hit → automatic failover to next in chain
         └──────────────▶ ...
 ```
+
+## Making every model smarter
+
+A model's output quality is a function of the context it gets, the constraints it is held to, and whether anyone checks its work. Routing alone touches none of those.
+
+**It knows what you know.** Each run carries a task brief: the file you have open with your selection and its line range, the branch and uncommitted changes, and the project's convention files — `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md` — normalized so every provider gets them. Nothing is sent twice: Claude already loads `CLAUDE.md` and Codex `AGENTS.md`, so their briefs carry only what they cannot know.
+
+**Every CLI gets the instructions it is missing**, through its own real channel — Claude `--append-system-prompt`, Codex `developerInstructions`, and for the ACP agents, which have no system slot, the session's first prompt, restated only when it changes. The content is compensation for what each CLI does not do by default, so Claude's list is the shortest.
+
+**The work gets checked.** After a run changes files, the project's *own* typecheck/test script runs and, on failure, the model gets one repair round with the real output. Commands are never invented — only what `package.json` or a `Makefile` declares — and nothing runs in Plan mode.
+
+**A different model looks for what the checks cannot see.** On hard work a different provider reviews the diff adversarially, told that finding nothing (`LGTM`) is a valid answer. Different labs have different blind spots; that is the whole reason to own several subscriptions.
+
+**It learns.** Auto routing calibrates each account from your own clean-run rate — runs you did not have to steer, retry, or escalate — and estimates how much of a quota window a task will burn before choosing. Corrections you type mid-run are collected, and a recurring one is *offered* (never silently applied) as a standing rule every provider inherits.
 
 ## The UI
 
@@ -46,7 +62,7 @@ Secrets (tokens, API keys) live in the VS Code secret store. Profile directories
 
 **Adding an account is one authorize click**: the wizard opens a login terminal per account and detects completion automatically — by watching for the auth file (Codex/Gemini), polling `claude auth status`, or capturing the token straight from terminal output (Claude `setup-token`). No copy-pasting.
 
-**Limit detection is first-class**: Claude's stream emits `rate_limit_event` with the exact reset time; Codex/Gemini/Copilot limit messages are fingerprinted in [limits.ts](packages/core/src/adapters/limits.ts). On a limit, the full original prompt is re-sent to the next account in the chain and the account goes on cooldown until its stated reset.
+**Limit detection is first-class**: Claude's stream emits `rate_limit_event` with the exact reset time; Codex/Gemini/Copilot limit messages are fingerprinted in `packages/core/src/adapters/limits.ts`. On a limit, the full original prompt is re-sent to the next account in the chain and the account goes on cooldown until its stated reset.
 
 ## Requirements
 
@@ -105,6 +121,12 @@ Secrets (tokens, API keys) live in the VS Code secret store. Profile directories
 | Setting | Default | Description |
 |---|---|---|
 | `usturlab.permissionMode` | `safe` | `safe` (read/plan), `edits` (auto-accept edits), `full` (skip approvals) |
+| `usturlab.routingMode` | `auto` | `auto` reads the task and picks the model; `manual` follows your chain exactly. Your rules win in both |
+| `usturlab.sendWorkspaceContext` | `true` | Send the open file, selection, git state and convention files |
+| `usturlab.standingInstructions` | `true` | Give each provider the instructions it needs to behave like the best one |
+| `usturlab.verifyChanges` | `true` | Run the project's own checks after a change, and let the model fix a failure once |
+| `usturlab.secondOpinion` | `hard` | Have a different provider review the work: `never` / `hard` / `always` |
+| `usturlab.autoPlanHeavyEdits` | `true` | Plan heavy code-writing work before it edits |
 | `usturlab.pollUsage` | `false` | Proactively poll quota (Claude 5h/weekly window, Copilot AI credits) |
 | `usturlab.cliPath.*` | CLI name | Override binary paths |
 
@@ -114,6 +136,7 @@ Secrets (tokens, API keys) live in the VS Code secret store. Profile directories
 - `usturlab: Routing Rules` / `Edit Routing Rules` (raw JSON)
 - `usturlab: New Conversation`, `Open Chat`, `Cancel Running Task`
 - `usturlab: Open Session in Terminal`
+- `usturlab: Analytics` — what the router learned: clean-run rate and confidence per account, median burn per run, performance per kind of work
 - `usturlab: Simulate Usage Limit (debug)` — test failover without burning quota
 
 ## Development
@@ -121,14 +144,18 @@ Secrets (tokens, API keys) live in the VS Code secret store. Profile directories
 ```bash
 pnpm install
 pnpm build        # core typecheck + extension bundle (esbuild)
-pnpm test         # core unit tests (vitest)
+pnpm test         # unit tests (vitest) — no accounts needed
+
+pnpm -C packages/core test:live   # against your real logged-in CLIs
 ```
+
+`test:live` proves the parts that only reality can: that the standing brief reaches each provider through its own channel, that the workspace brief is understood, that check discovery finds a repo's real commands and nothing else, and that a second model catches a planted defect while waving through correct code.
 
 Open the repo in VS Code and press **F5** to launch the Extension Development Host.
 
 ### Architecture
 
-- `packages/core` — editor-agnostic engine: rule matcher/router, orchestrator with failover, quota tracker, per-provider CLI adapters (spawn + stream parsing + limit detection). No `vscode` imports; fully unit-tested.
+- `packages/core` — editor-agnostic engine: rule matcher/router, auto-routing with measured capability and burn estimation, orchestrator with failover and handover, task/provider briefs, verification and review prompts, per-provider CLI adapters (spawn + stream parsing + limit detection). No `vscode` imports; fully unit-tested.
 - `packages/vscode` — the extension: account onboarding with auto-detected logins, secret storage, sidebar chat list, chat/accounts/rules editor tabs (preact), terminal mode.
 
 Limit-message fingerprints live in `packages/core/src/adapters/limits.ts` — when a CLI changes its copy, that's the only file to touch.
