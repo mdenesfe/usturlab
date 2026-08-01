@@ -1,4 +1,5 @@
 import type { AdapterEvent, PermissionMode, ProviderId, ResolvedAccount } from '../types.js';
+import type { PermissionDecision } from './permission.js';
 
 /**
  * Live handle for a run in flight. Adapters that can accept mid-run user
@@ -7,6 +8,11 @@ import type { AdapterEvent, PermissionMode, ProviderId, ResolvedAccount } from '
  */
 export interface LiveRunHandle {
   inject?: (text: string) => boolean;
+  /**
+   * Answers a pending permission request. Set by adapters whose CLI can ask;
+   * the host calls it when the user decides.
+   */
+  respondPermission?: (id: string, decision: PermissionDecision) => void;
   /**
    * How an injected message shows up:
    * - 'turn'   → the agent answers it as a separate turn (its own reply block)
@@ -28,6 +34,17 @@ export interface RunRequest {
    * prepended to the session's first prompt.
    */
   systemBrief?: string;
+  /**
+   * Ask the user before consequential actions instead of deciding from the
+   * permission mode alone. The mode still bounds what can be asked for.
+   */
+  askPermission?: boolean;
+  /**
+   * Extra CLI args and env the host needs to inject — Claude's permission
+   * prompt runs through an MCP server the host owns, so only the host knows
+   * how to reach it.
+   */
+  hostArgs?: { args: string[]; env: Record<string, string> };
   /**
    * Set when a resumed session must hear the brief again because it changed
    * (only matters for transports without a system-prompt slot).

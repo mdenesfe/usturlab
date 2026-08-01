@@ -1,8 +1,8 @@
 {
   "name": "usturlab",
-  "displayName": "usturlab — AI Subscription Router",
+  "displayName": "usturlab \u2014 AI Subscription Router",
   "description": "Add all your AI subscriptions (multiple Claude accounts, Codex, Gemini, Copilot) and route every task to the best account and model with user-defined rules and automatic quota failover.",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "publisher": "mdenesfe",
   "license": "MIT",
   "icon": "media/marketplace-icon.png",
@@ -106,6 +106,10 @@
         "command": "usturlab.openAnalytics",
         "title": "usturlab: Analytics",
         "icon": "$(graph)"
+      },
+      {
+        "command": "usturlab.toggleAsk",
+        "title": "usturlab: Toggle Ask Before Acting"
       }
     ],
     "menus": {
@@ -131,7 +135,7 @@
             "full"
           ],
           "default": "safe",
-          "markdownDescription": "How much autonomy routed CLIs get: `safe` (read/plan only), `edits` (auto-accept file edits), `full` (skip all approvals — use with care)."
+          "markdownDescription": "How much autonomy routed CLIs get: `safe` (read/plan only), `edits` (auto-accept file edits), `full` (skip all approvals \u2014 use with care)."
         },
         "usturlab.pollUsage": {
           "type": "boolean",
@@ -170,7 +174,7 @@
             "restart"
           ],
           "default": "queue",
-          "markdownDescription": "What happens when you send a message while a task runs on a provider without live input (Codex/Gemini/Copilot). Claude always receives it live. `queue`: runs right after the current task. `restart`: cancels the in-flight task and re-asks with both messages merged — feels immediate, but discards unfinished tool work."
+          "markdownDescription": "What happens when you send a message while a task runs on a provider without live input (Codex/Gemini/Copilot). Claude always receives it live. `queue`: runs right after the current task. `restart`: cancels the in-flight task and re-asks with both messages merged \u2014 feels immediate, but discards unfinished tool work."
         },
         "usturlab.routingMode": {
           "type": "string",
@@ -179,7 +183,7 @@
             "manual"
           ],
           "default": "auto",
-          "markdownDescription": "`auto`: usturlab reads the task, judges its difficulty and picks the model — keeping nearly-exhausted accounts in reserve. `manual`: follow your rules and default chain exactly. Your rules always win in both modes."
+          "markdownDescription": "`auto`: usturlab reads the task, judges its difficulty and picks the model \u2014 keeping nearly-exhausted accounts in reserve. `manual`: follow your rules and default chain exactly. Your rules always win in both modes."
         },
         "usturlab.autoPlanHeavyEdits": {
           "type": "boolean",
@@ -194,12 +198,12 @@
         "usturlab.standingInstructions": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Give each provider the standing instructions it needs to behave like the best one — delivered through its own system-prompt channel. Lines that measurably lower the clean-run rate are dropped automatically."
+          "markdownDescription": "Give each provider the standing instructions it needs to behave like the best one \u2014 delivered through its own system-prompt channel. Lines that measurably lower the clean-run rate are dropped automatically."
         },
         "usturlab.verifyChanges": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "After a run changes files, run the project's **own** typecheck/test script and, if it fails, give the model one chance to fix it. Commands are never invented — only what `package.json` or a `Makefile` declares. Never runs in Plan mode."
+          "markdownDescription": "After a run changes files, run the project's **own** typecheck/test script and, if it fails, give the model one chance to fix it. Commands are never invented \u2014 only what `package.json` or a `Makefile` declares. Never runs in Plan mode."
         },
         "usturlab.secondOpinion": {
           "type": "string",
@@ -209,7 +213,12 @@
             "always"
           ],
           "default": "hard",
-          "markdownDescription": "Have a **different** provider review the work before you rely on it — a different model sees different mistakes. `hard`: only on work classified as hard. Costs a second account's quota, so it is skipped when headroom is low."
+          "markdownDescription": "Have a **different** provider review the work before you rely on it \u2014 a different model sees different mistakes. `hard`: only on work classified as hard. Costs a second account's quota, so it is skipped when headroom is low."
+        },
+        "usturlab.askPermission": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Stop and ask before consequential actions \u2014 running a command, changing a file \u2014 instead of deciding from the permission mode alone. Works on **every** provider: Codex and the ACP agents ask over their own protocols, and Claude asks through a local MCP bridge (it cannot ask over stream-json). Reads are never interrupted, and Plan mode still refuses rather than asking."
         }
       }
     }

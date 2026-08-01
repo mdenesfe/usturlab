@@ -70,6 +70,10 @@ export interface OrchestratorDeps {
     provider: ProviderId,
     permissionMode: PermissionMode,
   ) => { text: string; lineIds: string[] };
+  /** Stop and ask the user before consequential actions. */
+  getAskPermission?: () => boolean;
+  /** Provider-specific args/env only the host can supply (Claude's MCP bridge). */
+  getHostArgs?: (provider: ProviderId) => { args: string[]; env: Record<string, string> } | undefined;
 }
 
 export class Orchestrator {
@@ -182,6 +186,8 @@ export class Orchestrator {
             permissionMode: effectivePermission,
             systemBrief,
             restateBrief,
+            askPermission: this.deps.getAskPermission?.() ?? false,
+            hostArgs: this.deps.getHostArgs?.(target.provider),
             handle,
           },
           account,

@@ -173,6 +173,7 @@ function ChatApp() {
     import('../../core/src/commands/slashCommands.js').SlashCommand[]
   >([]);
   const [permissionMode, setPermissionMode] = useState('safe');
+  const [askPermission, setAskPermission] = useState(false);
   const [routingMode, setRoutingMode] = useState<'auto' | 'manual'>('auto');
   const [attachments, setAttachments] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
@@ -195,6 +196,7 @@ function ChatApp() {
       if (msg.kind === 'modes') {
         setPermissionMode(msg.permissionMode);
         setRoutingMode(msg.routingMode);
+        setAskPermission(msg.askPermission === true);
       }
       if (msg.kind === 'attachments') {
         setAttachments((prev) => [...new Set([...prev, ...msg.paths])]);
@@ -241,6 +243,9 @@ function ChatApp() {
             items={items}
             noAccounts={accounts.length === 0}
             onAddAccount={() => vscode.postMessage({ kind: 'addAccount' })}
+            onPermission={(id, decision) =>
+              vscode.postMessage({ kind: 'permissionDecision', id, decision })
+            }
           />
           <div ref={bottomRef} />
         </div>
@@ -252,6 +257,7 @@ function ChatApp() {
           customCommands={customCommands}
           running={running}
           permissionMode={permissionMode}
+          askPermission={askPermission}
           routingMode={routingMode}
           attachments={attachments}
           onPickAttachments={() => vscode.postMessage({ kind: 'pickAttachments' })}
@@ -259,7 +265,20 @@ function ChatApp() {
           onSend={send}
           onCancel={() => vscode.postMessage({ kind: 'cancel' })}
           onModeChange={(modes) => {
-            if (modes.permissionMode) setPermissionMode(modes.permissionMode);
+            // "Ask" is a separate switch, not a fourth permission level: it
+            // decides who answers, while the mode still bounds what can be asked.
+            if (modes.permissionMode === 'ask') {
+              setAskPermission(true);
+              vscode.postMessage({ kind: 'setAskPermission', ask: true });
+              return;
+            }
+            if (modes.permissionMode) {
+              setPermissionMode(modes.permissionMode);
+              if (askPermission) {
+                setAskPermission(false);
+                vscode.postMessage({ kind: 'setAskPermission', ask: false });
+              }
+            }
             if (modes.routingMode) setRoutingMode(modes.routingMode);
             vscode.postMessage({ kind: 'setModes', ...modes });
           }}

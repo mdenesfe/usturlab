@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.7.0 — 2026-08-01
+
+### A tasks panel, fed by whatever the model actually keeps
+
+Every CLI keeps a task list and every one of them describes it differently. They now all land in one live checklist in the transcript — updated in place, never stacked — with a progress bar and the step being worked on.
+
+| | source |
+|---|---|
+| Claude | its `TodoWrite` tool call |
+| Codex | `turn/plan/updated` |
+| Gemini · Copilot | the ACP `plan` session update |
+
+### It stops and asks — on every provider
+
+Claude Code's defining behaviour was the one thing usturlab threw away: Codex and the ACP agents were already *sending* approval requests, and the old code answered all of them blindly. Now, with **Ask** selected in the composer (or `usturlab.askPermission`), the question reaches you.
+
+- The request appears **in the transcript** as a card with the command or diff and Allow / Always / Deny — not a toast that scrolls away, because the model is genuinely blocked until you answer. If the tab is not focused you also get a notification you can answer from.
+- **Always is per action, not blanket**: allowing `git status` allows `git`, never `rm`. A blanket allow is what Full mode is for.
+- **Reads are never interrupted.** Plan mode still refuses rather than asking.
+- A run that ends with a question outstanding releases the CLI instead of leaving its stdin blocked forever.
+
+**Claude needed a bridge.** It cannot ask over stream-json — `--permission-mode manual` silently degrades to `default` and the tool just runs (verified). Its real hook is `--permission-prompt-tool`, so the extension now ships a small MCP server that Claude spawns and that asks usturlab over a loopback socket with a per-session token. If the extension is unreachable it denies: a permission prompt that fails open is worse than none.
+
+### Switching modes
+
+The composer's permission dropdown gains **Ask** alongside Plan / Edit / Full, and switching applies immediately to every open surface. `usturlab: Toggle Ask Before Acting` does the same from the palette. Ask is a separate switch rather than a fourth level — it decides *who answers*, while the mode still bounds *what can be asked for*.
+
+### Verified live
+
+`pnpm -C packages/core test:live`. Each provider was asked to write a file into the home directory — which every sandbox genuinely refuses — and denied:
+
+| | asked | obeyed the denial |
+|---|---|---|
+| Claude (MCP bridge) | ✅ | ✅ file not written |
+| Codex (`on-request`) | ✅ | ✅ file not written |
+| Copilot (ACP) | ✅ | ✅ file not written |
+
+Worth knowing: Codex only asks when its sandbox would otherwise block. `echo` inside the workspace — and even in the temp dir, which `workspace-write` permits — runs without a question. That is the right behaviour, not a gap.
+
+### Fixed
+
+- The permission gate announced one answered question **twice** to the UI; `close()` and `ask()` were both reporting it.
+- `edits` mode would have started denying commands, which would have stopped agents running the project's own tests. The line between `edits` and `full` is drawn by each CLI's sandbox flags, where it can actually be enforced — so the gate no longer re-litigates it.
+
+- 200 offline tests, 13 live
+
 ## 0.6.1 — 2026-08-01
 
 Until now the router only improved **who** ran your task. Nothing improved **how well** they ran it. This release is that half: context, constraints, and someone checking the work.

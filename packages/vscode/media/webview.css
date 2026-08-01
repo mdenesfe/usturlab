@@ -596,6 +596,241 @@ body {
   color: var(--vscode-foreground);
 }
 
+/* ── the model's own task list ──────────────────────────── */
+
+.task-block {
+  align-self: stretch;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--vscode-sideBar-background);
+  font-size: 0.85em;
+}
+
+.task-summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  color: var(--muted);
+}
+
+.task-summary::-webkit-details-marker {
+  display: none;
+}
+
+.task-summary::before {
+  content: '▸';
+  font-size: 0.85em;
+  transition: transform 0.15s ease;
+}
+
+.task-block[open] .task-summary::before {
+  transform: rotate(90deg);
+}
+
+.task-label {
+  font-family: var(--mono);
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.task-count {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--vscode-foreground);
+}
+
+.task-bar {
+  width: 60px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--vscode-input-background);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.task-fill {
+  display: block;
+  height: 100%;
+  background: #4ec9b0;
+  transition: width 0.25s ease;
+}
+
+.task-current {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+.task-items {
+  margin: 0;
+  padding: 4px 10px 8px;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+
+.task-item {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+  line-height: 1.5;
+}
+
+.task-mark {
+  width: 12px;
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--muted);
+}
+
+.task-item.done .task-mark {
+  color: #4ec9b0;
+}
+
+.task-item.done .task-text {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted) 50%, transparent);
+}
+
+.task-item.active .task-mark,
+.task-item.active .task-text {
+  color: var(--accent);
+}
+
+/* ── permission: the run is blocked until this is answered ── */
+
+.permission-block {
+  align-self: stretch;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.9em;
+}
+
+.permission-block.pending {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.permission-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 12px 6px;
+}
+
+.permission-kind {
+  width: 12px;
+  text-align: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.permission-title {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+.permission-by {
+  font-family: var(--mono);
+  font-size: 0.8em;
+  flex-shrink: 0;
+}
+
+.permission-detail {
+  margin: 0 12px 8px 32px;
+  padding: 6px 9px;
+  background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.1));
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 0.88em;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.permission-actions {
+  display: flex;
+  gap: 6px;
+  padding: 0 12px 10px 32px;
+}
+
+.perm-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.perm-btn:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.perm-btn.allow {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--vscode-button-foreground, #fff);
+}
+
+.perm-btn.allow:hover {
+  opacity: 0.9;
+  background: var(--accent);
+}
+
+.perm-btn.deny:hover {
+  border-color: var(--vscode-errorForeground);
+  color: var(--vscode-errorForeground);
+}
+
+.permission-block.answered {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 12px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.permission-mark {
+  width: 12px;
+  text-align: center;
+}
+
+.permission-block.answered.allowed .permission-mark {
+  color: #4ec9b0;
+}
+
+.permission-block.answered.denied .permission-mark {
+  color: #f48771;
+}
+
+.permission-block.answered .permission-title {
+  font-size: 0.95em;
+}
+
+.permission-verdict {
+  font-family: var(--mono);
+  font-size: 0.85em;
+}
+
 /* A second provider's critique — collapsed by default, it is not the answer. */
 .review-block {
   align-self: stretch;

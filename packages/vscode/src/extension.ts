@@ -23,6 +23,7 @@ import { MetricsStore } from './storage/metricsStore.js';
 import { PreferenceStore } from './storage/preferenceStore.js';
 import { WorkspaceContext } from './context/workspaceContext.js';
 import { Verifier } from './verify/verifier.js';
+import { PermissionBridge } from './permission/bridge.js';
 import { globalStateQuotaPersistence } from './storage/quotaPersistence.js';
 import { RulesManager } from './rules/rulesFile.js';
 import { ChatViewProvider } from './panel/chatViewProvider.js';
@@ -65,6 +66,14 @@ export function activate(ctx: vscode.ExtensionContext): void {
   const preferences = new PreferenceStore(ctx);
   const workspaceContext = new WorkspaceContext(output);
   const verifier = new Verifier(output);
+  // Claude asks through a local MCP server it spawns itself; the bridge is the
+  // host end of that conversation.
+  const bridge = new PermissionBridge(
+    joinPath(ctx.extensionPath, 'dist', 'permissionServer.js'),
+    (request) => chatRef!.askViaBridge(request),
+    output,
+  );
+  ctx.subscriptions.push(bridge);
   ctx.subscriptions.push(rules);
 
   /** Standing instructions, minus any line the evidence says to stop sending. */
@@ -104,6 +113,9 @@ export function activate(ctx: vscode.ExtensionContext): void {
             ...chatRef?.threadFiles(task.conversationId),
           })
         : '',
+    getAskPermission: () =>
+      vscode.workspace.getConfiguration('usturlab').get<boolean>('askPermission', false),
+    getHostArgs: (provider) => (provider === 'claude' ? bridge.claudeArgs() : undefined),
     getProviderBrief: (provider, mode) =>
       vscode.workspace.getConfiguration('usturlab').get<boolean>('standingInstructions', true)
         ? providerBrief(provider, mode)
@@ -136,6 +148,19 @@ export function activate(ctx: vscode.ExtensionContext): void {
   );
 
   registerCommands(ctx, { accounts, adapters, quota, rules, chat, statusBar });
+
+  // Only listen once asking is actually on; a socket nobody uses is waste.
+  const applyAsk = () => {
+    if (vscode.workspace.getConfiguration('usturlab').get<boolean>('askPermission', false)) {
+      void bridge.start();
+    }
+  };
+  applyAsk();
+  ctx.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('usturlab.askPermission')) applyAsk();
+    }),
+  );
 
   const usageRefresher = () => refreshUsage(accounts, quota, (line) => output.appendLine(line));
   chat.setUsageRefresher(usageRefresher);

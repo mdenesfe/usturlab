@@ -2,7 +2,9 @@ import { EventQueue, JsonRpcProcess } from './jsonRpc.js';
 import { getObject, getString } from './ndjson.js';
 import { isTransientFailure } from './limits.js';
 import { describeToolUse } from './toolDetail.js';
-import type { AdapterEvent, LimitInfo, PermissionMode } from '../types.js';
+import { sameTasks, tasksFromAcpPlan } from './taskList.js';
+import { PermissionGate, acpPermissionKind } from './permission.js';
+import type { AdapterEvent, LimitInfo } from '../types.js';
 import type { RunRequest } from './adapter.js';
 
 /**
@@ -24,21 +26,6 @@ export interface AcpOptions {
   onUnsupported?: () => void;
 }
 
-/** ACP permission options are tagged by kind; pick by our permission mode. */
-function choosePermission(
-  mode: PermissionMode,
-  options: Array<{ optionId?: string; kind?: string; name?: string }>,
-): { optionId?: string; allowed: boolean } {
-  const byKind = (kind: string) => options.find((o) => o.kind === kind);
-  if (mode === 'safe') {
-    const reject = byKind('reject_once') ?? byKind('reject_always');
-    if (reject?.optionId) return { optionId: reject.optionId, allowed: false };
-    return { allowed: false };
-  }
-  const allow = byKind('allow_always') ?? byKind('allow_once') ?? options[0];
-  return { optionId: allow?.optionId, allowed: true };
-}
-
 export async function* runAcp(opts: AcpOptions): AsyncGenerator<AdapterEvent> {
   const { req, signal } = opts;
   const events = new EventQueue<AdapterEvent>();
@@ -54,6 +41,15 @@ export async function* runAcp(opts: AcpOptions): AsyncGenerator<AdapterEvent> {
   let segStart = 0;
 
   let refusal = false;
+  let lastTasks: ReturnType<typeof tasksFromAcpPlan> = [];
+
+  const gate = new PermissionGate({
+    mode: req.permissionMode,
+    ask: req.askPermission === true,
+    emit: (request) => events.push({ type: 'permission', request }),
+    resolved: (id, allowed) => events.push({ type: 'permission-resolved', id, allowed }),
+  });
+  if (req.handle) req.handle.respondPermission = (id, decision) => gate.respond(id, decision);
 
   /** One outstanding prompt settled; the last one ends the run. */
   const settle = (error?: Error) => {
@@ -71,6 +67,7 @@ export async function* runAcp(opts: AcpOptions): AsyncGenerator<AdapterEvent> {
   const finish = (event?: AdapterEvent) => {
     if (finished) return;
     finished = true;
+    gate.close();
     if (event) events.push(event);
     events.end();
     rpc.dispose();
@@ -128,21 +125,49 @@ export async function* runAcp(opts: AcpOptions): AsyncGenerator<AdapterEvent> {
           });
           break;
         }
+        case 'plan': {
+          const items = tasksFromAcpPlan(update);
+          if (items.length > 0 && !sameTasks(items, lastTasks)) {
+            lastTasks = items;
+            events.push({ type: 'tasks', items });
+          }
+          break;
+        }
         default:
           break;
       }
     },
-    onServerRequest: (r) => {
+    onServerRequest: async (r) => {
       if (r.method === 'session/request_permission') {
         const options = (r.params.options as Array<{ optionId?: string; kind?: string }>) ?? [];
-        const choice = choosePermission(req.permissionMode, options);
-        events.push({
-          type: 'tool-use',
-          name: choice.allowed ? 'permission granted' : 'permission denied',
-          detail: getString(r.params, 'toolCall', 'title'),
+        const toolCall = getObject(r.params, 'toolCall') ?? {};
+        const title = getString(toolCall, 'title') ?? 'perform an action';
+        const decision = await gate.ask({
+          id: `${r.id}`,
+          kind: acpPermissionKind(getString(toolCall, 'kind')),
+          title,
+          detail:
+            getString(toolCall, 'rawInput', 'command') ??
+            getString(toolCall, 'rawInput', 'description'),
+          path: getString(toolCall, 'locations', '0', 'path'),
         });
-        return choice.optionId
-          ? { outcome: { outcome: 'selected', optionId: choice.optionId } }
+
+        // ACP wants one of the options the agent offered; map our answer onto
+        // whichever of them means the same thing.
+        const byKind = (kind: string) => options.find((o) => o.kind === kind);
+        if (decision.outcome === 'deny') {
+          const reject = byKind('reject_once') ?? byKind('reject_always');
+          return reject?.optionId
+            ? { outcome: { outcome: 'selected', optionId: reject.optionId } }
+            : { outcome: { outcome: 'cancelled' } };
+        }
+        const allow =
+          decision.outcome === 'allow-always'
+            ? (byKind('allow_always') ?? byKind('allow_once'))
+            : (byKind('allow_once') ?? byKind('allow_always'));
+        const chosen = allow ?? options[0];
+        return chosen?.optionId
+          ? { outcome: { outcome: 'selected', optionId: chosen.optionId } }
           : { outcome: { outcome: 'cancelled' } };
       }
       // We advertise no client filesystem, so nothing else needs answering.

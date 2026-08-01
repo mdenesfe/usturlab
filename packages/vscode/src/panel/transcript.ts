@@ -1,4 +1,4 @@
-import type { Target, ToolAction } from '@usturlab/core';
+import type { PermissionRequest, TaskItem, Target, ToolAction } from '@usturlab/core';
 import type { HostToWebview } from './protocol.js';
 
 /**
@@ -38,6 +38,10 @@ export type TranscriptItem =
       durationMs?: number;
     }
   | { kind: 'review'; by: string; text: string }
+  /** The model's own checklist; replaced in place as it progresses. */
+  | { kind: 'tasks'; items: TaskItem[] }
+  /** A question the model is blocked on until the user answers. */
+  | { kind: 'permission'; request: PermissionRequest; target?: Target; answered?: boolean; allowed?: boolean }
   | { kind: 'failover'; text: string }
   | { kind: 'notice'; text: string }
   | { kind: 'error'; text: string };
@@ -113,6 +117,24 @@ export function applyHostMessage(items: TranscriptItem[], msg: HostToWebview): T
         segments.push({ kind: 'tools', steps: [step] });
       }
       next[i] = { ...item, segments };
+      break;
+    }
+    case 'tasks': {
+      // One live checklist per conversation: update in place, never stack.
+      const at = next.findIndex((i) => i.kind === 'tasks');
+      if (at >= 0) next[at] = { kind: 'tasks', items: msg.items };
+      else next.push({ kind: 'tasks', items: msg.items });
+      break;
+    }
+    case 'permission': {
+      next.push({ kind: 'permission', request: msg.request, target: msg.target });
+      break;
+    }
+    case 'permissionResolved': {
+      const at = next.findIndex((i) => i.kind === 'permission' && i.request.id === msg.id);
+      if (at >= 0) {
+        next[at] = { ...(next[at] as Extract<TranscriptItem, { kind: 'permission' }>), answered: true, allowed: msg.allowed };
+      }
       break;
     }
     case 'review': {

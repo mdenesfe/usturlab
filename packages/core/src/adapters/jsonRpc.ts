@@ -23,8 +23,12 @@ export interface JsonRpcOptions {
   env: NodeJS.ProcessEnv;
   signal: AbortSignal;
   onNotification: (n: RpcNotification) => void;
-  /** Server→client requests (approvals, elicitations). Return the result payload. */
-  onServerRequest?: (r: RpcServerRequest) => unknown;
+  /**
+   * Server→client requests (approvals, elicitations). Return the result
+   * payload, or a promise for it — an approval that has to reach the user and
+   * come back takes as long as the user takes.
+   */
+  onServerRequest?: (r: RpcServerRequest) => unknown | Promise<unknown>;
   onStderr?: (line: string) => void;
   onExit?: (code: number | null) => void;
   onSpawnError?: (message: string) => void;
@@ -102,14 +106,19 @@ export class JsonRpcProcess {
       return;
     }
 
-    // Server → client request (approvals). Answer so the CLI is never stuck.
+    // Server → client request (approvals). Answer so the CLI is never stuck —
+    // even when the answer has to go to the user and come back first.
     if (msg.id !== undefined && typeof msg.method === 'string') {
-      const result = this.opts.onServerRequest?.({
-        id: msg.id as string | number,
-        method: msg.method,
-        params: (msg.params ?? {}) as Record<string, unknown>,
-      });
-      this.write({ jsonrpc: '2.0', id: msg.id, result: result ?? {} });
+      const id = msg.id;
+      void Promise.resolve(
+        this.opts.onServerRequest?.({
+          id: id as string | number,
+          method: msg.method,
+          params: (msg.params ?? {}) as Record<string, unknown>,
+        }),
+      )
+        .then((result) => this.write({ jsonrpc: '2.0', id, result: result ?? {} }))
+        .catch(() => this.write({ jsonrpc: '2.0', id, result: {} }));
       return;
     }
 

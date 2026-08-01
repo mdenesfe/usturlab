@@ -23,6 +23,8 @@ export * from './adapters/jsonRpc.js';
 export * from './adapters/acp.js';
 export * from './adapters/limits.js';
 export * from './adapters/toolDetail.js';
+export * from './adapters/taskList.js';
+export * from './adapters/permission.js';
 export * from './context/brief.js';
 export * from './context/providerBrief.js';
 export * from './verify/checks.js';

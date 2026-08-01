@@ -1,4 +1,6 @@
 import type { ToolAction } from './adapters/toolDetail.js';
+import type { TaskItem } from './adapters/taskList.js';
+import type { PermissionRequest } from './adapters/permission.js';
 
 export type ProviderId = 'claude' | 'codex' | 'gemini' | 'copilot';
 
@@ -72,6 +74,12 @@ export type AdapterEvent =
       action?: ToolAction;
     }
   | { type: 'model-downgraded'; from: string; to: string }
+  /** The model's own task list, however that provider expresses it. */
+  | { type: 'tasks'; items: TaskItem[] }
+  /** The model is waiting on the user before it acts. */
+  | { type: 'permission'; request: PermissionRequest }
+  /** That wait is over — the CLI moved on (answered, cancelled or timed out). */
+  | { type: 'permission-resolved'; id: string; allowed: boolean }
   | { type: 'result'; text: string; usage?: Usage; costUsd?: number }
   | ({ type: 'limit' } & LimitInfo)
   | { type: 'error'; message: string; retryable: boolean };

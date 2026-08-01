@@ -16,6 +16,22 @@ const extensionConfig = {
   minify: production,
 };
 
+/**
+ * Claude spawns this as its own process for permission prompts, so it cannot
+ * live inside the extension bundle.
+ */
+/** @type {import('esbuild').BuildOptions} */
+const permissionServerConfig = {
+  entryPoints: ['src/permission/mcpServer.ts'],
+  bundle: true,
+  outfile: 'dist/permissionServer.js',
+  format: 'cjs',
+  platform: 'node',
+  target: 'node18',
+  sourcemap: !production,
+  minify: production,
+};
+
 /** @type {import('esbuild').BuildOptions} */
 const webviewConfig = {
   entryPoints: ['webview/main.tsx'],
@@ -31,10 +47,18 @@ const webviewConfig = {
 };
 
 if (watch) {
-  const contexts = await Promise.all([esbuild.context(extensionConfig), esbuild.context(webviewConfig)]);
+  const contexts = await Promise.all([
+    esbuild.context(extensionConfig),
+    esbuild.context(permissionServerConfig),
+    esbuild.context(webviewConfig),
+  ]);
   await Promise.all(contexts.map((c) => c.watch()));
   console.log('[usturlab] watching...');
 } else {
-  await Promise.all([esbuild.build(extensionConfig), esbuild.build(webviewConfig)]);
+  await Promise.all([
+    esbuild.build(extensionConfig),
+    esbuild.build(permissionServerConfig),
+    esbuild.build(webviewConfig),
+  ]);
   console.log('[usturlab] build complete');
 }

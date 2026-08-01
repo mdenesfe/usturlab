@@ -1,4 +1,5 @@
 import type { Segment, ToolStep, TranscriptItem } from '../../src/panel/transcript.js';
+import type { PermissionDecision } from '../../../core/src/adapters/permission.js';
 import { Markdown } from './Markdown.js';
 import { IconUsturlab } from './icons.js';
 import { BRAND_COLOR, BrandMark, PROVIDER_NAME } from './brandIcons.js';
@@ -134,14 +135,81 @@ function ToolGroup({ steps, running }: { steps: ToolStep[]; running: boolean }) 
   );
 }
 
+const KIND_GLYPH: Record<string, string> = {
+  command: '❯',
+  edit: '✎',
+  read: '◇',
+  network: '↓',
+  other: '·',
+};
+
+/**
+ * The model is stopped until this is answered, so it reads as a question with
+ * buttons rather than a notice. "Always" is offered per kind of action, not
+ * blanket — allowing `git status` should never allow `rm`.
+ */
+function PermissionCard({
+  item,
+  onDecide,
+}: {
+  item: Extract<TranscriptItem, { kind: 'permission' }>;
+  onDecide?: (id: string, decision: PermissionDecision) => void;
+}) {
+  const { request } = item;
+  if (item.answered) {
+    return (
+      <div class={`permission-block answered ${item.allowed ? 'allowed' : 'denied'}`}>
+        <span class="permission-mark">{item.allowed ? '✓' : '✕'}</span>
+        <span class="permission-title">{request.title}</span>
+        <span class="permission-verdict">{item.allowed ? 'allowed' : 'denied'}</span>
+      </div>
+    );
+  }
+  return (
+    <div class="permission-block pending">
+      <div class="permission-head">
+        <span class={`permission-kind ${request.kind}`}>{KIND_GLYPH[request.kind] ?? '·'}</span>
+        <span class="permission-title">{request.title}</span>
+        {item.target && (
+          <span class="permission-by" style={{ color: BRAND_COLOR[item.target.provider] }}>
+            {item.target.provider}:{item.target.account}
+          </span>
+        )}
+      </div>
+      {request.detail && <pre class="permission-detail">{request.detail}</pre>}
+      <div class="permission-actions">
+        <button class="perm-btn allow" onClick={() => onDecide?.(request.id, { outcome: 'allow' })}>
+          Allow
+        </button>
+        <button
+          class="perm-btn always"
+          title={
+            request.kind === 'command'
+              ? 'Allows this command for the rest of the conversation — not every command'
+              : `Allows ${request.kind} actions for the rest of the conversation`
+          }
+          onClick={() => onDecide?.(request.id, { outcome: 'allow-always' })}
+        >
+          Always
+        </button>
+        <button class="perm-btn deny" onClick={() => onDecide?.(request.id, { outcome: 'deny' })}>
+          Deny
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function Transcript({
   items,
   noAccounts,
   onAddAccount,
+  onPermission,
 }: {
   items: TranscriptItem[];
   noAccounts?: boolean;
   onAddAccount?: () => void;
+  onPermission?: (id: string, decision: PermissionDecision) => void;
 }) {
   if (items.length === 0) {
     return (
@@ -254,6 +322,39 @@ export function Transcript({
               </div>
             );
           }
+          case 'tasks': {
+            const done = item.items.filter((t) => t.status === 'done').length;
+            const active = item.items.find((t) => t.status === 'active');
+            return (
+              <details key={i} class="task-block" open={!!active}>
+                <summary class="task-summary">
+                  <span class="task-label">tasks</span>
+                  <span class="task-count">
+                    {done}/{item.items.length}
+                  </span>
+                  <span class="task-bar">
+                    <span
+                      class="task-fill"
+                      style={{ width: `${(done / Math.max(item.items.length, 1)) * 100}%` }}
+                    />
+                  </span>
+                  {active && <span class="task-current">{active.text}</span>}
+                </summary>
+                <ol class="task-items">
+                  {item.items.map((task, j) => (
+                    <li key={j} class={`task-item ${task.status}`}>
+                      <span class="task-mark">
+                        {task.status === 'done' ? '✓' : task.status === 'active' ? '▸' : '○'}
+                      </span>
+                      <span class="task-text">{task.text}</span>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            );
+          }
+          case 'permission':
+            return <PermissionCard key={i} item={item} onDecide={onPermission} />;
           case 'review':
             return (
               <details key={i} class="review-block">

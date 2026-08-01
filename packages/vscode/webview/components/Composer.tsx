@@ -79,6 +79,7 @@ const PERMISSION_MODES: Array<{ id: string; label: string; hint: string }> = [
   { id: 'safe', label: 'Plan', hint: 'Read and plan only — no file changes' },
   { id: 'edits', label: 'Edit', hint: 'Auto-accept file edits' },
   { id: 'full', label: 'Full', hint: 'Skip all approvals — use with care' },
+  { id: 'ask', label: 'Ask', hint: 'Stop and ask before each command or file change — on every provider' },
 ];
 
 export function Composer({
@@ -87,6 +88,7 @@ export function Composer({
   customCommands = [],
   running,
   permissionMode,
+  askPermission,
   routingMode,
   attachments,
   onSend,
@@ -100,6 +102,7 @@ export function Composer({
   customCommands?: SlashCommand[];
   running: boolean;
   permissionMode: string;
+  askPermission: boolean;
   routingMode: 'auto' | 'manual';
   attachments: string[];
   onSend: (text: string) => void;
@@ -271,7 +274,7 @@ export function Composer({
         <select
           class="mode-select"
           title={PERMISSION_MODES.find((m) => m.id === permissionMode)?.hint}
-          value={permissionMode}
+          value={askPermission ? 'ask' : permissionMode}
           onChange={(e) => onModeChange({ permissionMode: (e.target as HTMLSelectElement).value })}
         >
           {PERMISSION_MODES.map((m) => (

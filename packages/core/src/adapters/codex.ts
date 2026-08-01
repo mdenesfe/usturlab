@@ -5,6 +5,8 @@ import { EventQueue, JsonRpcProcess, type RpcNotification } from './jsonRpc.js';
 import { getNumber, getObject, getString } from './ndjson.js';
 import { detectCodexLimit, isTransientFailure } from './limits.js';
 import { describeToolUse } from './toolDetail.js';
+import { sameTasks, tasksFromCodexPlan } from './taskList.js';
+import { PermissionGate, codexApprovalKind } from './permission.js';
 import { buildChildEnv } from '../accounts/env.js';
 import type { AdapterEvent, PermissionMode, ResolvedAccount } from '../types.js';
 
@@ -82,11 +84,21 @@ export class CodexAdapter implements ProviderAdapter {
     let text = '';
     let finished = false;
     let stderrTail = '';
+    let lastTasks: ReturnType<typeof tasksFromCodexPlan> = [];
     const openItems = new Map<string, string>();
+
+    const gate = new PermissionGate({
+      mode: req.permissionMode,
+      ask: req.askPermission === true,
+      emit: (request) => events.push({ type: 'permission', request }),
+      resolved: (id, allowed) => events.push({ type: 'permission-resolved', id, allowed }),
+    });
+    if (req.handle) req.handle.respondPermission = (id, decision) => gate.respond(id, decision);
 
     const finish = (event?: AdapterEvent) => {
       if (finished) return;
       finished = true;
+      gate.close();
       if (event) events.push(event);
       events.end();
       rpc.dispose();
@@ -141,6 +153,14 @@ export class CodexAdapter implements ProviderAdapter {
           }
           break;
         }
+        case 'turn/plan/updated': {
+          const items = tasksFromCodexPlan(n.params);
+          if (items.length > 0 && !sameTasks(items, lastTasks)) {
+            lastTasks = items;
+            events.push({ type: 'tasks', items });
+          }
+          break;
+        }
         case 'item/completed': {
           const item = getObject(n.params, 'item');
           const itemId = getString(item, 'id');
@@ -184,9 +204,30 @@ export class CodexAdapter implements ProviderAdapter {
       env,
       signal,
       onNotification,
-      // Approval requests are pre-answered by the permission mode we start
-      // the thread with; approve so a run never hangs waiting on a dialog.
-      onServerRequest: () => ({ decision: 'approved' }),
+      // Codex asks before running commands and before applying patches. In
+      // ask mode that question reaches the user; otherwise the permission
+      // mode answers it, and a run never hangs on a dialog nobody sees.
+      onServerRequest: async (r) => {
+        const kind = codexApprovalKind(r.method);
+        if (!kind) return { decision: 'approved' };
+        const detail =
+          getString(r.params, 'command') ??
+          getString(r.params, 'reason') ??
+          getString(r.params, 'patch');
+        const decision = await gate.ask({
+          id: `${r.id}`,
+          kind,
+          title:
+            kind === 'command'
+              ? `run \`${(detail ?? 'a command').split('\n')[0]}\``
+              : kind === 'edit'
+                ? `apply changes to ${getString(r.params, 'path') ?? 'the workspace'}`
+                : 'a permission change',
+          detail,
+          path: getString(r.params, 'path'),
+        });
+        return { decision: decision.outcome === 'deny' ? 'denied' : 'approved' };
+      },
       onStderr: (line) => {
         if (!line.includes('models cache')) stderrTail = (stderrTail + '\n' + line).slice(-4096);
       },
@@ -216,7 +257,9 @@ export class CodexAdapter implements ProviderAdapter {
 
         const threadParams: Record<string, unknown> = {
           cwd: req.cwd,
-          approvalPolicy: 'never',
+          // 'never' would decide everything server-side and never reach us, so
+          // ask mode has to opt in to being asked.
+          approvalPolicy: req.askPermission ? 'on-request' : 'never',
           sandbox: SANDBOX[req.permissionMode],
         };
         if (req.model) threadParams.model = req.model;

@@ -10,7 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "test:live": "USTURLAB_LIVE=1 vitest run test/live-brief.test.ts test/live-quality.test.ts"
+    "test:live": "USTURLAB_LIVE=1 vitest run test/live-brief.test.ts test/live-quality.test.ts test/live-ask.test.ts"
   },
   "dependencies": {
     "minimatch": "^10.0.1",

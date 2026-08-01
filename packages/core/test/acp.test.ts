@@ -13,7 +13,12 @@ const AGENT = fileURLToPath(new URL('./fixtures/fake-acp-agent.mjs', import.meta
 
 function run(
   prompt: string,
-  opts: { handle?: LiveRunHandle; permissionMode?: PermissionMode; resumeSessionId?: string } = {},
+  opts: {
+    handle?: LiveRunHandle;
+    permissionMode?: PermissionMode;
+    resumeSessionId?: string;
+    askPermission?: boolean;
+  } = {},
 ) {
   const req: RunRequest = {
     prompt,
@@ -21,6 +26,7 @@ function run(
     permissionMode: opts.permissionMode ?? 'edits',
     handle: opts.handle,
     resumeSessionId: opts.resumeSessionId,
+    askPermission: opts.askPermission,
   };
   return runAcp({
     command: process.execPath,
@@ -57,14 +63,37 @@ describe('ACP adapter', () => {
     expect(tool).toMatchObject({ name: 'Shell', detail: 'ls -la' });
   });
 
-  it('answers permission requests according to the permission mode', async () => {
+  it('answers permission requests from the mode, silently, when not asking', async () => {
     const granted = await collect(run('PERMISSION check', { permissionMode: 'edits' }));
     expect((granted.at(-1) as { text: string }).text).toContain('PERMISSION-GRANTED');
-    expect(granted.some((e) => e.type === 'tool-use' && e.name === 'permission granted')).toBe(true);
 
     const denied = await collect(run('PERMISSION check', { permissionMode: 'safe' }));
     expect((denied.at(-1) as { text: string }).text).toContain('PERMISSION-DENIED');
-    expect(denied.some((e) => e.type === 'tool-use' && e.name === 'permission denied')).toBe(true);
+
+    // Nobody was interrupted: the mode decided, so no question was raised.
+    for (const events of [granted, denied]) {
+      expect(events.some((e) => e.type === 'permission')).toBe(false);
+    }
+  });
+
+  it('raises the question instead when asking is on, and obeys the answer', async () => {
+    const handle: LiveRunHandle = {};
+    const events: AdapterEvent[] = [];
+    for await (const ev of run('PERMISSION check', {
+      permissionMode: 'edits',
+      askPermission: true,
+      handle,
+    })) {
+      events.push(ev);
+      if (ev.type === 'permission') {
+        expect(ev.request.kind).toBe('command');
+        handle.respondPermission?.(ev.request.id, { outcome: 'deny' });
+      }
+    }
+    expect(events.some((e) => e.type === 'permission')).toBe(true);
+    expect(events.some((e) => e.type === 'permission-resolved')).toBe(true);
+    // Denied even though the mode alone would have allowed it.
+    expect((events.at(-1) as { text: string }).text).toContain('PERMISSION-DENIED');
   });
 
   it('delivers a mid-run message and answers it as its own turn', async () => {

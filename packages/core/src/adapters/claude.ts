@@ -4,6 +4,7 @@ import { spawnLines } from './spawn.js';
 import { getNumber, getObject, getString, tryParseJson } from './ndjson.js';
 import { detectClaudeLimit, isTransientFailure } from './limits.js';
 import { describeToolUse } from './toolDetail.js';
+import { sameTasks, tasksFromTodoWrite } from './taskList.js';
 import { buildChildEnv } from '../accounts/env.js';
 import type { AdapterEvent, PermissionMode, ResolvedAccount } from '../types.js';
 
@@ -37,6 +38,10 @@ export class ClaudeAdapter implements ProviderAdapter {
   ): AsyncGenerator<AdapterEvent> {
     // stream-json input keeps stdin open, so additional user messages can be
     // injected into the RUNNING session (Claude answers them as extra turns).
+    // Asking replaces the mode flag rather than joining it: plan would refuse
+    // to act at all and bypassPermissions would never consult the prompt tool,
+    // so ask mode leaves Claude on its default and lets the tool decide.
+    const asking = req.askPermission === true && !!req.hostArgs && req.permissionMode !== 'safe';
     const args = [
       '-p',
       '--input-format',
@@ -45,19 +50,24 @@ export class ClaudeAdapter implements ProviderAdapter {
       'stream-json',
       '--verbose',
       '--include-partial-messages',
-      ...PERMISSION_ARGS[req.permissionMode],
+      ...(asking ? [] : PERMISSION_ARGS[req.permissionMode]),
     ];
     if (req.model) args.push('--model', req.model);
     if (req.resumeSessionId) args.push('--resume', req.resumeSessionId);
     // Claude keeps its own system prompt and appends ours to it.
     if (req.systemBrief?.trim()) args.push('--append-system-prompt', req.systemBrief);
+    // Claude cannot ask over stream-json — `--permission-mode manual` silently
+    // degrades to `default` in headless mode. Its real hook is an MCP tool it
+    // calls before acting, which the host supplies.
+    if (asking) args.push(...req.hostArgs!.args);
 
-    const env = this.buildEnv(account, process.env);
+    const env = { ...this.buildEnv(account, process.env), ...(req.hostArgs?.env ?? {}) };
     let sawRateLimitRetry = false;
     let sawResult = false;
     let sessionEmitted = false;
     let stderrTail = '';
     let lastText = '';
+    let lastTasks: ReturnType<typeof tasksFromTodoWrite> = [];
 
     let stdin: NodeJS.WritableStream | undefined;
     let pendingTurns = 0;
@@ -164,6 +174,13 @@ export class ClaudeAdapter implements ProviderAdapter {
           for (const block of content) {
             const b = block as Record<string, unknown>;
             if (b.type === 'tool_use' && typeof b.name === 'string') {
+              if (b.name === 'TodoWrite') {
+                const items = tasksFromTodoWrite(b.input);
+                if (items.length > 0 && !sameTasks(items, lastTasks)) {
+                  lastTasks = items;
+                  yield { type: 'tasks', items };
+                }
+              }
               const info = describeToolUse(b.name, b.input, req.cwd);
               yield {
                 type: 'tool-use',

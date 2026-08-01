@@ -1,4 +1,4 @@
-import type { ProviderId, RulesFile, SlashCommand, Target, ToolAction, UsageWindow, TaskMetric, Rule, RuleTarget } from '@usturlab/core';
+import type { ProviderId, RulesFile, SlashCommand, Target, TaskItem, ToolAction, PermissionRequest, PermissionDecision, UsageWindow, TaskMetric, Rule, RuleTarget } from '@usturlab/core';
 
 export interface AccountStatusDto {
   id: string;
@@ -50,7 +50,9 @@ export type WebviewToHost =
   | { kind: 'saveDefaultChain'; chain: RuleTarget[] }
   | { kind: 'refreshUsage' }
   | { kind: 'openAnalytics' }
-  | { kind: 'clearAnalytics' };
+  | { kind: 'clearAnalytics' }
+  | { kind: 'permissionDecision'; id: string; decision: PermissionDecision }
+  | { kind: 'setAskPermission'; ask: boolean };
 
 export type HostToWebview =
   | { kind: 'userEcho'; text: string }
@@ -74,8 +76,11 @@ export type HostToWebview =
   | { kind: 'accounts'; accounts: AccountStatusDto[] }
   | { kind: 'conversations'; list: ConversationMeta[]; activeId: string }
   | { kind: 'rules'; rules: RulesFile; path: string; exists: boolean; error?: string; customCommands: SlashCommand[] }
-  | { kind: 'modes'; permissionMode: string; routingMode: 'auto' | 'manual' }
+  | { kind: 'modes'; permissionMode: string; routingMode: 'auto' | 'manual'; askPermission?: boolean }
   | { kind: 'attachments'; paths: string[] }
   | { kind: 'conversationReset' }
   | { kind: 'review'; messageId: string; by: string; text: string }
+  | { kind: 'tasks'; messageId: string; items: TaskItem[] }
+  | { kind: 'permission'; messageId: string; request: PermissionRequest; target?: Target }
+  | { kind: 'permissionResolved'; id: string; allowed: boolean }
   | { kind: 'analytics'; metrics: TaskMetric[]; accounts: AccountStatusDto[] };

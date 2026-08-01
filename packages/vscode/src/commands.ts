@@ -103,6 +103,16 @@ export function registerCommands(
     vscode.commands.registerCommand('usturlab.openRules', () => chat.openRulesTab()),
 
     vscode.commands.registerCommand('usturlab.openAnalytics', () => chat.openAnalyticsTab()),
+    vscode.commands.registerCommand('usturlab.toggleAsk', async () => {
+      const config = vscode.workspace.getConfiguration('usturlab');
+      const next = !config.get<boolean>('askPermission', false);
+      await config.update('askPermission', next, vscode.ConfigurationTarget.Global);
+      void vscode.window.showInformationMessage(
+        next
+          ? 'usturlab will ask before each command or file change.'
+          : 'usturlab will decide from the permission mode again.',
+      );
+    }),
 
     vscode.commands.registerCommand('usturlab.cancelTask', () => chat.cancelAll()),
 

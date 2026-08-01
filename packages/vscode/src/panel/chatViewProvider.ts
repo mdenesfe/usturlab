@@ -22,6 +22,8 @@ import {
   revisionPrompt,
   isClean,
   parsePlan,
+  type PermissionDecision,
+  type PermissionRequest,
   pickExecutor,
   executePrompt,
   executorTier,
@@ -55,6 +57,9 @@ const REPLAYED_KINDS = new Set<HostToWebview['kind']>([
   'notice',
   'failover',
   'review',
+  'tasks',
+  'permission',
+  'permissionResolved',
   'done',
   'error',
 ]);
@@ -114,6 +119,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   /** What the router needs to keep a thread on one model: where it ran and how heavy it got. */
   /** Conversations the user had to interject into — a signal the model was off track. */
   private steeredRuns = new Set<string>();
+  /** Claude's bridge answers arrive outside any adapter, so they wait here. */
+  private pendingBridge = new Map<string, (decision: PermissionDecision) => void>();
   private threadContext = new Map<
     string,
     {
@@ -386,6 +393,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       kind: 'modes',
       permissionMode: config.get<string>('permissionMode', 'safe'),
       routingMode: config.get<'auto' | 'manual'>('routingMode', 'auto'),
+      askPermission: config.get<boolean>('askPermission', false),
     };
   }
 
@@ -663,6 +671,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       case 'openAnalytics':
         this.openAnalyticsTab();
         break;
+      case 'permissionDecision':
+        // The surface knows which conversation it belongs to; the webview
+        // never has to track it.
+        if (surface.conversationId) {
+          this.answerPermission(surface.conversationId, msg.id, msg.decision);
+        }
+        return;
+      case 'setAskPermission':
+        await vscode.workspace
+          .getConfiguration('usturlab')
+          .update('askPermission', msg.ask, vscode.ConfigurationTarget.Global);
+        // Every open surface reflects the switch, not just the one clicked.
+        for (const [w] of this.surfaces) this.safePost(w, this.modesMessage());
+        return;
       case 'clearAnalytics':
         void this.metrics.clear();
         break;
@@ -1068,6 +1090,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           }
           case 'brief':
             briefLineIds = ev.lineIds;
+            break;
+          case 'tasks':
+            post({ kind: 'tasks', messageId: currentId(), items: ev.items });
+            break;
+          case 'permission':
+            // The CLI is blocked until the user answers, so this cannot be a
+            // toast that scrolls away — it goes into the transcript.
+            post({
+              kind: 'permission',
+              messageId: currentId(),
+              request: ev.request,
+              target: live.lastTarget,
+            });
+            this.notifyPermission(conversationId, ev.request);
+            break;
+          case 'permission-resolved':
+            post({ kind: 'permissionResolved', id: ev.id, allowed: ev.allowed });
             break;
           case 'result': {
             answerText = ev.text;
@@ -1484,6 +1523,73 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       this.output.appendLine(`[off-thread] ${formatTarget(target)}: ${(e as Error).message}`);
       return undefined;
     }
+  }
+
+  /**
+   * A blocked run is worth a notification: the model is idle until the user
+   * answers, and the tab may not even be visible. Answering from the toast
+   * saves a trip back to the panel.
+   */
+  private notifyPermission(conversationId: string, request: PermissionRequest): void {
+    if (this.isVisible(conversationId)) return;
+    const title = request.title.length > 70 ? request.title.slice(0, 70) + '…' : request.title;
+    void vscode.window
+      .showWarningMessage(`usturlab is waiting: ${title}`, 'Allow', 'Allow always', 'Deny')
+      .then((choice) => {
+        if (!choice) return;
+        const decision: PermissionDecision =
+          choice === 'Deny'
+            ? { outcome: 'deny' }
+            : choice === 'Allow always'
+              ? { outcome: 'allow-always' }
+              : { outcome: 'allow' };
+        this.answerPermission(conversationId, request.id, decision);
+      });
+  }
+
+  /** Releases the waiting CLI with the user's answer. */
+  answerPermission(conversationId: string, id: string, decision: PermissionDecision): void {
+    const live = this.liveRuns.get(conversationId);
+    if (live?.handle.respondPermission) {
+      live.handle.respondPermission(id, decision);
+      return;
+    }
+    // Claude's prompt runs through the bridge, which is not tied to a run.
+    this.pendingBridge.get(id)?.(decision);
+    this.pendingBridge.delete(id);
+  }
+
+  /** Claude asks through the MCP bridge, outside the adapter event stream. */
+  async askViaBridge(request: PermissionRequest): Promise<PermissionDecision> {
+    const conversationId = this.activeConversationId();
+    if (!conversationId) return { outcome: 'deny', reason: 'no active conversation' };
+    const live = this.liveRuns.get(conversationId);
+    this.toConversation(conversationId, {
+      kind: 'permission',
+      messageId: live?.messageIds[live.turnIdx] ?? shortId(),
+      request,
+      target: live?.lastTarget,
+    });
+    this.notifyPermission(conversationId, request);
+    const decision = await new Promise<PermissionDecision>((resolve) => {
+      this.pendingBridge.set(request.id, resolve);
+    });
+    this.toConversation(conversationId, {
+      kind: 'permissionResolved',
+      id: request.id,
+      allowed: decision.outcome !== 'deny',
+    });
+    return decision;
+  }
+
+  /** The conversation a bridge request belongs to: the one currently running. */
+  private activeConversationId(): string | undefined {
+    for (const [id] of this.tasks) return id;
+    return undefined;
+  }
+
+  private isVisible(conversationId: string): boolean {
+    return this.panels.get(conversationId)?.active === true;
   }
 
   /** Toast when a run ends while the user is looking elsewhere. */
