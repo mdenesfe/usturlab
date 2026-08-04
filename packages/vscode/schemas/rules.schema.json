@@ -28,9 +28,22 @@
         "model": { "type": "string", "description": "Optional model override (e.g. sonnet, haiku, gemini-2.5-flash). Omit for codex — ChatGPT accounts only accept the CLI default." }
       }
     },
+    "exclusion": {
+      "type": "object",
+      "required": ["provider"],
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "enum": ["claude", "codex", "gemini", "copilot"] },
+        "account": { "type": "string", "minLength": 1, "description": "Bar only this account. Omit to bar the whole provider." }
+      }
+    },
     "rule": {
       "type": "object",
-      "required": ["id", "match", "target"],
+      "required": ["id", "match"],
+      "anyOf": [
+        { "required": ["target"] },
+        { "required": ["exclude"] }
+      ],
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "minLength": 1 },
@@ -51,8 +64,14 @@
         "target": {
           "type": "array",
           "minItems": 1,
-          "description": "Failover chain for this rule, tried in order.",
+          "description": "Failover chain for this rule, tried in order. Optional when the rule only excludes.",
           "items": { "$ref": "#/definitions/target" }
+        },
+        "exclude": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Never route matching work here — applied to the whole chain, including the default chain. An explicit @mention still overrides it.",
+          "items": { "$ref": "#/definitions/exclusion" }
         }
       }
     }

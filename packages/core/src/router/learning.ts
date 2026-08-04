@@ -1,4 +1,4 @@
-import type { ProviderId } from '../types.js';
+import type { ProviderId, Tier } from '../types.js';
 import type { TaskMetric } from '../quota/metricsSchema.js';
 import { median } from '../quota/metricsSchema.js';
 
@@ -60,6 +60,7 @@ export function isRetry(previous: string, next: string, gapMs: number): boolean 
 export interface ProviderPerformance {
   provider: ProviderId;
   kind?: string;
+  tier?: Tier;
   runs: number;
   cleanRate: number;
   medianDurationMs: number;
@@ -76,16 +77,24 @@ export function measurePerformance(
   metrics: TaskMetric[],
   provider: ProviderId,
   kind?: string,
+  tier?: Tier,
 ): ProviderPerformance {
   // A dropped connection is not a verdict on the account — it would otherwise
   // punish whichever provider happened to be running when the network blipped.
   const relevant = metrics.filter(
-    (m) => m.provider === provider && !m.transient && (kind === undefined || m.kind === kind),
+    (m) =>
+      m.provider === provider &&
+      !m.transient &&
+      (kind === undefined || m.kind === kind) &&
+      // Runs recorded before tiers were tracked carry no tier and are simply
+      // not evidence about one; they still count in the untiered probes.
+      (tier === undefined || m.tier === tier),
   );
   const clean = relevant.filter(isCleanRun);
   return {
     provider,
     kind,
+    tier,
     runs: relevant.length,
     cleanRate: relevant.length > 0 ? clean.length / relevant.length : 0,
     medianDurationMs: median(clean.map((m) => m.durationMs ?? 0).filter((d) => d > 0)),
@@ -98,26 +107,38 @@ export function measurePerformance(
  *
  * The observed clean-rate is compared against a neutral baseline (0.8): doing
  * better pulls the score up, worse pulls it down, and the pull is scaled by
- * how much evidence exists. Kind-specific evidence is preferred; the
- * provider's overall record fills in until a kind has its own history.
+ * how much evidence exists.
+ *
+ * Evidence is keyed by tier as well as kind, because a provider is not one
+ * model. Measuring only per-provider meant a string of scrappy runs on the
+ * cheap model dragged down the score that decides whether the *expensive* one
+ * gets the hard work — and vice versa. Probes run most-specific first, and each
+ * fallback is a weaker claim about the model actually being considered, so it
+ * is trusted proportionally less.
  */
 export function calibrateAffinity(
   staticAffinity: number,
   metrics: TaskMetric[],
   provider: ProviderId,
   kind: string,
+  tier?: Tier,
 ): { affinity: number; performance: ProviderPerformance } {
-  const forKind = measurePerformance(metrics, provider, kind);
-  const overall = measurePerformance(metrics, provider);
-  // Kind evidence leads; overall evidence backs it up at half weight.
-  const evidence =
-    forKind.runs >= 3
-      ? forKind
-      : overall.runs >= 3
-        ? { ...overall, confidence: overall.confidence * 0.5 }
-        : { ...forKind, confidence: 0 };
+  const probes: Array<{ perf: ProviderPerformance; weight: number }> = [];
+  if (tier) {
+    probes.push({ perf: measurePerformance(metrics, provider, kind, tier), weight: 1 });
+    probes.push({ perf: measurePerformance(metrics, provider, undefined, tier), weight: 0.5 });
+  }
+  probes.push({ perf: measurePerformance(metrics, provider, kind), weight: tier ? 0.5 : 1 });
+  probes.push({ perf: measurePerformance(metrics, provider), weight: tier ? 0.25 : 0.5 });
 
-  if (evidence.confidence <= 0) return { affinity: staticAffinity, performance: forKind };
+  const MIN_RUNS = 3;
+  const chosen = probes.find((p) => p.perf.runs >= MIN_RUNS);
+  const fallback = probes[0]!.perf;
+  const evidence = chosen
+    ? { ...chosen.perf, confidence: chosen.perf.confidence * chosen.weight }
+    : { ...fallback, confidence: 0 };
+
+  if (evidence.confidence <= 0) return { affinity: staticAffinity, performance: fallback };
 
   const BASELINE = 0.8;
   const delta = evidence.cleanRate - BASELINE;
@@ -125,6 +146,8 @@ export function calibrateAffinity(
   const adjusted = staticAffinity * (1 + evidence.confidence * delta * 0.5);
   return {
     affinity: Math.max(0.35, Math.min(1, adjusted)),
-    performance: forKind.runs > 0 ? forKind : overall,
+    // Report the evidence actually used, so callers reading medianDurationMs
+    // get the timings of the runs the score was built from.
+    performance: chosen ? chosen.perf : fallback,
   };
 }

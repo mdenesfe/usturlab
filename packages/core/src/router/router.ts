@@ -53,6 +53,19 @@ export function route(
   let escalated: { from: string; to: string } | undefined;
   let suggestPermission: RoutingDecision['suggestPermission'];
   let estimatedBurnPct: number | undefined;
+  let tier: RoutingDecision['tier'];
+
+  const matchTask = { ...task, prompt: cleaned };
+  const matched = rules.rules.filter((r) => matchesRule(r, matchTask));
+  // Every matching rule contributes its bans, not just the one that won the
+  // routing — a rule that only says "never gemini for security work" is a whole
+  // rule on its own and must not have to name a target to be heard.
+  const bans = matched.flatMap((r) => (r.exclude ?? []).map((e) => ({ ...e, ruleId: r.id })));
+  const bannedBy = (t: Target) =>
+    bans.find((b) => b.provider === t.provider && (!b.account || b.account === t.account));
+  // Typing @gemini is a deliberate override of your own rule, so what you named
+  // survives the ban. Everything the router appended behind it does not.
+  const mentioned = new Set<string>();
 
   if (mention) {
     const mentionTargets: Target[] = [];
@@ -70,21 +83,24 @@ export function route(
         mentionTargets.push({ provider: c.provider, account: c.label, model: mention.model });
       }
     }
+    for (const t of mentionTargets) mentioned.add(targetKey(t));
     raw = [...mentionTargets, ...defaultChain];
     reason = `@${mention.provider}${mention.account ? ':' + mention.account : ''} mention`;
   } else {
-    const matchTask = { ...task, prompt: cleaned };
-    // User rules stay primary — they always win over automatic choice.
-    const rule = rules.rules.find((r) => matchesRule(r, matchTask));
+    // User rules stay primary — they always win over automatic choice. A rule
+    // with no target only bans, so it is not the one that decides where to go.
+    const rule = matched.find((r) => r.target.length > 0);
     if (rule) {
       raw = [...rule.target, ...defaultChain];
       ruleId = rule.id;
       reason = rule.description ?? `rule: ${rule.id}`;
     } else if (mode === 'auto') {
       classification = classifyTask(matchTask);
-      // A bare "yes, go ahead" carries the thread's weight, not its own.
-      if (isContinuation(cleaned) && options.conversation?.peakComplexity) {
-        classification = { ...classification, complexity: options.conversation.peakComplexity };
+      // A bare "yes, go ahead" carries the weight of the turn it is answering,
+      // not its own.
+      const previous = options.conversation?.recentComplexity?.[0];
+      if (isContinuation(cleaned) && previous) {
+        classification = { ...classification, complexity: previous };
       }
       const auto = autoRoute(classification, accounts, quota, {
         metrics: options.metrics,
@@ -97,6 +113,7 @@ export function route(
       escalated = auto.escalated;
       suggestPermission = auto.suggestPermission;
       estimatedBurnPct = auto.burn?.pct;
+      tier = auto.tier;
     } else {
       raw = defaultChain;
       reason = rules.defaultChain.length > 0 ? 'default chain' : 'priority order';
@@ -111,6 +128,12 @@ export function route(
     const key = targetKey(target);
     if (seen.has(key)) continue;
     seen.add(key);
+
+    const ban = mentioned.has(key) ? undefined : bannedBy(target);
+    if (ban) {
+      skipped.push({ target, reason: `excluded by rule "${ban.ruleId}"` });
+      continue;
+    }
 
     const account = resolveTargetAccount(target, accounts);
     if (!account) {
@@ -140,6 +163,7 @@ export function route(
       escalated,
       suggestPermission,
       estimatedBurnPct,
+      tier,
     },
     cleanedPrompt: cleaned,
   };

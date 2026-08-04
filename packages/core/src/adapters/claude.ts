@@ -6,13 +6,49 @@ import { detectClaudeLimit, isTransientFailure } from './limits.js';
 import { describeToolUse } from './toolDetail.js';
 import { sameTasks, tasksFromTodoWrite } from './taskList.js';
 import { buildChildEnv } from '../accounts/env.js';
-import type { AdapterEvent, PermissionMode, ResolvedAccount } from '../types.js';
+import type { AdapterEvent, AgentStatus, PermissionMode, ResolvedAccount } from '../types.js';
 
 const PERMISSION_ARGS: Record<PermissionMode, string[]> = {
   safe: ['--permission-mode', 'plan'],
   edits: ['--permission-mode', 'acceptEdits'],
   full: ['--dangerously-skip-permissions'],
 };
+
+/** Claude spawns subagents through this tool; the name has changed across versions. */
+function isAgentTool(name: string): boolean {
+  const tool = name.toLowerCase();
+  return tool === 'task' || tool === 'agent';
+}
+
+/**
+ * Claude's own words for how a task ended, mapped onto ours — undefined when
+ * it has not ended. Agents are often launched asynchronously, and then the
+ * parent's tool_result comes back at once with `async_launched`: treating that
+ * as an ending closes the lane while the agent is still working, and the next
+ * agent no longer overlaps it, so the fan-out stops looking parallel too.
+ */
+function agentStatus(raw: string | undefined): Exclude<AgentStatus, 'running'> | undefined {
+  if (raw === 'completed' || raw === 'success') return 'completed';
+  if (raw === 'cancelled' || raw === 'canceled' || raw === 'aborted' || raw === 'interrupted') {
+    return 'cancelled';
+  }
+  if (raw === 'failed' || raw === 'error') return 'failed';
+  return undefined;
+}
+
+/** A tool_result body is either a plain string or a list of content blocks. */
+function resultText(content: unknown): string | undefined {
+  if (typeof content === 'string') return content.trim() || undefined;
+  if (!Array.isArray(content)) return undefined;
+  const text = content
+    .map((block) => {
+      const b = block as Record<string, unknown>;
+      return b?.type === 'text' && typeof b.text === 'string' ? b.text : '';
+    })
+    .join('')
+    .trim();
+  return text || undefined;
+}
 
 export class ClaudeAdapter implements ProviderAdapter {
   readonly id = 'claude' as const;
@@ -68,6 +104,12 @@ export class ClaudeAdapter implements ProviderAdapter {
     let stderrTail = '';
     let lastText = '';
     let lastTasks: ReturnType<typeof tasksFromTodoWrite> = [];
+    // Subagents, keyed by the tool call that spawned them — several run at once,
+    // so every later event has to find its own lane again.
+    const agents = new Set<string>();
+    const taskToTool = new Map<string, string>();
+    const endStatus = new Map<string, string>();
+    const ended = new Set<string>();
 
     let stdin: NodeJS.WritableStream | undefined;
     let pendingTurns = 0;
@@ -135,6 +177,48 @@ export class ClaudeAdapter implements ProviderAdapter {
           }
         } else if (msg.subtype === 'api_retry' && msg.error === 'rate_limit') {
           sawRateLimitRetry = true;
+        } else if (msg.subtype === 'task_started') {
+          // The lane already exists (its tool_use block opened it); this only
+          // ties Claude's task id to it, since later patches carry nothing else.
+          const toolUseId = getString(msg, 'tool_use_id');
+          const taskId = getString(msg, 'task_id');
+          if (toolUseId && taskId) taskToTool.set(taskId, toolUseId);
+        } else if (msg.subtype === 'task_progress') {
+          const id = getString(msg, 'tool_use_id');
+          if (id && agents.has(id) && !ended.has(id)) {
+            yield {
+              type: 'agent-progress',
+              id,
+              activity: getString(msg, 'description'),
+              lastTool: getString(msg, 'last_tool_name'),
+              toolUses: getNumber(msg, 'usage', 'tool_uses'),
+              tokens: getNumber(msg, 'usage', 'total_tokens'),
+              durationMs: getNumber(msg, 'usage', 'duration_ms'),
+            };
+          }
+        } else if (msg.subtype === 'task_updated') {
+          // Carries the verdict but no summary; the notification right after
+          // has both, so only the verdict is kept here.
+          const taskId = getString(msg, 'task_id');
+          const status = getString(msg, 'patch', 'status');
+          const id = taskId ? taskToTool.get(taskId) : undefined;
+          if (id && status) endStatus.set(id, status);
+        } else if (msg.subtype === 'task_notification') {
+          const id = getString(msg, 'tool_use_id');
+          if (id && agents.has(id) && !ended.has(id)) {
+            ended.add(id);
+            yield {
+              type: 'agent-end',
+              id,
+              // The notification only fires once a task is over, so an
+              // unfamiliar word here still means "finished".
+              status: agentStatus(getString(msg, 'status') ?? endStatus.get(id)) ?? 'completed',
+              summary: getString(msg, 'summary'),
+              toolUses: getNumber(msg, 'usage', 'tool_uses'),
+              tokens: getNumber(msg, 'usage', 'total_tokens'),
+              durationMs: getNumber(msg, 'usage', 'duration_ms'),
+            };
+          }
         }
         continue;
       }
@@ -169,12 +253,37 @@ export class ClaudeAdapter implements ProviderAdapter {
       }
 
       if (type === 'assistant') {
+        // Set on everything a subagent does — that is what tells its work apart
+        // from the main thread's when several agents run at once.
+        const parent = getString(msg, 'parent_tool_use_id');
         const content = getObject(msg, 'message')?.content;
         if (Array.isArray(content)) {
           for (const block of content) {
             const b = block as Record<string, unknown>;
             if (b.type === 'tool_use' && typeof b.name === 'string') {
-              if (b.name === 'TodoWrite') {
+              const toolId = typeof b.id === 'string' ? b.id : undefined;
+              // Spawning an agent opens a lane instead of adding a timeline row.
+              // Nested spawns stay rows inside their parent's lane: the panel
+              // shows concurrency, and a nested lane would read as a sibling.
+              if (isAgentTool(b.name) && toolId && !parent) {
+                const input = (b.input && typeof b.input === 'object' ? b.input : {}) as Record<
+                  string,
+                  unknown
+                >;
+                const description = typeof input.description === 'string' ? input.description.trim() : '';
+                agents.add(toolId);
+                yield {
+                  type: 'agent-start',
+                  id: toolId,
+                  label: description || b.name,
+                  agentKind: typeof input.subagent_type === 'string' ? input.subagent_type : undefined,
+                  prompt: typeof input.prompt === 'string' ? input.prompt : undefined,
+                  background: input.run_in_background === true,
+                };
+                continue;
+              }
+              // A subagent's own checklist is not the conversation's plan.
+              if (b.name === 'TodoWrite' && !parent) {
                 const items = tasksFromTodoWrite(b.input);
                 if (items.length > 0 && !sameTasks(items, lastTasks)) {
                   lastTasks = items;
@@ -189,8 +298,41 @@ export class ClaudeAdapter implements ProviderAdapter {
                 preview: info.preview,
                 path: info.path,
                 action: info.action,
+                agentId: parent,
               };
             }
+          }
+        }
+        continue;
+      }
+
+      // A foreground subagent comes back as a tool_result on the main thread —
+      // the one end signal that is guaranteed, whatever else the CLI emitted.
+      if (type === 'user' && !getString(msg, 'parent_tool_use_id')) {
+        const content = getObject(msg, 'message')?.content;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            const b = block as Record<string, unknown>;
+            if (b.type !== 'tool_result' || typeof b.tool_use_id !== 'string') continue;
+            const id = b.tool_use_id;
+            if (!agents.has(id) || ended.has(id)) continue;
+            // Only a terminal result ends the lane; a launch acknowledgement
+            // ("async_launched") means the agent is only just getting started.
+            const status =
+              b.is_error === true
+                ? ('failed' as const)
+                : agentStatus(getString(msg, 'tool_use_result', 'status') ?? endStatus.get(id));
+            if (!status) continue;
+            ended.add(id);
+            yield {
+              type: 'agent-end',
+              id,
+              status,
+              summary: resultText(b.content),
+              toolUses: getNumber(msg, 'tool_use_result', 'totalToolUseCount'),
+              tokens: getNumber(msg, 'tool_use_result', 'totalTokens'),
+              durationMs: getNumber(msg, 'tool_use_result', 'totalDurationMs'),
+            };
           }
         }
         continue;

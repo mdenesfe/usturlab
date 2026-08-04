@@ -50,7 +50,9 @@ function computeSuggestions(
         }));
     }
     return accounts
-      .filter((a) => `${a.provider}:${a.label}`.toLowerCase().includes(q))
+      // A review-only account cannot be routed to, so offering it as a mention
+      // would only produce a target the router refuses.
+      .filter((a) => !a.reviewOnly && `${a.provider}:${a.label}`.toLowerCase().includes(q))
       .map((a) => ({
         insert: `@${a.provider}:${a.label}`,
         label: `${a.provider}:${a.label}`,
@@ -112,6 +114,9 @@ export function Composer({
   onRemoveAttachment: (path: string) => void;
 }) {
   const allCommands = [...customCommands, ...SLASH_COMMANDS];
+  // Accounts that can actually be given a task — a reviewer is connected but
+  // never routed to, so it must not make the composer look ready when it is not.
+  const routable = accounts.filter((a) => !a.reviewOnly);
   const [text, setText] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -194,8 +199,10 @@ export function Composer({
         ref={textareaRef}
         value={text}
         placeholder={
-          accounts.length === 0
-            ? 'No accounts yet — add one to start'
+          routable.length === 0
+            ? accounts.length === 0
+              ? 'No accounts yet — add one to start'
+              : 'Only a reviewer account is connected — add one that can do the work'
             : running
               ? 'Task running… Enter queues your next message · Esc stops'
               : 'Describe the task…  @ account · # tag · / command'
@@ -257,11 +264,17 @@ export function Composer({
         </div>
       )}
       <div class="composer-bar">
-        <button class="icon-btn attach-btn" title="Attach files" onClick={onPickAttachments}>
+        <button
+          class="icon-btn attach-btn"
+          title="Attach files"
+          aria-label="Attach files"
+          onClick={onPickAttachments}
+        >
           <IconPlus size={13} />
         </button>
         <select
           class="mode-select"
+          aria-label="Routing mode"
           title="Routing: Auto reads the task and picks the model; Manual follows your chain. Rules always win."
           value={routingMode}
           onChange={(e) =>
@@ -273,6 +286,7 @@ export function Composer({
         </select>
         <select
           class="mode-select"
+          aria-label="Permission mode"
           title={PERMISSION_MODES.find((m) => m.id === permissionMode)?.hint}
           value={askPermission ? 'ask' : permissionMode}
           onChange={(e) => onModeChange({ permissionMode: (e.target as HTMLSelectElement).value })}
@@ -284,10 +298,13 @@ export function Composer({
           ))}
         </select>
         <div class="account-strip">
-          {accounts.map((a) => (
+          {/* Every pill is a "route here" button; a reviewer has nowhere to route to. */}
+          {routable.map((a) => (
             <button
               key={a.id}
               class={`account-pill ${a.available ? '' : 'limited'}`}
+              // The pill says "ready" or "limited" with a coloured dot alone.
+              aria-label={`Route to ${a.provider}:${a.label} — ${a.available ? 'ready' : 'limited'}`}
               title={
                 a.available
                   ? (a.usage ?? []).map((u) => `${u.utilizationPct}% of ${u.label}`).join(' · ') ||
@@ -318,7 +335,7 @@ export function Composer({
           <button
             class="run-btn send"
             title="Send (Enter)"
-            disabled={!text.trim() || accounts.length === 0}
+            disabled={!text.trim() || routable.length === 0}
             onClick={submit}
           >
             <IconSend size={12} /> Send

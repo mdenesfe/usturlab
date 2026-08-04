@@ -88,6 +88,9 @@ const PER_PROVIDER: Record<ProviderId, BriefLine[]> = {
         'to continue.',
     },
   ],
+  // Reviews only, and the review prompt carries its own instructions — lines
+  // about editing files would describe work this provider cannot do.
+  openrouter: [],
 };
 
 /** Permission mode is a hard constraint; every provider is told the same one. */

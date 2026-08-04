@@ -11,6 +11,7 @@ import {
   CodexAdapter,
   CopilotAdapter,
   GeminiAdapter,
+  OpenRouterAdapter,
   Orchestrator,
   QuotaTracker,
   SessionStore,
@@ -56,6 +57,9 @@ export function activate(ctx: vscode.ExtensionContext): void {
   adapters.register(new CodexAdapter(cliPath('codex', 'codex')));
   adapters.register(new GeminiAdapter(cliPath('gemini', 'gemini')));
   adapters.register(new CopilotAdapter(cliPath('copilot', 'copilot')));
+  // No CLI and no subscription: an HTTP call to free open-weight models, used
+  // only to review what the others wrote.
+  adapters.register(new OpenRouterAdapter());
 
   const accounts = new AccountStore(ctx);
   void migrateFromUsrouter(accounts, (line) => output.appendLine(line));

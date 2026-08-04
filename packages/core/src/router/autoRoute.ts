@@ -1,4 +1,5 @@
-import type { AccountProfile, PermissionMode, ProviderId, Target } from '../types.js';
+import type { AccountProfile, PermissionMode, ProviderId, Target, Tier } from '../types.js';
+import { isReviewOnly } from '../types.js';
 import type { QuotaTracker } from '../quota/quotaTracker.js';
 import type { TaskMetric } from '../quota/metricsSchema.js';
 import type { Classification, Complexity, TaskKind } from './classify.js';
@@ -17,7 +18,7 @@ import { affordability, estimateBurn, type BurnEstimate } from './burn.js';
  * work genuinely got heavier.
  */
 
-export type Tier = 'light' | 'standard' | 'heavy';
+export type { Tier } from '../types.js';
 
 /** Model id per provider per tier; undefined means "let the CLI decide". */
 const TIER_MODELS: Record<ProviderId, Record<Tier, string | undefined>> = {
@@ -29,6 +30,9 @@ const TIER_MODELS: Record<ProviderId, Record<Tier, string | undefined>> = {
     standard: 'claude-sonnet-4.6',
     heavy: 'gpt-5.4',
   },
+  // Never routed to (review-only), so the tier never gets read; the adapter
+  // picks a free model for itself.
+  openrouter: { light: undefined, standard: undefined, heavy: undefined },
 };
 
 const TIER_BY_COMPLEXITY: Record<Complexity, Tier> = {
@@ -43,6 +47,9 @@ const TIER_RANK: Record<Tier, number> = { light: 0, standard: 1, heavy: 2 };
 /** Score bonus for keeping a conversation where it already is. */
 const STICKY_BASE = 12;
 
+/** Points a measurably faster account is worth on light work. */
+const SPEED_BONUS = 8;
+
 /** Prior capability per provider per kind of work (0..1), calibrated by use. */
 const KIND_AFFINITY: Record<TaskKind, Partial<Record<ProviderId, number>>> = {
   question: { claude: 0.9, codex: 0.85, gemini: 0.85, copilot: 0.8 },
@@ -56,13 +63,23 @@ const KIND_AFFINITY: Record<TaskKind, Partial<Record<ProviderId, number>>> = {
   agentic: { claude: 0.95, codex: 0.95, gemini: 0.75, copilot: 0.8 },
 };
 
+/** How many past turns still carry weight when sizing this one. */
+const RECENT_TURNS = 2;
+
+const TIER_ORDER: Tier[] = ['light', 'standard', 'heavy'];
+
 /** What the router knows about the conversation this message belongs to. */
 export interface ConversationContext {
   /** Where the previous turns of this conversation ran. */
   lastTarget?: Target;
-  /** Complexity of the heaviest turn so far. */
-  peakComplexity?: Complexity;
+  /** Complexity of the last few turns, newest first. */
+  recentComplexity?: Complexity[];
   turnCount: number;
+}
+
+/** The heavier of two tiers. */
+function heavier(a: Tier, b: Tier): Tier {
+  return TIER_RANK[a] >= TIER_RANK[b] ? a : b;
 }
 
 export interface AutoRouteResult {
@@ -73,6 +90,8 @@ export interface AutoRouteResult {
   /** The router wants this turn reviewed before it writes code. */
   suggestPermission?: PermissionMode;
   burn?: BurnEstimate;
+  /** Weight class chosen for this turn — recorded with the run. */
+  tier: Tier;
 }
 
 interface Candidate {
@@ -81,6 +100,10 @@ interface Candidate {
   headroom: number;
   burn: BurnEstimate;
   account: AccountProfile;
+  /** Measured median of this account's clean runs, 0 when unmeasured. */
+  medianDurationMs: number;
+  /** How many runs that median came from. */
+  runs: number;
 }
 
 export interface AutoRouteOptions {
@@ -116,16 +139,24 @@ export function autoRoute(
 
   // ── tier, with conversation memory ────────────────────
   const messageTier = TIER_BY_COMPLEXITY[classification.complexity];
-  const peakTier = conversation?.peakComplexity
-    ? TIER_BY_COMPLEXITY[conversation.peakComplexity]
-    : undefined;
   // A short follow-up inside a heavy thread ("yes, do it") must not drop the
-  // conversation to a light model — the thread keeps its weight.
+  // conversation to a light model — but the thread's weight has to be able to
+  // come back down too. An all-time peak never did: one hard turn pinned every
+  // later turn to the heavy tier, so a typo fix thirty messages on still ran on
+  // the most expensive model in the account. Only the last few turns count, and
+  // they lift the tier by at most one rank.
+  const recent = (conversation?.recentComplexity ?? []).slice(0, RECENT_TURNS);
+  const recentTier = recent.length
+    ? recent.map((c) => TIER_BY_COMPLEXITY[c]).reduce(heavier)
+    : undefined;
+  const oneRankUp = TIER_ORDER[Math.min(TIER_RANK[messageTier] + 1, TIER_ORDER.length - 1)]!;
   const tier: Tier =
-    peakTier && TIER_RANK[peakTier] > TIER_RANK[messageTier] ? peakTier : messageTier;
+    recentTier && TIER_RANK[recentTier] > TIER_RANK[messageTier]
+      ? (TIER_RANK[recentTier] > TIER_RANK[oneRankUp] ? oneRankUp : recentTier)
+      : messageTier;
   const escalated =
-    peakTier && TIER_RANK[messageTier] > TIER_RANK[peakTier]
-      ? { from: peakTier, to: messageTier }
+    recentTier && TIER_RANK[messageTier] > TIER_RANK[recentTier]
+      ? { from: recentTier, to: messageTier }
       : undefined;
 
   // Hard work: capability first. Trivial work: protect the good quota.
@@ -136,6 +167,9 @@ export function autoRoute(
   const candidates: Candidate[] = [];
   for (const account of accounts) {
     if (account.disabled) continue;
+    // A free reviewer has no quota to weigh and would win every scoring round
+    // on headroom alone — it is never a candidate to do the work.
+    if (isReviewOnly(account.provider)) continue;
     const headroom = accountHeadroom(account.id, quota);
     if (headroom <= 0) continue; // cooled down — router skips it anyway
 
@@ -146,11 +180,12 @@ export function autoRoute(
     };
     const burn = estimateBurn(target, classification.complexity, classification.kind, metrics);
 
-    const { affinity } = calibrateAffinity(
+    const { affinity, performance } = calibrateAffinity(
       affinities[account.provider] ?? 0.75,
       metrics,
       account.provider,
       classification.kind,
+      tier,
     );
     // Cube the affinity so real capability gaps outweigh small quota gaps —
     // doing the user's job well beats saving a few percent of a window.
@@ -174,7 +209,27 @@ export function autoRoute(
       sticky -
       account.priority * 0.5;
 
-    candidates.push({ target, score, headroom, burn, account });
+    candidates.push({
+      target,
+      score,
+      headroom,
+      burn,
+      account,
+      medianDurationMs: performance.medianDurationMs,
+      runs: performance.runs,
+    });
+  }
+
+  // On light work, how long the answer takes is part of doing the job well:
+  // the same correct fix in 6s beats it in 40s, and the tier is chosen precisely
+  // because capability is not the deciding factor here. Only measured medians
+  // count — an account with no history neither gains nor loses.
+  if (tier === 'light') {
+    const timed = candidates.filter((c) => c.medianDurationMs > 0 && c.runs >= 3);
+    if (timed.length > 1) {
+      const fastest = Math.min(...timed.map((c) => c.medianDurationMs));
+      for (const c of timed) c.score += SPEED_BONUS * (fastest / c.medianDurationMs);
+    }
   }
 
   candidates.sort((a, b) => b.score - a.score);
@@ -204,6 +259,7 @@ export function autoRoute(
     escalated,
     suggestPermission,
     burn: best?.burn,
+    tier,
   };
 }
 

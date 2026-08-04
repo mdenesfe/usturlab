@@ -216,7 +216,7 @@ describe('conversation memory', () => {
     const quota = new QuotaTracker();
     const r = route(task('evet yap'), emptyRules, accounts, quota, {
       mode: 'auto',
-      conversation: { peakComplexity: 'hard', turnCount: 3 },
+      conversation: { recentComplexity: ['hard'], turnCount: 3 },
     });
     expect(r.decision.chain[0]?.model).toBe('opus');
   });
@@ -229,7 +229,7 @@ describe('conversation memory', () => {
     const sticky = autoRoute(classifyTask(task('rename this variable')), accounts, quota, {
       conversation: {
         lastTarget: { provider: 'claude', account: 'personal' },
-        peakComplexity: 'trivial',
+        recentComplexity: ['trivial'],
         turnCount: 2,
       },
     });
@@ -245,7 +245,7 @@ describe('conversation memory', () => {
       emptyRules,
       accounts,
       quota,
-      { mode: 'auto', conversation: { peakComplexity: 'simple', turnCount: 4 } },
+      { mode: 'auto', conversation: { recentComplexity: ['simple'], turnCount: 4 } },
     );
     expect(r.decision.escalated).toEqual({ from: 'light', to: 'heavy' });
     expect(r.decision.chain[0]?.model).toBe('opus');

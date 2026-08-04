@@ -23,7 +23,10 @@ export function RuleEditor({ rule, accounts, onSave, onCancel }: RuleEditorProps
   const handleSave = () => {
     const newErrors: Record<string, string> = {};
     if (!id.trim()) newErrors.id = 'ID is required';
-    if (targets.length === 0) newErrors.targets = 'At least one target is required';
+    // A rule that only says where work must NOT go is complete without a target.
+    if (targets.length === 0 && !rule?.exclude?.length) {
+      newErrors.targets = 'At least one target is required';
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -35,6 +38,9 @@ export function RuleEditor({ rule, accounts, onSave, onCancel }: RuleEditorProps
       match,
       target: targets,
       ...(description.trim() && { description: description.trim() }),
+      // Exclusions are authored in the rules file; this form rebuilds the rule
+      // from its own state, so carry them through rather than dropping them.
+      ...(rule?.exclude?.length ? { exclude: rule.exclude } : {}),
     };
 
     onSave(newRule);
@@ -103,6 +109,24 @@ export function RuleEditor({ rule, accounts, onSave, onCancel }: RuleEditorProps
           <label>Match Conditions</label>
           <MatchConditionEditor match={match} onChange={setMatch} />
         </div>
+
+        {(rule?.exclude?.length ?? 0) > 0 && (
+          <div class="form-group">
+            <label>Never route here</label>
+            <div class="target-list">
+              {rule!.exclude!.map((e, idx) => (
+                <div key={idx} class="target-item">
+                  <div class="target-label">
+                    {e.account ? `${e.provider}:${e.account}` : `every ${e.provider} account`}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div class="field-hint">
+              Kept as written. Exclusions are edited in the rules file for now.
+            </div>
+          </div>
+        )}
 
         <div class="form-group">
           <label>Failover Chain *</label>

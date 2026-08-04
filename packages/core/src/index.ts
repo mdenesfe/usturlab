@@ -36,6 +36,7 @@ export * from './adapters/claude.js';
 export * from './adapters/codex.js';
 export * from './adapters/gemini.js';
 export * from './adapters/copilot.js';
+export * from './adapters/openrouter.js';
 export * from './adapters/fake.js';
 export * from './util/ids.js';
 export * from './commands/slashCommands.js';

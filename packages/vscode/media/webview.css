@@ -27,6 +27,72 @@ body {
 
 /* ── shared controls ────────────────────────────────────── */
 
+/* Says in words what a colour or a glyph says visually. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * Copy is the most common thing anyone does with an answer. It sits quiet
+ * until the block is hovered, and confirms in place rather than as a toast.
+ */
+.copy-btn {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--vscode-sideBar-background);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.72em;
+  line-height: 1.6;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.copy-btn:hover {
+  color: var(--vscode-foreground);
+  border-color: var(--vscode-focusBorder);
+}
+
+/* Never hide it from the keyboard, and never hide the confirmation. */
+.copy-btn:focus-visible,
+.copy-btn.done,
+.copy-btn.failed {
+  opacity: 1;
+}
+
+.copy-btn.done {
+  color: #4ec9b0;
+  border-color: color-mix(in srgb, #4ec9b0 45%, transparent);
+}
+
+.md-code:hover .copy-btn,
+.msg-assistant:hover .copy-btn {
+  opacity: 1;
+}
+
+.code-copy {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  z-index: 1;
+}
+
+.answer-copy {
+  margin-left: auto;
+}
+
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -596,6 +662,376 @@ body {
   color: var(--vscode-foreground);
 }
 
+/* ── subagents: concurrent lanes ────────────────────────── */
+
+/*
+ * A stack of collapsed rows reads as a sequence. Parallel work has to look
+ * parallel: one trunk, a branch per agent, every lane showing its own live
+ * state at the same time, and duration bars that survive the run as a picture
+ * of who took how long.
+ */
+.agent-fanout {
+  align-self: stretch;
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--vscode-sideBar-background);
+  font-family: var(--mono);
+  font-size: 0.82em;
+  overflow: hidden;
+}
+
+.agent-fanout.live {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.agent-fanout-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--vscode-foreground) 3%, transparent);
+}
+
+.agent-fanout-count {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.agent-fanout-mode {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.agent-fanout-state {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-fanout-total {
+  margin-left: auto;
+  flex-shrink: 0;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-lanes {
+  position: relative;
+  padding: 5px 0 5px 14px;
+}
+
+/* The trunk every branch hangs off — drawn only when there is more than one. */
+.agent-fanout.parallel .agent-lanes::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 16px;
+  bottom: 16px;
+  width: 1px;
+  background: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.agent-lane {
+  position: relative;
+}
+
+.agent-fanout.parallel .agent-lane-head::before {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: 12px;
+  width: 7px;
+  height: 1px;
+  background: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.agent-lane-head {
+  display: block;
+  padding: 4px 10px 3px 4px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  color: var(--muted);
+}
+
+.agent-lane-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.agent-lane-head::-webkit-details-marker {
+  display: none;
+}
+
+.agent-lane-head:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.agent-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--muted);
+}
+
+.agent-lane.running .agent-dot {
+  background: var(--accent);
+  animation: agent-pulse 1.5s ease-out infinite;
+}
+
+.agent-lane.completed .agent-dot {
+  background: #4ec9b0;
+}
+
+.agent-lane.failed .agent-dot {
+  background: #f48771;
+}
+
+@keyframes agent-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+
+.agent-kind {
+  flex-shrink: 0;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 0.88em;
+  color: var(--vscode-foreground);
+  background: color-mix(in srgb, var(--vscode-foreground) 9%, transparent);
+}
+
+.agent-label {
+  color: var(--vscode-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.agent-bg {
+  flex-shrink: 0;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 0.85em;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+/* Everything about the lane's state, right-aligned and free to shrink. */
+.agent-right {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.agent-now {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+/* The first line of what it reported back — the answer, without opening it. */
+.agent-said {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.agent-verdict {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.agent-verdict.completed {
+  color: #4ec9b0;
+}
+
+.agent-verdict.failed {
+  color: #f48771;
+}
+
+.agent-meta {
+  flex-shrink: 0;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
+/* How long this lane took, against the slowest one in the fan-out. */
+.agent-track {
+  height: 2px;
+  margin: 3px 0 0 13px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
+  overflow: hidden;
+}
+
+.agent-track-fill {
+  display: block;
+  height: 100%;
+  border-radius: 1px;
+  background: var(--muted);
+  transition: width 0.3s ease;
+}
+
+.agent-track-fill.completed {
+  background: #4ec9b0;
+}
+
+.agent-track-fill.failed {
+  background: #f48771;
+}
+
+/* Still running: no honest length to draw, so it sweeps instead. */
+.agent-track-fill.running {
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: agent-sweep 1.6s linear infinite;
+}
+
+@keyframes agent-sweep {
+  0% {
+    background-position: -45% 0;
+  }
+  100% {
+    background-position: 145% 0;
+  }
+}
+
+.agent-lane-body {
+  margin: 0 10px 6px 8px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+}
+
+.agent-prompt {
+  font-size: 0.95em;
+}
+
+.agent-prompt-head {
+  padding: 2px 0;
+  cursor: pointer;
+  list-style: none;
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.agent-prompt-head::-webkit-details-marker {
+  display: none;
+}
+
+.agent-prompt-head::before {
+  content: '▸ ';
+  font-size: 0.85em;
+}
+
+.agent-prompt[open] .agent-prompt-head::before {
+  content: '▾ ';
+}
+
+.agent-prompt-text {
+  margin: 2px 0 6px;
+  padding: 6px 9px;
+  border-radius: 3px;
+  background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.08));
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.agent-steps {
+  padding: 2px 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.agent-report {
+  margin-top: 6px;
+  padding: 6px 9px;
+  border-left: 2px solid color-mix(in srgb, #4ec9b0 55%, transparent);
+  border-radius: 0 3px 3px 0;
+  background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.08));
+  font-family: var(--vscode-font-family);
+  font-size: 1.08em;
+  line-height: 1.55;
+}
+
+.agent-report-label {
+  font-family: var(--mono);
+  font-size: 0.72em;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+
+/*
+ * Narrow panel: the label and the lane's state stop competing for one line and
+ * take one each. Squeezing them both is how badges end up on top of text.
+ */
+@media (max-width: 640px) {
+  .agent-fanout-head {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .agent-fanout-total {
+    margin-left: 0;
+  }
+
+  .agent-lane-row {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .agent-label {
+    flex: 1 1 auto;
+  }
+
+  .agent-right {
+    flex-basis: 100%;
+    justify-content: flex-start;
+    padding-left: 13px;
+  }
+}
+
+.agent-fanout-foot {
+  padding: 4px 10px 6px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Live tool activity gets the same accent as a live fan-out. */
+.tool-group.live {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
 /* ── the model's own task list ──────────────────────────── */
 
 .task-block {
@@ -890,6 +1326,9 @@ body {
 }
 
 .msg-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   align-self: stretch;
   padding: 6px 10px;
   border-left: 2px solid var(--vscode-errorForeground);
@@ -897,8 +1336,69 @@ body {
   border-radius: 3px;
   font-family: var(--mono);
   font-size: 0.85em;
+}
+
+.msg-error-text {
+  flex: 1;
+  min-width: 0;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* A failure with no way forward makes retyping the prompt the only option. */
+.retry-btn {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font-family: var(--mono);
+  font-size: 0.95em;
+  cursor: pointer;
+}
+
+.retry-btn:hover {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-hoverBackground);
+}
+
+/* The run ended without an answer — said plainly, instead of a cursor that
+   blinks for ever because nothing ever marked the turn finished. */
+.assistant-stopped {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 0.76em;
+  color: var(--muted);
+}
+
+/*
+ * Scrolling up to read stops the transcript following the stream — which is
+ * right, but it also strands you. This is the way back, and it says whether
+ * anything actually happened while you were away.
+ */
+.jump-latest {
+  display: block;
+  margin: 0 auto 6px;
+  padding: 3px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--vscode-sideBar-background);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.74em;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.jump-latest:hover {
+  color: var(--vscode-foreground);
+  border-color: var(--vscode-focusBorder);
+}
+
+.jump-latest.missed {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
 /* routing badge */
@@ -1045,6 +1545,59 @@ body {
 
 .divider.failover span {
   color: var(--vscode-charts-yellow, #d0a54e);
+}
+
+/* ── the run, pinned where it cannot scroll away ─────────── */
+
+.workbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  font-family: var(--mono);
+  font-size: 0.74em;
+  color: var(--muted);
+}
+
+.workbar.blocked {
+  border-color: color-mix(in srgb, var(--vscode-charts-yellow, #d0a54e) 50%, var(--border));
+  background: color-mix(in srgb, var(--vscode-charts-yellow, #d0a54e) 8%, transparent);
+}
+
+.workbar-state {
+  flex-shrink: 0;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.workbar.blocked .workbar-state {
+  color: var(--vscode-charts-yellow, #d0a54e);
+}
+
+.workbar-detail {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workbar-time {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--vscode-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.workbar-hint {
+  flex-shrink: 0;
+  opacity: 0.6;
 }
 
 /* ── composer ───────────────────────────────────────────── */
@@ -1947,9 +2500,14 @@ body.resizing {
   background: var(--vscode-list-hoverBackground);
 }
 
-.accounts-hint {
+.accounts-hint,
+.field-hint {
   font-size: 0.78em;
   color: var(--muted);
+}
+
+.field-hint {
+  margin-top: 4px;
 }
 
 .accounts-hint code {
@@ -3183,4 +3741,23 @@ body.resizing {
 .metric-duration {
   text-align: right;
   color: var(--muted);
+}
+
+/* ── motion ─────────────────────────────────────────────── */
+
+/*
+ * The live indicators are decoration on top of text that already says what is
+ * happening, so they are safe to drop entirely.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .live-dots i,
+  .type-cursor,
+  .agent-dot,
+  .agent-track-fill.running {
+    animation: none;
+  }
+
+  .agent-track-fill.running {
+    background: color-mix(in srgb, var(--accent) 55%, transparent);
+  }
 }

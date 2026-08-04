@@ -35,6 +35,8 @@ function usageHint(a: AccountStatusDto): string {
       return a.authMode === 'api-key'
         ? 'No data yet — the PAT needs the "Plan: read" permission.'
         : 'Usage view needs a PAT account (fine-grained token with "Plan: read").';
+    case 'openrouter':
+      return 'Free models are capped per day rather than by a usage window. When the cap is reached this account is parked until it resets at 00:00 UTC, and reviews go back to your subscriptions.';
     default:
       return 'No usage data.';
   }

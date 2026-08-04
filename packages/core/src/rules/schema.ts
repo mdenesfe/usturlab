@@ -20,12 +20,29 @@ export const matchSchema = z
     message: 'match must contain at least one condition',
   });
 
-export const ruleSchema = z.object({
-  id: z.string().min(1),
-  description: z.string().optional(),
-  match: matchSchema,
-  target: z.array(targetSchema).min(1),
+/** `{ provider }` bars a whole provider; adding `account` bars just that one. */
+export const exclusionSchema = z.object({
+  provider: providerSchema,
+  account: z.string().min(1).optional(),
 });
+
+export const ruleSchema = z
+  .object({
+    id: z.string().min(1),
+    description: z.string().optional(),
+    match: matchSchema,
+    /** Where the work should go. Optional when the rule only says where it must not. */
+    target: z.array(targetSchema).default([]),
+    /**
+     * Where it must never go. Applied to the whole chain — including the
+     * default chain and anything a mention pulled in — so "never send security
+     * work to gemini" is one line instead of an enumeration of everyone else.
+     */
+    exclude: z.array(exclusionSchema).optional(),
+  })
+  .refine((r) => r.target.length > 0 || (r.exclude?.length ?? 0) > 0, {
+    message: 'rule must have a target, an exclude, or both',
+  });
 
 export const rulesFileSchema = z.object({
   $schema: z.string().optional(),
@@ -35,6 +52,7 @@ export const rulesFileSchema = z.object({
 });
 
 export type RuleTarget = z.infer<typeof targetSchema>;
+export type RuleExclusion = z.infer<typeof exclusionSchema>;
 export type RuleMatch = z.infer<typeof matchSchema>;
 export type Rule = z.infer<typeof ruleSchema>;
 export type RulesFile = z.infer<typeof rulesFileSchema>;
@@ -87,6 +105,16 @@ export const RULES_TEMPLATE = `{
       },
       "target": [
         { "provider": "claude", "account": "personal", "model": "haiku" }
+      ]
+    },
+    {
+      "id": "no-gemini-for-security",
+      "description": "A rule may only say where work must NOT go",
+      "match": {
+        "keywords": ["security", "auth", "credential", "güvenlik"]
+      },
+      "exclude": [
+        { "provider": "gemini" }
       ]
     }
   ],

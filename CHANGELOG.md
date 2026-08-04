@@ -1,5 +1,93 @@
 # Changelog
 
+## 0.8.0 — 2026-08-04
+
+### Parallel agents, drawn as parallel
+
+When a model splits work across subagents, that is the most interesting thing happening in the panel — and it was the one thing usturlab did not show. Claude's stream marks every subagent message with `parent_tool_use_id`, and the old code either dropped it or, worse, folded a subagent's tool calls into the main thread's timeline where they read as the parent's own work.
+
+Subagents now get **lanes**: one per agent, all visible at once, each with its own live state.
+
+- **Concurrency is the layout.** Agents whose lifetimes overlap share one block under a single trunk, one branch each. Nothing about a stack of collapsed rows says "at the same time", so the lanes never collapse into a summary while they run.
+- **Each lane shows its own work** — the tool calls it made, what it is doing right now (`Running Search for b.txt`), its tool count and token spend, and what it reported back when it finished.
+- **Duration bars survive the run.** Once a fan-out is done, every lane keeps a bar proportional to the slowest one, so the shape of the work stays readable — which reviewer took 38s and which took 5s.
+- **A failed agent says so** (`✕`), and one that never reported back before the run ended reads as stopped rather than spinning forever.
+
+**Asynchronous agents were the hard part.** Claude usually launches agents in the background: the parent's `tool_result` comes back immediately with `async_launched`, and the agent reports for real much later — often after the turn that spawned it has already finished and answered. Reading that acknowledgement as an ending closed each lane instantly, which also meant no two lanes ever overlapped and the fan-out stopped looking parallel at all. Only a genuinely terminal status ends a lane now, and a lane is found by agent id rather than by which message it belongs to, so a late report still lands where it belongs.
+
+Both stream shapes are pinned as fixtures recorded from a real `claude` 2.1.216 and replayed in `packages/core/test/claudeAgents.test.ts` — the parsing is tested against output the CLI actually produced, not against a guess at its schema.
+
+### The run, where it cannot scroll away
+
+- **A work bar above the composer** while a task runs: elapsed time, and what is happening right now — `thinking`, `writing`, the file being edited, how many agents are working, or `waiting for you` when a permission question is blocking the model.
+- **Live tool activity opens itself.** A running tool group used to sit collapsed behind "3 steps"; it now expands while the work is live and closes when it is done. Click it and it is yours — the panel stops steering it.
+
+### A run that ends, ends
+
+Three places let a turn stream for ever, because only a `result` ever marked one finished:
+
+| | before | now |
+|---|---|---|
+| you press Stop | cursor blinks for good, no sign you stopped it | turn closes with `⊘ stopped by you` |
+| every account fails | the bubble sits there thinking under the error | turn closes; the error says why |
+| failover mid-answer | the abandoned attempt keeps a live cursor | that attempt closes, the banner explains |
+
+None of this was cosmetic: the state was written to the stored conversation, so reopening an old chat replayed the same lie — and a subagent in that turn looked like it was still working, months later.
+
+### Getting out of a hole
+
+- **Copy** on every code block and every answer. It was the most common thing anyone does here and there was no way to do it but drag a selection across a moving stream.
+- **Retry** on the failure that just happened, sending your last message again. It routes fresh, so the account that just hit its limit is on cooldown and gets skipped.
+- **Jump to latest** once you have scrolled up, and it says `new activity` when something arrived while you were reading. Scrolling away used to strand you.
+
+### Reachable without a mouse or a screen
+
+- The transcript is a `log`; the work bar is a `status`, so state changes are announced without reading every streamed token aloud.
+- The chat list is keyboard-navigable (it was a plain `div`), icon-only buttons have labels, and everything that said something in colour alone — account readiness, a running chat, an agent's state — now says it in words too.
+
+### A second opinion that costs nothing
+
+The second opinion was the best idea in this extension and the one most likely to be switched off, because it was billed to the user twice: once to do the work, once to check it. That is why it only ever ran on hard tasks, and only when a second subscription had headroom to spare — a review you cannot afford is a review that does not happen.
+
+**OpenRouter** connects as a fifth provider, reaching free open-weight models (DeepSeek R1, Qwen3 Coder, Llama 3.3 70B) over plain HTTP. It is added with an API key from `openrouter.ai/keys` and no subscription. With one connected, reviews run there — and the headroom gate disappears, because there is no longer anything to ration. Your subscriptions keep every point of quota for the work that needs tools.
+
+**It can only ever review.** A free model over HTTP has no tools, no sandbox and no session: enough to read a diff and argue with it, nowhere near enough to write code. So the provider is marked review-only and is held out of the authoring path in every place a target is chosen — the default chain, the automatic router's scoring, plan execution, `@` mentions, and the account pills. An account you cannot give work to never appears as somewhere to send work.
+
+**Free tiers are treated as the moving target they are.** The free model list rotates without notice, so a retired model id (404) falls through to the next model in the chain rather than failing the review. Free capacity also runs out two ways — a busy model and a spent daily allowance, both reported as `429` — so a 429 is retried on another model before it is believed, and only then parks the account until the allowance rolls over at 00:00 UTC. A drained reviewer is recorded as such, so the next task picks a different one instead of paying for the round trip again.
+
+### The router stops overcharging you
+
+Four things the routing loop was getting wrong, all of them quietly.
+
+**A thread's weight now comes back down.** The heaviest turn a conversation ever had used to pin every later turn to the heavy tier — one hard question on turn 3 meant a typo fix on turn 40 still ran on the most expensive model in the account, and the stickiness bonus kept it there. Only the last two turns count now, and they lift a turn by at most one rank. A bare confirmation still inherits the weight of the turn it answers, which was the case this was built for in the first place.
+
+**Turkish prompts are actually weighed.** The kind patterns spoke some Turkish; the complexity scoring — the part that picks the model — spoke none. "auth modülünü tüm kod tabanında yeni API'ye taşı, sonra da testleri güncelle" scored as a simple edit and went to a light model. Three things had to be right to fix it: `\b` is ASCII-only, so a pattern anchored with it can never match a word starting with "ö"; the language is agglutinative, so a closing boundary matches the bare noun and nothing a sentence does with it; and a final "k" softens under a suffix, so "güvenlik" has to be spelled short enough to still find "güvenliğini". Stacked confirmations ("evet yap", "tamam devam et") read as one continuation now, too.
+
+**Measured speed counts on light work.** The median duration of each provider's clean runs was being computed in two places and used in none. On light-tier work — where the tier was chosen precisely because capability is not the deciding factor — a measurably faster account now gets a real bonus. Nothing changes for heavy work, and an account with no history neither gains nor loses.
+
+**A cheap model's failures stay off the expensive one's record.** Capability was measured per provider, so a run of scrappy work on Haiku dragged down the score that decides whether Opus gets the hard task, and vice versa. Runs now record their weight class and evidence is keyed by it, with older untiered runs still counted at lower confidence.
+
+### A retired model no longer costs you an account
+
+Model ids are pinned by version in the tier table, and providers retire them on their own schedule. That error matched nothing — not a limit, not a transient failure — so it failed straight over to the next account, which was then asked for the same dead model. The CLI's rejection of a model is now recognized as its own kind of failure: the account drops to the CLI's own default once and finishes the job, emitting `model-downgraded` (an event that had a handler in the panel and no producer anywhere). A run that downgraded is not filed under a weight class, because we no longer know which one it ran on.
+
+### Rules can say never
+
+A rule could only say where work should go. Barring one provider from one kind of work meant enumerating everyone else — and it still did not work, because the default chain is appended behind every rule.
+
+Rules take an `exclude` now: `{ "match": { "keywords": ["güvenlik"] }, "exclude": [{ "provider": "gemini" }] }`. It applies to the whole chain, failover tail included, and a rule that only excludes does not have to name a target to be heard — every matching rule contributes its bans, not just the one that won the routing. An explicit `@mention` still overrides it, because overriding your own rule on purpose is allowed. The visual editor shows exclusions and preserves them; authoring them is a rules-file edit for now.
+
+### Fixed
+
+- `ANTHROPIC_BASE_URL` is now scrubbed from routed Claude runs alongside the credentials. It carries no secret of its own, which is exactly why it was missed — but it decides which server the credential is sent to, so a stray one in the user's shell silently rerouted every routed run through a third-party proxy.
+- A mid-run correction was being filed under the thread's *complexity* where its task kind belongs, so the learning loop clustered corrections by the wrong key.
+
+### Also
+
+- Narrow panels stop overlapping: below 640px a lane's label and its state take one line each instead of stacking badges on top of text.
+- The live indicators respect `prefers-reduced-motion`.
+- A provider with no official brand mark renders an initial in its colour instead of a blank space in the account strip.
+
 ## 0.7.0 — 2026-08-01
 
 ### A tasks panel, fed by whatever the model actually keeps

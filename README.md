@@ -32,9 +32,9 @@ A model's output quality is a function of the context it gets, the constraints i
 
 **The work gets checked.** After a run changes files, the project's *own* typecheck/test script runs and, on failure, the model gets one repair round with the real output. Commands are never invented — only what `package.json` or a `Makefile` declares — and nothing runs in Plan mode.
 
-**A different model looks for what the checks cannot see.** On hard work a different provider reviews the diff adversarially, told that finding nothing (`LGTM`) is a valid answer. Different labs have different blind spots; that is the whole reason to own several subscriptions.
+**A different model looks for what the checks cannot see.** On hard work a different provider reviews the diff adversarially, told that finding nothing (`LGTM`) is a valid answer. Different labs have different blind spots; that is the whole reason to own several subscriptions. Connect a free [OpenRouter](#how-it-works-and-why-its-tos-friendly) account and the review runs on an open-weight model instead, so checking the work costs no quota at all.
 
-**It learns.** Auto routing calibrates each account from your own clean-run rate — runs you did not have to steer, retry, or escalate — and estimates how much of a quota window a task will burn before choosing. Corrections you type mid-run are collected, and a recurring one is *offered* (never silently applied) as a standing rule every provider inherits.
+**It learns.** Auto routing calibrates each account from your own clean-run rate — runs you did not have to steer, retry, or escalate — keyed by weight class so a scrappy run on the cheap model is not held against the expensive one, and on light work a measurably faster account wins. It estimates how much of a quota window a task will burn before choosing. Corrections you type mid-run are collected, and a recurring one is *offered* (never silently applied) as a standing rule every provider inherits.
 
 ## The UI
 
@@ -42,6 +42,10 @@ Claude-panel style, built for a developer environment:
 
 - **Sidebar** — your chat list, grouped by date (Today / Yesterday / Last 7 days / Older). Running chats show a pulsing dot. Nothing is typed here; it's a clean index.
 - **Chats open in the editor area** — one tab per conversation, centered column, monospace prompts, markdown + syntax-highlighted code blocks, a routing badge on every reply (`⤳ codex:work /gpt-5.4 [tests-to-codex]`), failover dividers when an account hits its limit mid-task. Two chats side-by-side run concurrently.
+- **Parallel agents get lanes.** When a model splits the work across subagents, each one is its own lane — its tool calls, what it is doing right now, its token spend, and what it reported back. Agents whose lifetimes overlap share one block under a single trunk, so concurrency is visible as concurrency; when they finish, each lane keeps a duration bar proportional to the slowest, so you can see which part of the work was expensive.
+- **The run never scrolls away.** A bar above the composer holds the elapsed time and the current activity — `thinking`, the file being edited, how many agents are working, or `waiting for you` when the model is blocked on a permission question. Live tool activity expands itself while it happens and collapses when it's done. Scroll up to read and a **jump to latest** appears, telling you whether anything happened while you were away.
+- **A run that ends, ends.** Stop it and the turn closes with `⊘ stopped by you`; when every account fails, the error closes it and offers **Retry**. Copy sits on every code block and every answer.
+- **Usable without a mouse.** The chat list is keyboard-navigable, the transcript is a `log` and the work bar a `status` — so state is announced without reading every streamed token aloud — and nothing conveys state by colour alone.
 - **Accounts tab** — provider cards with status (`● ready` / `◌ limited · resets 18:30`), auth type, usage bars, add/remove.
 - **Rules tab** — your routing rules visualized: match conditions as chips, failover chains as pill sequences. Edits to the JSON apply live.
 
@@ -57,6 +61,9 @@ Consumer AI subscriptions can't be called directly over the API. usturlab theref
 | Codex CLI | `CODEX_HOME` per profile | ChatGPT login, API key |
 | Gemini CLI | `HOME` override per profile | Google login (paid tiers — see caveats), API key |
 | Copilot CLI | `COPILOT_HOME` per profile | GitHub login, fine-grained PAT |
+| OpenRouter | none needed (stateless HTTP) | free API key — **reviews only**, see below |
+
+The one exception to "no APIs" is **OpenRouter**, which is not a subscription: it reaches free open-weight models (DeepSeek R1, Qwen3 Coder, Llama 3.3 70B) over plain HTTP so the [second opinion](#making-every-model-smarter) can run without spending a second subscription. Because a model reached this way has no tools, no sandbox and no session, it is marked **review-only** — held out of the default chain, the router's scoring, plan execution and `@` mentions. It can check work; it can never be given work.
 
 Secrets (tokens, API keys) live in the VS Code secret store. Profile directories live under `~/.usturlab/profiles/`. usturlab also scrubs hijacking env vars (e.g. a stray `ANTHROPIC_API_KEY` silently overrides Claude subscription auth) from every subprocess.
 
@@ -109,6 +116,7 @@ Secrets (tokens, API keys) live in the VS Code secret store. Profile directories
 - `@provider:account/model` mentions in the prompt (e.g. `@claude:work/opus`) bypass rules entirely.
 - Rules are evaluated in order; **first match wins**. Within a rule's `match`, fields are AND-ed and values within a field are OR-ed.
 - Failover order: the matched rule's `target` chain, then `defaultChain` entries not yet tried.
+- A rule may carry `exclude` instead of (or alongside) `target` — `{ "exclude": [{ "provider": "gemini" }] }` bars it from the whole chain, `defaultChain` included. Every matching rule's exclusions apply, not just the first match's; an explicit `@mention` overrides them.
 - Accounts on cooldown (recently limited) are skipped at routing time.
 - `#hashtags` in the prompt become tags for `match.tags` rules.
 

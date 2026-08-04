@@ -57,8 +57,27 @@ export function HistoryList({
         <div key={group.label} class="history-group">
           <div class="history-group-label">{group.label}</div>
           {group.items.map((c) => (
-            <div key={c.id} class="history-row" onClick={() => onOpen(c.id)}>
-              {c.running && <span class="dot ok pulse" />}
+            <div
+              key={c.id}
+              class="history-row"
+              // Not a <button>: it contains one. Role plus keys is what that
+              // leaves, and a chat list you cannot reach by keyboard is broken.
+              role="button"
+              tabIndex={0}
+              onClick={() => onOpen(c.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onOpen(c.id);
+                }
+              }}
+            >
+              {c.running && (
+                <>
+                  <span class="dot ok pulse" />
+                  <span class="sr-only">running</span>
+                </>
+              )}
               <span class="history-title" title={c.title}>
                 {c.title}
               </span>
@@ -66,6 +85,7 @@ export function HistoryList({
               <button
                 class="icon-btn history-del"
                 title="Delete chat"
+                aria-label={`Delete chat: ${c.title || 'untitled'}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(c.id);

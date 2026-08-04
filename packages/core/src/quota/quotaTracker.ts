@@ -37,6 +37,13 @@ function defaultResetAt(provider: ProviderId | undefined, now: number): number {
     }
     case 'copilot':
       return now + 24 * HOUR;
+    case 'openrouter': {
+      // Free-tier request allowance is counted per UTC day.
+      const reset = new Date(now);
+      reset.setUTCHours(0, 0, 0, 0);
+      reset.setUTCDate(reset.getUTCDate() + 1);
+      return reset.getTime();
+    }
     case 'claude':
     case 'codex':
     default:

@@ -34,6 +34,32 @@ export function isTransientFailure(text: string): boolean {
   return TRANSIENT.some((re) => re.test(text));
 }
 
+/**
+ * The model id was rejected, not the account. Model names are retired on the
+ * provider's schedule, and the tier table here pins some of them by version —
+ * so this is a normal, expected failure rather than an exotic one. It says
+ * nothing about the credential, which is why failing over to another account
+ * (and asking it for the same dead model) is the wrong answer.
+ */
+const UNKNOWN_MODEL = [
+  /unknown model/i,
+  /model not found/i,
+  /invalid model/i,
+  /no such model/i,
+  /unsupported model/i,
+  /not a valid model/i,
+  // Dots are allowed through the gap on purpose — the model id sitting in it
+  // usually contains one ("gemini-2.5-pro"). The length cap does the fencing.
+  /model[^\n]{0,40}(does not exist|is n[o']?t? (longer )?available|unavailable|deprecated|retired)/i,
+  /(does not exist|is not available)[^\n]{0,20}model/i,
+];
+
+/** True when the CLI rejected the requested model itself. */
+export function isUnknownModel(text: string): boolean {
+  if (!text) return false;
+  return UNKNOWN_MODEL.some((re) => re.test(text));
+}
+
 export function detectClaudeLimit(text: string): LimitInfo | undefined {
   const pipe = CLAUDE_PIPE_EPOCH.exec(text);
   if (pipe) {

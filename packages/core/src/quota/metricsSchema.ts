@@ -1,4 +1,4 @@
-import type { ProviderId } from '../types.js';
+import type { ProviderId, Tier } from '../types.js';
 
 /**
  * What actually happened on a run. These records are the only memory the
@@ -14,6 +14,11 @@ export interface TaskMetric {
   provider: ProviderId;
   account: string;
   model?: string;
+  /**
+   * Weight class the model belonged to. Capability is measured per tier, so a
+   * scrappy run on the cheap model is not held against the expensive one.
+   */
+  tier?: Tier;
   ruleId?: string;
   routingReason?: string;
   /** Task shape as classified before the run. */

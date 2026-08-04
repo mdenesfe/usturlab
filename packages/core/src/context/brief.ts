@@ -73,6 +73,8 @@ const NATIVE_CONVENTIONS: Record<ProviderId, string[]> = {
   // written before that migration will not, so keep supplying it.
   gemini: [],
   copilot: [],
+  // Reads nothing from disk — it only ever sees the text it is handed.
+  openrouter: [],
 };
 
 function fileNameOf(path: string): string {

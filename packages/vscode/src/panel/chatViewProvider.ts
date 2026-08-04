@@ -21,6 +21,7 @@ import {
   reviewPrompt,
   revisionPrompt,
   isClean,
+  isReviewOnly,
   parsePlan,
   type PermissionDecision,
   type PermissionRequest,
@@ -53,6 +54,10 @@ const REPLAYED_KINDS = new Set<HostToWebview['kind']>([
   'routing',
   'delta',
   'toolUse',
+  // A lane's opening and its verdict are worth keeping; the progress ticks in
+  // between are live-only and would bloat every stored conversation.
+  'agentStart',
+  'agentEnd',
   'downgraded',
   'notice',
   'failover',
@@ -61,8 +66,14 @@ const REPLAYED_KINDS = new Set<HostToWebview['kind']>([
   'permission',
   'permissionResolved',
   'done',
+  'stopped',
   'error',
 ]);
+
+/** `#hashtags` become routing tags — the same thing the panel derives on send. */
+function tagsOf(text: string): string[] {
+  return [...text.matchAll(/(^|\s)#([\w-]+)/g)].map((m) => m[2]!);
+}
 
 interface ConversationRecord {
   id: string;
@@ -125,7 +136,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     string,
     {
       lastTarget?: Target;
-      peakComplexity?: string;
+      /** Complexity of the last few turns, newest first — a window, not a peak. */
+      recentComplexity?: string[];
+      /** Task kind of the most recent turn, for attributing a correction. */
+      lastKind?: string;
       turnCount: number;
       /** Last finished run, so a quick re-ask can be attributed back to it. */
       lastPrompt?: string;
@@ -200,7 +214,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (!ctx) return undefined;
     return {
       lastTarget: ctx.lastTarget,
-      peakComplexity: ctx.peakComplexity as ConversationContext['peakComplexity'],
+      recentComplexity: ctx.recentComplexity as ConversationContext['recentComplexity'],
       turnCount: ctx.turnCount,
     };
   }
@@ -495,10 +509,24 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.queues.clear();
     for (const [id, controller] of this.tasks) {
       controller.abort();
+      this.markStopped(id, 'stopped');
       this.toConversation(id, { kind: 'busy', running: false }, { log: false });
     }
     this.tasks.clear();
     this.sendConversations();
+  }
+
+  /**
+   * Closes off whatever was streaming. A cancelled run never reaches `result`,
+   * so nothing else ever marks that turn finished: the answer would keep a
+   * blinking cursor and its agents would look like they were still working,
+   * every time the conversation is reopened.
+   */
+  private markStopped(conversationId: string, reason?: string): void {
+    const live = this.liveRuns.get(conversationId);
+    const messageId = live?.messageIds[Math.min(live.turnIdx, live.messageIds.length - 1)];
+    if (!messageId) return;
+    this.toConversation(conversationId, { kind: 'stopped', messageId, reason });
   }
 
   private metas(): ConversationMeta[] {
@@ -696,9 +724,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           this.queues.delete(surface.conversationId);
           this.tasks.get(surface.conversationId)?.abort();
           this.tasks.delete(surface.conversationId);
+          this.markStopped(surface.conversationId, 'stopped by you');
           this.toConversation(surface.conversationId, { kind: 'busy', running: false }, { log: false });
           this.sendConversations();
         }
+        break;
+      case 'retryLast':
+        if (surface.conversationId) void this.retryLast(surface.conversationId);
         break;
       case 'send':
         if (surface.conversationId) {
@@ -802,7 +834,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           text,
           timestamp: Date.now(),
           provider: live.lastTarget?.provider ?? 'unknown',
-          kind: this.threadContext.get(conversationId)?.peakComplexity,
+          kind: this.threadContext.get(conversationId)?.lastKind,
         });
         if (live.handle.injectMode === 'inline') {
           // The agent folds this into the turn already streaming — no new block.
@@ -835,6 +867,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           text: 'restarting with both messages merged (this model cannot take mid-run input)',
         });
         this.tasks.get(conversationId)?.abort();
+        this.markStopped(conversationId, 'restarted with your new message');
         this.tasks.delete(conversationId);
         const merged = inFlight
           ? `${inFlight}\n\n[Additional message sent while you were working — address both]: ${text}`
@@ -854,6 +887,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     await this.runTask(conversationId, text, tags, modes);
+  }
+
+  /**
+   * Sends the last thing the user asked for again. The text comes from the
+   * host's own record rather than the panel, so a retry after a failure asks
+   * for exactly what was asked before — and it routes fresh, which is the
+   * point: the account that just failed is on cooldown and gets skipped.
+   */
+  private async retryLast(conversationId: string): Promise<void> {
+    if (this.tasks.has(conversationId)) return;
+    const rec = this.conversations.get(conversationId);
+    const last = [...(rec?.turns ?? [])].reverse().find((turn) => turn.role === 'user');
+    const text = last?.text?.trim();
+    if (!text) return;
+    await this.handleSend(conversationId, text, tagsOf(text));
   }
 
   /**
@@ -961,18 +1009,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               ...metric,
               kind: cls?.kind,
               complexity: cls?.complexity,
+              tier: ev.decision.tier,
               routingReason: ev.decision.reason,
               ruleId: ev.decision.ruleId,
             };
             if (cls?.complexity) {
               const ctx = this.threadContext.get(conversationId) ?? { turnCount: 0 };
-              const order = ['trivial', 'simple', 'moderate', 'hard'];
-              if (
-                !ctx.peakComplexity ||
-                order.indexOf(cls.complexity) > order.indexOf(ctx.peakComplexity)
-              ) {
-                ctx.peakComplexity = cls.complexity;
-              }
+              // Newest first, and only the last few kept: the router sizes a
+              // turn from what the thread has been doing lately, not from the
+              // heaviest thing it ever did.
+              ctx.recentComplexity = [cls.complexity, ...(ctx.recentComplexity ?? [])].slice(0, 4);
+              ctx.lastKind = cls.kind;
               this.threadContext.set(conversationId, ctx);
             }
             autoPlanned = ev.decision.suggestPermission === 'safe';
@@ -1042,10 +1089,52 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               preview: ev.preview,
               path: ev.path,
               action: ev.action,
+              agentId: ev.agentId,
+            });
+            break;
+          case 'agent-start':
+            post({
+              kind: 'agentStart',
+              messageId: currentId(),
+              id: ev.id,
+              label: ev.label,
+              agentKind: ev.agentKind,
+              prompt: ev.prompt,
+              background: ev.background,
+            });
+            break;
+          case 'agent-progress':
+            post({
+              kind: 'agentProgress',
+              messageId: currentId(),
+              id: ev.id,
+              activity: ev.activity,
+              lastTool: ev.lastTool,
+              toolUses: ev.toolUses,
+              tokens: ev.tokens,
+              durationMs: ev.durationMs,
+            });
+            break;
+          case 'agent-end':
+            post({
+              kind: 'agentEnd',
+              messageId: currentId(),
+              id: ev.id,
+              status: ev.status,
+              summary: ev.summary,
+              toolUses: ev.toolUses,
+              tokens: ev.tokens,
+              durationMs: ev.durationMs,
             });
             break;
           case 'model-downgraded':
             post({ kind: 'downgraded', messageId: currentId(), from: ev.from, to: ev.to });
+            // Whatever the CLI picked for itself, we no longer know its weight
+            // class — so this run is not evidence about one. Clearing the tier
+            // keeps it out of the per-tier capability probes instead of filing
+            // it under a tier it may not have run on.
+            metric.model = undefined;
+            metric.tier = undefined;
             break;
           case 'failover': {
             // The account that could not finish is recorded on its own, or the
@@ -1516,7 +1605,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       )) {
         if (signal.aborted) return undefined;
         if (ev.type === 'result') text = ev.text;
-        if (ev.type === 'error' || ev.type === 'limit') return undefined;
+        if (ev.type === 'limit') {
+          // A free reviewer runs out most days. Park the account so the next
+          // task picks a different one instead of paying for the round trip.
+          this.quota.markLimitHit(account.id, {
+            resetAt: ev.resetAt,
+            scope: ev.scope,
+            provider: target.provider,
+          });
+          return undefined;
+        }
+        if (ev.type === 'error') return undefined;
       }
       return text.trim() || undefined;
     } catch (e) {
@@ -1700,6 +1799,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           models: this.adapters.get(a.provider)?.models ?? [],
           identity: this.identities.get(a.id),
           homeDir: a.homeDir,
+          reviewOnly: isReviewOnly(a.provider),
         };
       });
   }

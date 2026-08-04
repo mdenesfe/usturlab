@@ -1,4 +1,4 @@
-import type { ProviderId, RulesFile, SlashCommand, Target, TaskItem, ToolAction, PermissionRequest, PermissionDecision, UsageWindow, TaskMetric, Rule, RuleTarget } from '@usturlab/core';
+import type { AgentProgress, AgentStatus, ProviderId, RulesFile, SlashCommand, Target, TaskItem, ToolAction, PermissionRequest, PermissionDecision, UsageWindow, TaskMetric, Rule, RuleTarget } from '@usturlab/core';
 
 export interface AccountStatusDto {
   id: string;
@@ -12,6 +12,11 @@ export interface AccountStatusDto {
   /** Login identity (email/username) when detectable from CLI state. */
   identity?: string;
   homeDir?: string;
+  /**
+   * Reviews other providers' work but is never routed a task. The panel keeps
+   * these out of anything that implies "send this here" — pills, @mentions.
+   */
+  reviewOnly?: boolean;
 }
 
 export interface ConversationMeta {
@@ -52,7 +57,9 @@ export type WebviewToHost =
   | { kind: 'openAnalytics' }
   | { kind: 'clearAnalytics' }
   | { kind: 'permissionDecision'; id: string; decision: PermissionDecision }
-  | { kind: 'setAskPermission'; ask: boolean };
+  | { kind: 'setAskPermission'; ask: boolean }
+  /** Send the conversation's last user message again, after a failure. */
+  | { kind: 'retryLast' };
 
 export type HostToWebview =
   | { kind: 'userEcho'; text: string }
@@ -66,11 +73,32 @@ export type HostToWebview =
       preview?: string;
       path?: string;
       action?: ToolAction;
+      /** Set when a subagent did this — it belongs in that agent's lane. */
+      agentId?: string;
     }
+  | {
+      kind: 'agentStart';
+      messageId: string;
+      id: string;
+      label: string;
+      agentKind?: string;
+      prompt?: string;
+      background?: boolean;
+    }
+  | ({ kind: 'agentProgress'; messageId: string; id: string } & AgentProgress)
+  | ({
+      kind: 'agentEnd';
+      messageId: string;
+      id: string;
+      status: Exclude<AgentStatus, 'running'>;
+      summary?: string;
+    } & AgentProgress)
   | { kind: 'failover'; messageId: string; from: Target; to: Target; reason: string; resetAt?: number }
   | { kind: 'downgraded'; messageId: string; from: string; to: string }
   | { kind: 'notice'; text: string }
   | { kind: 'done'; messageId: string; costUsd?: number; durationMs?: number }
+  /** The run ended without an answer — cancelled, restarted or shut down. */
+  | { kind: 'stopped'; messageId: string; reason?: string }
   | { kind: 'error'; messageId: string; message: string }
   | { kind: 'busy'; running: boolean }
   | { kind: 'accounts'; accounts: AccountStatusDto[] }

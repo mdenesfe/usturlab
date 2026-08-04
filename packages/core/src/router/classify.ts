@@ -28,30 +28,65 @@ export interface Classification {
   writesCode: boolean;
 }
 
+/**
+ * Turkish stems open with a lookbehind instead of `\b`, and close with nothing.
+ *
+ * Two reasons, both learned the hard way. `\b` is ASCII-only, so `\bölçeklen`
+ * can never match — the boundary it wants does not exist next to "ö". And the
+ * language is agglutinative, so a closing boundary would be just as wrong:
+ * "dosya" has to match "dosyalarda".
+ *
+ * Stems are also cut short of a final k, which softens when a suffix lands on
+ * it: "güvenlik" becomes "güvenliğini", "karmaşık" becomes "karmaşığı". A
+ * pattern spelled with the hard consonant matches the bare noun and nothing a
+ * sentence actually does with it.
+ */
+const TR = '(?<![\\p{L}\\p{N}])';
+
 const KIND_PATTERNS: Array<{ kind: TaskKind; writes: boolean; re: RegExp }> = [
-  { kind: 'test', writes: true, re: /\b(test|tests|spec|unit test|coverage|vitest|jest|pytest)\b/i },
-  { kind: 'review', writes: false, re: /\b(review|audit|security|vulnerab|code smell|critique)\b/i },
-  { kind: 'debug', writes: true, re: /\b(debug|bug|error|crash|fails?|failing|broken|stack trace|exception|traceback)\b/i },
-  { kind: 'refactor', writes: true, re: /\b(refactor|clean ?up|simplify|restructure|rename|extract|migrate|modernize)\b/i },
-  { kind: 'docs', writes: true, re: /\b(document|docs|readme|changelog|comment|jsdoc|docstring)\b/i },
-  { kind: 'explain', writes: false, re: /\b(explain|how does|what does|why does|walk me through|understand|anlat|açıkla|nedir)\b/i },
-  { kind: 'edit', writes: true, re: /\b(add|implement|create|write|build|fix|change|update|support|optimi[sz]e|improve|speed up|port|convert|ekle|yaz|düzelt|uygula|iyile[şs]tir)\b/i },
+  { kind: 'test', writes: true, re: new RegExp(`\\b(test|tests|spec|unit test|coverage|vitest|jest|pytest)\\b|${TR}(test|birim test|kapsam)`, 'iu') },
+  { kind: 'review', writes: false, re: new RegExp(`\\b(review|audit|security|vulnerab|code smell|critique)\\b|${TR}(incele|gözden geçir|denetle|güvenli|zafiyet)`, 'iu') },
+  { kind: 'debug', writes: true, re: new RegExp(`\\b(debug|bug|error|crash|fails?|failing|broken|stack trace|exception|traceback)\\b|${TR}(hata|çöküyor|çalışmıyor|bozu(k|ğ)|patlıyor|kırıl|ayıkla)`, 'iu') },
+  { kind: 'refactor', writes: true, re: new RegExp(`\\b(refactor|clean ?up|simplify|restructure|rename|extract|migrate|modernize)\\b|${TR}(sadeleştir|yeniden düzenle|yeniden yapılandır|temizle|taşı)`, 'iu') },
+  { kind: 'docs', writes: true, re: new RegExp(`\\b(document|docs|readme|changelog|comment|jsdoc|docstring)\\b|${TR}(belge|doküman|açıklama satır|yorum satır)`, 'iu') },
+  { kind: 'explain', writes: false, re: new RegExp(`\\b(explain|how does|what does|why does|walk me through|understand)\\b|${TR}(anlat|açıkla|nedir)`, 'iu') },
+  { kind: 'edit', writes: true, re: new RegExp(`\\b(add|implement|create|write|build|fix|change|update|support|optimi[sz]e|improve|speed up|port|convert)\\b|${TR}(ekle|yaz|düzelt|uygula|iyile[şs]tir|oluştur|geliştir|güncelle|değiştir|kur)`, 'iu') },
 ];
 
-const AGENTIC_RE =
-  /\b(and then|after that|step by step|for (each|every) file|across the (repo|codebase)|entire (repo|codebase|project)|all (the )?(files|tests|packages)|end.to.end|migrate .* to|set up|scaffold)\b/i;
+const AGENTIC_RE = new RegExp(
+  `\\b(and then|after that|step by step|for (each|every) file|across the (repo|codebase)|entire (repo|codebase|project)|all (the )?(files|tests|packages)|end.to.end|migrate .* to|set up|scaffold)\\b` +
+    `|${TR}(ve sonra|sonra da|ardından|akabinde|adım adım|her (dosya|test|paket)|tüm (dosya|test|proje|paket|kod|sayfa)|bütün (dosya|test|proje)|kod taban|baştan sona|uçtan uca|toplu (halde|olarak)|hepsinde)`,
+  'iu',
+);
 
-const HARD_RE =
-  /\b(architect|design|redesign|optimi[sz]e|performance|concurren|race condition|memory leak|security|protocol|algorithm|complex|tricky|deadlock|scal(e|ing)|refactor .* (whole|entire)|root cause)\b/i;
+const HARD_RE = new RegExp(
+  `\\b(architect|design|redesign|optimi[sz]e|performance|concurren|race condition|memory leak|security|protocol|algorithm|complex|tricky|deadlock|scal(e|ing)|refactor .* (whole|entire)|root cause)\\b` +
+    `|${TR}(mimari|tasarla|tasarım|optimiz|performans|eşzamanl|yarış durumu|bellek sızıntı|güvenli|zafiyet|protokol|algoritma|karmaşı|ölçeklen|kök neden|kilitlenme|yeniden yapılandır)`,
+  'iu',
+);
 
-const TRIVIAL_RE =
-  /\b(typo|rename|format|prettier|lint|one.?liner|bump|version|import|semicolon|whitespace)\b/i;
+const TRIVIAL_RE = new RegExp(
+  `\\b(typo|rename|format|prettier|lint|one.?liner|bump|version|import|semicolon|whitespace)\\b` +
+    `|${TR}(yazım hatası|yeniden adlandır|biçimlendir|sürüm(ü)? (yükselt|artır)|noktalı virgül|boşluk|girinti|tek satır)`,
+  'iu',
+);
 
 const QUESTION_RE = /^(what|who|when|where|which|why|how|is|are|can|does|do|should|could)\b|\?\s*$/i;
 
-/** "yes", "go ahead", "devam et" — a continuation, not a new small task. */
-const CONTINUATION_RE =
-  /^(y(es|ep|eah)?|ok(ay)?|sure|go( ahead)?|do it|continue|proceed|next|please do|evet|tamam|olur|devam( et)?|yap|başla|onayla)[\s.!]*$/i;
+/** Words that mean "carry on" with nothing else attached. */
+const CONFIRM =
+  'y(es|ep|eah)?|ok(ay)?|sure|go( ahead)?|do it|continue|proceed|next|please( do)?|' +
+  'evet|tamam|olur|peki|hadi|uygundur|devam( et(elim)?)?|yap(alım)?|başla(yalım)?|onayla';
+
+/**
+ * "yes", "go ahead", "evet yap" — a continuation, not a new small task.
+ *
+ * Several confirmations in a row still make one: Turkish stacks them where
+ * English uses a single word ("tamam devam et", "evet yap"). Getting this wrong
+ * is expensive — an unrecognized confirmation is classified on its own two
+ * words, comes out trivial, and drops a hard thread onto a light model.
+ */
+const CONTINUATION_RE = new RegExp(`^(?:${CONFIRM})(?:[\\s,]+(?:${CONFIRM}))*[\\s.!]*$`, 'i');
 
 export function isContinuation(prompt: string): boolean {
   return CONTINUATION_RE.test(prompt.trim());

@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact';
+import { CopyButton } from './CopyButton.js';
 
 type Part =
   | { type: 'code'; lang?: string; code: string }
@@ -113,6 +114,7 @@ export function Markdown({ text }: { text: string }) {
         p.type === 'code' ? (
           <pre class="md-code" key={i}>
             {p.lang && <span class="md-code-lang">{p.lang}</span>}
+            <CopyButton text={p.code.replace(/\n$/, '')} label="Copy code" className="code-copy" />
             <code>{highlight(p.code.replace(/\n$/, ''), p.lang)}</code>
           </pre>
         ) : (

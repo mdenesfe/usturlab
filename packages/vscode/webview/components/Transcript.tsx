@@ -3,111 +3,30 @@ import type { PermissionDecision } from '../../../core/src/adapters/permission.j
 import { Markdown } from './Markdown.js';
 import { IconUsturlab } from './icons.js';
 import { BRAND_COLOR, BrandMark, PROVIDER_NAME } from './brandIcons.js';
-
-function LiveDots() {
-  return (
-    <span class="live-dots">
-      <i />
-      <i />
-      <i />
-    </span>
-  );
-}
-
-/** "Bash ×36 · Read ×5 · Agent" style summary of a tool group. */
-function summarizeSteps(steps: ToolStep[]): string {
-  const counts = new Map<string, number>();
-  for (const step of steps) counts.set(step.name, (counts.get(step.name) ?? 0) + 1);
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 4)
-    .map(([name, n]) => (n > 1 ? `${name} ×${n}` : name))
-    .join(' · ');
-}
-
-// Deliberately basic glyphs: a webview cannot rely on any icon font.
-const ACTION_GLYPH: Record<string, string> = {
-  read: '◇',
-  write: '✚',
-  edit: '✎',
-  search: '⌕',
-  run: '❯',
-  fetch: '↓',
-  task: '⚑',
-  other: '·',
-};
-
-const ACTION_LABEL: Record<string, string> = {
-  read: 'read',
-  write: 'wrote',
-  edit: 'edited',
-  search: 'searched',
-  run: 'ran',
-  fetch: 'fetched',
-  task: 'agent',
-  other: '',
-};
-
-function fileName(path: string): string {
-  const parts = path.split('/');
-  return parts[parts.length - 1] || path;
-}
+import { assistantText } from '../../src/panel/transcript.js';
+import { AgentLanes } from './AgentLanes.js';
+import { CopyButton } from './CopyButton.js';
+import {
+  LiveDots,
+  ToolStepRow,
+  fileName,
+  summarizeSteps,
+  touchedFiles,
+  useAutoOpen,
+} from './steps.js';
 
 /**
- * Files the group touched, newest last — the mini preview the collapsed row
- * shows so you can see what happened without opening anything.
+ * Collapsible timeline entry for consecutive tool activity. It opens itself
+ * while the work is live — watching the model work is the point, and a closed
+ * box that says "3 steps" hides exactly what you came to see.
  */
-function touchedFiles(steps: ToolStep[]): string[] {
-  const seen: string[] = [];
-  for (const step of steps) {
-    if (!step.path) continue;
-    const name = fileName(step.path);
-    if (!seen.includes(name)) seen.push(name);
-  }
-  return seen;
-}
-
-/** One row: what was done, to which file, expandable to the content itself. */
-function ToolStepRow({ step }: { step: ToolStep }) {
-  const action = step.action ?? 'other';
-  const head = (
-    <>
-      <span class={`tool-step-action ${action}`} title={ACTION_LABEL[action] || undefined}>
-        {ACTION_GLYPH[action] ?? '·'}
-      </span>
-      <span class="tool-step-name">{step.name}</span>
-      <span class="tool-step-detail">{step.detail}</span>
-    </>
-  );
-  if (!step.preview) {
-    return <div class="tool-step">{head}</div>;
-  }
-  return (
-    <details class="tool-step expandable">
-      <summary class="tool-step-summary">{head}</summary>
-      <pre class={`tool-step-preview ${action}`}>
-        {action === 'edit'
-          ? step.preview.split('\n').map((line, i) => (
-              <div
-                key={i}
-                class={`diff-line ${line.startsWith('-') ? 'del' : line.startsWith('+') ? 'add' : ''}`}
-              >
-                {line || ' '}
-              </div>
-            ))
-          : step.preview}
-      </pre>
-    </details>
-  );
-}
-
-/** Collapsible timeline entry for consecutive tool activity. */
 function ToolGroup({ steps, running }: { steps: ToolStep[]; running: boolean }) {
   const latest = steps[steps.length - 1];
   const files = touchedFiles(steps);
+  const { open, onSummaryClick } = useAutoOpen(running);
   return (
-    <details class="tool-group">
-      <summary class="tool-summary">
+    <details class={`tool-group ${running ? 'live' : ''}`} open={open}>
+      <summary class="tool-summary" onClick={onSummaryClick}>
         <span class="tool-count">
           {steps.length} step{steps.length > 1 ? 's' : ''}
         </span>
@@ -166,7 +85,8 @@ function PermissionCard({
     );
   }
   return (
-    <div class="permission-block pending">
+    // The model is blocked on this, so it must be announced, not just drawn.
+    <div class="permission-block pending" role="alertdialog" aria-label={request.title}>
       <div class="permission-head">
         <span class={`permission-kind ${request.kind}`}>{KIND_GLYPH[request.kind] ?? '·'}</span>
         <span class="permission-title">{request.title}</span>
@@ -203,13 +123,18 @@ function PermissionCard({
 export function Transcript({
   items,
   noAccounts,
+  running,
   onAddAccount,
   onPermission,
+  onRetry,
 }: {
   items: TranscriptItem[];
   noAccounts?: boolean;
+  /** Whether the conversation is still running — an agent cannot outlive it. */
+  running?: boolean;
   onAddAccount?: () => void;
   onPermission?: (id: string, decision: PermissionDecision) => void;
+  onRetry?: () => void;
 }) {
   if (items.length === 0) {
     return (
@@ -250,7 +175,9 @@ export function Transcript({
     );
   }
   return (
-    <div class="transcript">
+    // A log rather than a live region: announcing every streamed token would
+    // make a screen reader unusable. The work bar carries the live state.
+    <div class="transcript" role="log" aria-label="Conversation" aria-busy={running === true}>
       {items.map((item, i) => {
         switch (item.kind) {
           case 'user':
@@ -264,6 +191,7 @@ export function Transcript({
             const provider = item.target?.provider;
             const color = provider ? BRAND_COLOR[provider] : undefined;
             const lastSegment: Segment | undefined = item.segments[item.segments.length - 1];
+            const answer = assistantText(item).trim();
             return (
               <div
                 key={i}
@@ -297,6 +225,9 @@ export function Transcript({
                         · ≈${item.costUsd.toFixed(2)}
                       </span>
                     )}
+                    {answer && (
+                      <CopyButton text={answer} label="Copy answer" className="answer-copy" />
+                    )}
                   </div>
                 )}
                 {item.segments.map((segment, j) => {
@@ -305,6 +236,9 @@ export function Transcript({
                     return (
                       <ToolGroup key={j} steps={segment.steps} running={!item.done && isLast} />
                     );
+                  }
+                  if (segment.kind === 'agents') {
+                    return <AgentLanes key={j} lanes={segment.lanes} live={running === true} />;
                   }
                   return (
                     <div key={j} class="assistant-body">
@@ -318,6 +252,9 @@ export function Transcript({
                     thinking
                     <LiveDots />
                   </div>
+                )}
+                {item.stopped && (
+                  <div class="assistant-stopped">⊘ {item.stoppedReason ?? 'stopped'}</div>
                 )}
               </div>
             );
@@ -382,8 +319,15 @@ export function Transcript({
             );
           case 'error':
             return (
-              <div key={i} class="msg-error">
-                {item.text}
+              <div key={i} class="msg-error" role="alert">
+                <span class="msg-error-text">{item.text}</span>
+                {/* Only the failure you are actually looking at is worth
+                    offering to redo; older ones are history. */}
+                {i === items.length - 1 && onRetry && !running && (
+                  <button class="retry-btn" onClick={onRetry} title="Send your last message again">
+                    ↻ Retry
+                  </button>
+                )}
               </div>
             );
         }

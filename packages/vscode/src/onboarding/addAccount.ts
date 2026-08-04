@@ -7,6 +7,7 @@ import {
   fetchClaudeUsage,
   getAccountIdentity,
   getClaudeProfileToken,
+  isReviewOnly,
   slugify,
   type AccountProfile,
   type AdapterRegistry,
@@ -71,6 +72,13 @@ const AUTH_OPTIONS: Record<ProviderId, AuthOption[]> = {
       mode: 'api-key',
     },
   ],
+  openrouter: [
+    {
+      label: 'OpenRouter API key',
+      description: 'Free key from openrouter.ai/keys — reviews only, no subscription',
+      mode: 'api-key',
+    },
+  ],
 };
 
 export async function addAccountWizard(
@@ -132,7 +140,11 @@ export async function addAccountWizard(
     await accounts.setSecret(id, key.trim());
     profile.hasSecret = true;
     await accounts.upsert(profile);
-    void vscode.window.showInformationMessage(`usturlab: added ${provider}:${profile.label}`);
+    void vscode.window.showInformationMessage(
+      isReviewOnly(provider)
+        ? `usturlab: added ${provider}:${profile.label} — it reviews the other providers' work and is never routed a task of its own.`
+        : `usturlab: added ${provider}:${profile.label}`,
+    );
     return;
   }
 

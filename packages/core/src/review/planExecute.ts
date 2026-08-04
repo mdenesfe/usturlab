@@ -1,4 +1,5 @@
 import type { Target } from '../types.js';
+import { isReviewOnly } from '../types.js';
 import type { Tier } from '../router/autoRoute.js';
 
 /**
@@ -99,6 +100,9 @@ export function pickExecutor(
   return candidates.find((c) => {
     const candidateKey = `${c.provider}:${c.account}`;
     if (candidateKey === plannerKey) return false;
+    // Carrying out a plan means editing files; a review-only provider has no
+    // tools to do it with, however much headroom it reports.
+    if (isReviewOnly(c.provider)) return false;
     return (headroom[candidateKey] ?? 0) >= 40;
   });
 }

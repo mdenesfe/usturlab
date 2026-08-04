@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import {
   terminalEnvOverrides,
   formatTarget,
+  isReviewOnly,
   type AdapterRegistry,
   type Target,
 } from '@usturlab/core';
@@ -12,7 +13,9 @@ export async function openInTerminal(
   adapters: AdapterRegistry,
   onRouted?: (target: Target) => void,
 ): Promise<void> {
-  const all = accounts.all().filter((a) => !a.disabled);
+  // Review-only providers are an HTTP call, not a CLI — there is no session to
+  // open a terminal on.
+  const all = accounts.all().filter((a) => !a.disabled && !isReviewOnly(a.provider));
   if (all.length === 0) {
     void vscode.window.showWarningMessage('usturlab: no accounts yet — run "usturlab: Add Account" first.');
     return;

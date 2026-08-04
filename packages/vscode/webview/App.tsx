@@ -5,6 +5,7 @@ import { vscode } from './vscodeApi.js';
 import { Transcript } from './components/Transcript.js';
 import { applyHostMessage, type TranscriptItem } from '../src/panel/transcript.js';
 import { Composer } from './components/Composer.js';
+import { WorkBar } from './components/WorkBar.js';
 import { HistoryList } from './components/HistoryList.js';
 import { AccountsView } from './components/AccountsView.js';
 import { RulesView } from './components/RulesView.js';
@@ -177,17 +178,35 @@ function ChatApp() {
   const [routingMode, setRoutingMode] = useState<'auto' | 'manual'>('auto');
   const [attachments, setAttachments] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
+  const [startedAt, setStartedAt] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   // Follow the stream only while the user is already at the bottom —
   // scrolling up to read must never be fought.
   const pinnedRef = useRef(true);
+  // ...but not fighting them is not the same as stranding them: once they are
+  // off the bottom there has to be a way back, and a sign that more arrived.
+  const [pinned, setPinned] = useState(true);
+  const [missed, setMissed] = useState(false);
+
+  const toBottom = () => {
+    pinnedRef.current = true;
+    setPinned(true);
+    setMissed(false);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   useEffect(() => {
     const onMessage = (event: MessageEvent<HostToWebview>) => {
       const msg = event.data;
       setItems((prev) => applyHostMessage(prev, msg));
-      if (msg.kind === 'busy') setRunning(msg.running);
+      if (msg.kind === 'busy') {
+        setRunning(msg.running);
+        // A reopened tab that is still running has no start time to report, so
+        // the clock starts now rather than inventing one.
+        if (msg.running) setStartedAt((prev) => prev || Date.now());
+        else setStartedAt(0);
+      }
       if (msg.kind === 'accounts') setAccounts(msg.accounts);
       if (msg.kind === 'rules') {
         setTags([...new Set(msg.rules.rules.flatMap((r) => r.match.tags ?? []))]);
@@ -210,6 +229,7 @@ function ChatApp() {
 
   useEffect(() => {
     if (pinnedRef.current) bottomRef.current?.scrollIntoView();
+    else if (items.length > 0) setMissed(true);
   }, [items]);
 
   const send = (text: string) => {
@@ -235,22 +255,43 @@ function ChatApp() {
         ref={scrollRef}
         onScroll={() => {
           const el = scrollRef.current;
-          if (el) pinnedRef.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 48;
+          if (!el) return;
+          const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 48;
+          pinnedRef.current = atBottom;
+          setPinned(atBottom);
+          if (atBottom) setMissed(false);
         }}
       >
         <div class="chat-column">
           <Transcript
             items={items}
             noAccounts={accounts.length === 0}
+            running={running}
             onAddAccount={() => vscode.postMessage({ kind: 'addAccount' })}
             onPermission={(id, decision) =>
               vscode.postMessage({ kind: 'permissionDecision', id, decision })
             }
+            onRetry={() => {
+              pinnedRef.current = true;
+              setPinned(true);
+              setMissed(false);
+              vscode.postMessage({ kind: 'retryLast' });
+            }}
           />
           <div ref={bottomRef} />
         </div>
       </div>
       <div class="chat-column composer-holder">
+        {!pinned && items.length > 0 && (
+          <button
+            class={`jump-latest ${missed ? 'missed' : ''}`}
+            onClick={toBottom}
+            aria-label={missed ? 'Jump to latest — new activity below' : 'Jump to latest'}
+          >
+            ↓ {missed ? 'new activity' : 'latest'}
+          </button>
+        )}
+        {running && startedAt > 0 && <WorkBar items={items} startedAt={startedAt} />}
         <Composer
           accounts={accounts}
           tags={tags}

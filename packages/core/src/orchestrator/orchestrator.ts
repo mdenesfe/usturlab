@@ -11,6 +11,7 @@ import { route } from '../router/router.js';
 import type { ConversationContext } from '../router/autoRoute.js';
 import type { TaskMetric } from '../quota/metricsSchema.js';
 import { expandSlashCommand, matchSlashCommand, type SlashCommand } from '../commands/slashCommands.js';
+import { isUnknownModel } from '../adapters/limits.js';
 import type { LiveRunHandle } from '../adapters/adapter.js';
 import type { RulesFile } from '../rules/schema.js';
 import type {
@@ -129,6 +130,10 @@ export class Orchestrator {
       tried.push(target);
       let attempt = 0;
       let retries = 0;
+      // The model this account is actually being asked for. It can fall back to
+      // the CLI's own default once, when the pinned id turns out to be gone.
+      let model = target.model;
+      let downgraded = false;
 
       target: while (true) {
         attempt++;
@@ -181,7 +186,7 @@ export class Orchestrator {
           {
             prompt,
             cwd: task.cwd,
-            model: target.model,
+            model,
             resumeSessionId: nativeSid,
             permissionMode: effectivePermission,
             systemBrief,
@@ -258,6 +263,19 @@ export class Orchestrator {
         }
 
         if (errorEvent) {
+          // A retired model id is not this account's fault, and every other
+          // account would be asked for the same dead name. Drop to the CLI's own
+          // default once and let the account finish the job.
+          if (!downgraded && model && isUnknownModel(errorEvent.message)) {
+            downgraded = true;
+            yield { type: 'model-downgraded', from: model, to: `${target.provider} default` };
+            model = undefined;
+            // Not a new attempt at the same thing — the same attempt, with a
+            // model the CLI will accept. Holding the counter also stops the
+            // panel announcing a dropped connection that never happened.
+            attempt--;
+            continue target;
+          }
           // A dropped stream or an overloaded upstream says nothing about this
           // account — retry it here instead of spending another provider's quota.
           const backoff = this.deps.retryBackoffMs ?? RETRY_BACKOFF_MS;

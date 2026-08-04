@@ -2,7 +2,7 @@
   "name": "usturlab",
   "displayName": "usturlab \u2014 AI Subscription Router",
   "description": "Add all your AI subscriptions (multiple Claude accounts, Codex, Gemini, Copilot) and route every task to the best account and model with user-defined rules and automatic quota failover.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "publisher": "mdenesfe",
   "license": "MIT",
   "icon": "media/marketplace-icon.png",
@@ -213,7 +213,7 @@
             "always"
           ],
           "default": "hard",
-          "markdownDescription": "Have a **different** provider review the work before you rely on it \u2014 a different model sees different mistakes. `hard`: only on work classified as hard. Costs a second account's quota, so it is skipped when headroom is low."
+          "markdownDescription": "Have a **different** provider review the work before you rely on it \u2014 a different model sees different mistakes. `hard`: only on work classified as hard. Connect an **OpenRouter** account and the review runs on a free open-weight model, costing none of your quota; without one it spends a second subscription and is skipped when headroom is low."
         },
         "usturlab.askPermission": {
           "type": "boolean",

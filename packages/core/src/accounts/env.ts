@@ -6,10 +6,20 @@ import type { ProviderId, ResolvedAccount } from '../types.js';
  * silently overrides subscription auth in `claude -p`).
  */
 const SCRUB: Record<ProviderId, string[]> = {
-  claude: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR'],
+  // ANTHROPIC_BASE_URL belongs here too: it does not carry a credential, but it
+  // decides which server the credential is sent to. A stray one in the user's
+  // shell silently reroutes every routed run to a third-party proxy.
+  claude: [
+    'ANTHROPIC_API_KEY',
+    'ANTHROPIC_AUTH_TOKEN',
+    'ANTHROPIC_BASE_URL',
+    'CLAUDE_CODE_OAUTH_TOKEN',
+    'CLAUDE_CONFIG_DIR',
+  ],
   codex: ['OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_HOME'],
   gemini: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_APPLICATION_CREDENTIALS', 'GOOGLE_GENAI_USE_VERTEXAI'],
   copilot: ['COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN', 'COPILOT_HOME'],
+  openrouter: ['OPENROUTER_API_KEY'],
 };
 
 /**
@@ -67,6 +77,11 @@ export function buildChildEnv(
       if (account.authMode === 'api-key' && account.secret) {
         env.COPILOT_GITHUB_TOKEN = account.secret;
       }
+      break;
+    case 'openrouter':
+      // No child process to configure — the adapter calls the API itself. The
+      // var is still set so an interactive shell for this account behaves.
+      if (account.secret) env.OPENROUTER_API_KEY = account.secret;
       break;
   }
   return env;

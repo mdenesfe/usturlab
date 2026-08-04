@@ -1,4 +1,5 @@
 import type { ProviderId, Target } from '../types.js';
+import { isReviewOnly } from '../types.js';
 import type { Classification } from '../router/classify.js';
 import type { BurnEstimate } from '../router/burn.js';
 
@@ -10,9 +11,15 @@ import type { BurnEstimate } from '../router/burn.js';
  * every blind spot that produced the mistake. A *different* model, from a
  * different lab, looking only at the diff, does not.
  *
- * This is expensive, so it is gated: hard work only, a provider that is
- * actually different, and enough headroom that the review does not cost the
- * user their next task.
+ * A review used to be expensive, so it was gated three ways: hard work only, a
+ * provider that is actually different, and enough headroom that the review does
+ * not cost the user their next task.
+ *
+ * A free reviewer removes the third gate entirely. Nothing is being rationed,
+ * so headroom is not consulted and the subscriptions are left for the work that
+ * needs tools. The remaining gates are the user's own setting (`policy`) and
+ * the requirement that the reviewer be a different model from the author —
+ * which a free open-weight model satisfies by construction.
  */
 
 export interface ReviewerChoice {
@@ -55,6 +62,19 @@ export function pickReviewer(options: PickReviewerOptions): ReviewerChoice | und
     const left = options.headroom[key(target)] ?? 0;
     return left >= MIN_HEADROOM_FOR_REVIEW && left - (options.burn?.pct ?? 0) > 10;
   };
+
+  // A reviewer that costs nothing is checked first: it is always a different
+  // lab from the author, and choosing it means the paid accounts keep every
+  // point of headroom for work that actually needs them.
+  const free = options.candidates.find(
+    (c) => isReviewOnly(c.provider) && key(c) !== key(options.author),
+  );
+  if (free) {
+    return {
+      target: free,
+      reason: `reviewed by ${free.provider} — a free open-weight model, none of your quota`,
+    };
+  }
 
   const differentProvider = options.candidates.find(
     (c) => c.provider !== options.author.provider && affordable(c),

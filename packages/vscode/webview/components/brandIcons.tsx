@@ -8,6 +8,8 @@ export const BRAND_COLOR: Record<string, string> = {
   codex: '#10A37F',
   gemini: '#4E8CF9',
   copilot: '#8957E5',
+  // Deliberately neutral: it is not a subscription like the four above.
+  openrouter: '#6E7A8A',
 };
 
 export const PROVIDER_NAME: Record<string, string> = {
@@ -15,6 +17,7 @@ export const PROVIDER_NAME: Record<string, string> = {
   codex: 'Codex · ChatGPT',
   gemini: 'Gemini CLI',
   copilot: 'GitHub Copilot',
+  openrouter: 'OpenRouter · free open-weight models',
 };
 
 const PATHS: Record<string, string> = {
@@ -40,10 +43,31 @@ export function BrandMark({ provider, size = 16 }: { provider: string; size?: nu
     );
   }
   const path = PATHS[provider];
-  if (!path) return null;
+  const color = BRAND_COLOR[provider];
+  // A provider we have no official mark for still needs to be identifiable in
+  // the strip: an initial in its colour, rather than a hole in the row.
+  if (!path) {
+    if (!color) return null;
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" role="img" aria-label={provider}>
+        <circle cx="12" cy="12" r="11" fill={color} />
+        <text
+          x="12"
+          y="12"
+          fill="#fff"
+          font-size="13"
+          font-weight="600"
+          text-anchor="middle"
+          dominant-baseline="central"
+        >
+          {provider.slice(0, 1).toUpperCase()}
+        </text>
+      </svg>
+    );
+  }
   return (
     <svg width={size} height={size} viewBox="0 0 24 24">
-      <path d={path} fill={BRAND_COLOR[provider]} />
+      <path d={path} fill={color} />
     </svg>
   );
 }
