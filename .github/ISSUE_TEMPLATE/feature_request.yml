@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest something usturlab should do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The situation you're in, not the solution yet — it often has a shorter answer than expected.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd like usturlab to do
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part
+      multiple: true
+      options:
+        - Routing rules / auto routing
+        - Failover and quota handling
+        - A new provider
+        - Context and briefs sent to models
+        - Review / second opinion
+        - The panel UI
+        - Accounts and onboarding
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead
+      description: Existing settings, a rules.json workaround, or another tool.

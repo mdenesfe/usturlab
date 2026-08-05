@@ -2,6 +2,8 @@
 
 Thanks for helping! A few pointers:
 
+By taking part you agree to the [Code of Conduct](CODE_OF_CONDUCT.md). Found a security problem? Don't open an issue — see [SECURITY.md](SECURITY.md).
+
 ## Setup
 
 ```bash
@@ -30,3 +32,5 @@ Press **F5** in VS Code to launch the Extension Development Host.
 - Tests must pass (`pnpm test`) and both packages must typecheck (`pnpm build`).
 - Real captured CLI output beats guessed formats — when you touch parsing, paste the actual lines into the tests.
 - Never log or persist secrets; they belong in the VS Code secret store only.
+- Scrub captured output before committing it: tokens, account names, absolute paths and anything else from your machine. Fixtures are public.
+- Provider names and logos identify the services and nothing more — keep it that way, and don't imply endorsement by any of them.

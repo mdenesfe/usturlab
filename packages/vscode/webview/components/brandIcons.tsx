@@ -1,6 +1,10 @@
 /**
- * Official provider marks (Simple Icons path data; claude = the Claude starburst) in each brand's color,
- * used to identify the services — nominative use.
+ * Official provider marks in each brand's color (claude = the Claude starburst), used
+ * only to identify the services usturlab connects to — nominative use.
+ *
+ * Mark outlines come from Simple Icons (https://github.com/simple-icons/simple-icons),
+ * released under CC0 1.0. The marks themselves stay trademarks of their owners, and
+ * usturlab is not affiliated with any of them; see the trademark note in the README.
  */
 
 export const BRAND_COLOR: Record<string, string> = {

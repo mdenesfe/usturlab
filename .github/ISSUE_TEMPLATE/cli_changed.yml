@@ -1,0 +1,62 @@
+name: A provider CLI changed its output
+description: A CLI updated, and usturlab now misreads its limit message, usage, or stream.
+labels: [bug, adapter]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        usturlab parses what each CLI prints, so a vendor changing its wording breaks detection.
+        These reports are the most useful kind — the fix is usually one fingerprint in
+        `packages/core/src/adapters/limits.ts` plus a test case.
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - Claude Code
+        - Codex (ChatGPT)
+        - Gemini CLI
+        - GitHub Copilot
+        - OpenRouter
+    validations:
+      required: true
+
+  - type: input
+    id: cli-version
+    attributes:
+      label: CLI version that broke it
+      placeholder: "claude 2.1.220"
+    validations:
+      required: true
+
+  - type: input
+    id: last-good
+    attributes:
+      label: Last version that worked, if you know it
+      placeholder: "claude 2.1.216"
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: What is misread
+      options:
+        - Limit / quota message not detected (no failover)
+        - Limit detected when there was none (false failover)
+        - Token or cost numbers wrong
+        - Stream parsing — tool calls, subagents, or tasks render wrong
+        - Login / account detection
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: verbatim
+    attributes:
+      label: The exact text the CLI printed
+      description: |
+        Verbatim, not paraphrased — fingerprints are matched literally, and this string
+        goes into the test suite. Scrub anything private first.
+      render: text
+    validations:
+      required: true

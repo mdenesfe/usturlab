@@ -31,7 +31,7 @@ Claude-panel style, built for a developer environment:
 
 Conversations persist across VS Code restarts, including native CLI session ids, so old chats keep their context.
 
-## How it works (and why it's ToS-friendly)
+## How it works
 
 Consumer AI subscriptions can't be called directly over the API. usturlab therefore never touches provider APIs with subscription credentials — it **orchestrates the official CLIs** (`claude`, `codex`, `gemini`, `copilot`) as subprocesses, each authenticated with its own isolated profile:
 
@@ -140,6 +140,18 @@ Limit-message fingerprints live in `packages/core/src/adapters/limits.ts` — wh
 - Copilot CLI's programmatic mode is plain text; tool activity is not itemized.
 - Quota polling uses undocumented endpoints and is off by default; passive detection (parsing the CLI's limit message mid-run) is the primary mechanism.
 
-## License
+## Your accounts, and each provider's terms
 
-MIT
+usturlab drives each provider's own official CLI, authenticated with credentials you logged in yourself. It does not share, pool or resell accounts, and it never sends subscription credentials to a provider's API.
+
+What it cannot do is know the terms of *your* plan. Those are set by each provider, differ between plans, and change. Registering several accounts and routing work between them is your decision under whatever agreement you hold with each of them — read those terms and stay inside them. Nothing here is legal advice, and the design described above is not a guarantee about any provider's rules.
+
+One switch is worth choosing deliberately rather than inheriting: **quota polling reads undocumented usage endpoints, and is off by default.** The primary mechanism — reading the limit message the CLI itself prints mid-run — needs no such call, so leaving it off costs you very little.
+
+## License, trademarks and attribution
+
+MIT.
+
+usturlab is an independent project. It is **not affiliated with, endorsed by, or sponsored by** Anthropic, OpenAI, Google, GitHub, Microsoft or OpenRouter. *Claude*, *Codex*, *ChatGPT*, *Gemini*, *Copilot* and their logos are trademarks of their respective owners, used here only to identify the services usturlab connects to.
+
+Provider mark outlines in the UI come from [Simple Icons](https://github.com/simple-icons/simple-icons), released under CC0 1.0.
