@@ -48,7 +48,6 @@ export type WebviewToHost =
   | { kind: 'renameAccount'; id: string }
   | { kind: 'openRules' }
   | { kind: 'editRules' }
-  | { kind: 'openRulesBuilder' }
   | { kind: 'saveRule'; rule: Rule; ruleIndex?: number }
   | { kind: 'deleteRule'; ruleId: string }
   | { kind: 'reorderRules'; order: string[] }

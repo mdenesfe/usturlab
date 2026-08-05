@@ -2558,9 +2558,145 @@ body.resizing {
 
 /* ── rules screen ───────────────────────────────────────── */
 
-.rules-path {
+/*
+ * The rules tab borrows the accounts shell — an ordered list on the left, the
+ * thing that row stands for on the right — because it is the same kind of
+ * screen. What is different is that the order of the list is itself an edit:
+ * the router tries rules top to bottom and stops at the first match, so the
+ * rows are numbered and can be moved.
+ */
+
+.rules-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-note {
+  padding: 0 8px 6px;
   font-family: var(--mono);
-  font-size: 0.75em;
+  font-size: 0.68em;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.list-note.spaced {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.rules-row {
+  align-items: center;
+}
+
+.rules-order {
+  width: 15px;
+  flex-shrink: 0;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 0.72em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.rules-order.fallback {
+  color: var(--accent);
+}
+
+.rules-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.rules-row-id {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rules-row-sub {
+  font-size: 0.72em;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accounts-row.active .rules-row-sub {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.row-marks {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+/* An exclusion-only rule says where work may not go: the marks are struck out
+ * rather than merely dimmed, so they cannot be read as "goes here". */
+.row-marks.barred {
+  position: relative;
+  opacity: 0.55;
+  filter: grayscale(1);
+}
+
+.row-marks.barred::after {
+  content: '';
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  top: 50%;
+  height: 1px;
+  background: var(--vscode-errorForeground);
+  opacity: 0.75;
+  transform: rotate(-15deg);
+}
+
+/* Reordering is one hover away, and stays reachable from the keyboard. */
+.rules-row-move {
+  display: flex;
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.rules-row:hover .rules-row-move,
+.rules-row:focus-within .rules-row-move {
+  opacity: 1;
+}
+
+.rules-row:hover .row-marks,
+.rules-row:focus-within .row-marks {
+  display: none;
+}
+
+.rules-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.rules-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 2px;
+}
+
+.rules-path {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 0.7em;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2568,68 +2704,326 @@ body.resizing {
 }
 
 .rules-missing {
+  padding: 0 6px;
+  font-size: 0.7em;
+  line-height: 1.45;
   color: var(--vscode-charts-yellow, #d0a54e);
 }
 
-.rule-card {
+.rules-detail-holder {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.rules-error {
+  margin: 16px 28px 0;
+}
+
+.rules-empty {
+  margin: 32px 28px;
+}
+
+.empty-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.rule-detail {
+  flex: 1;
+  min-height: 0;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* The id and the description are the rule's name — edited where they are read. */
+.title-input,
+.sub-input {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  padding: 1px 5px;
+  margin-left: -5px;
+}
+
+.title-input {
+  font-family: var(--mono);
+  font-size: 1.15em;
+}
+
+.sub-input {
+  font-family: var(--vscode-font-family);
+  font-size: 0.82em;
+  color: var(--muted);
+}
+
+.title-input:hover,
+.sub-input:hover {
+  border-color: var(--border);
+}
+
+.title-input:focus,
+.sub-input:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-input-background);
+}
+
+.detail-section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+/* Says what the section does with what is in it, without shouting it. */
+.section-note {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0.75;
+}
+
+/* ── match conditions ───────────────────────────────────── */
+
+.match-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.match-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.field-label {
+  font-family: var(--mono);
+  font-size: 0.78em;
+}
+
+.field-note {
+  font-size: 0.72em;
+  color: var(--muted);
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--vscode-input-background);
+}
+
+.chip-row:focus-within {
+  border-color: var(--vscode-focusBorder);
+}
+
+.edit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 3px 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.12));
+  font-size: 0.78em;
+}
+
+.edit-chip.mono {
+  font-family: var(--mono);
+  font-size: 0.74em;
+}
+
+.chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.chip-x:hover {
+  color: var(--vscode-errorForeground);
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.15));
+}
+
+.chip-input {
+  flex: 1;
+  min-width: 90px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: 0.8em;
+}
+
+.chip-input.mono {
+  font-family: var(--mono);
+  font-size: 0.76em;
+}
+
+.field-input,
+.field-select {
+  height: var(--control-h);
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground, var(--vscode-foreground));
+  font-family: var(--mono);
+  font-size: 0.78em;
+}
+
+.field-select {
+  cursor: pointer;
+}
+
+.field-input.narrow {
+  width: 140px;
+}
+
+.field-input:focus,
+.field-select:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+/* ── failover chains ────────────────────────────────────── */
+
+.chain-editor {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 14px;
+}
+
+.chain-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chain-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--vscode-sideBar-background);
 }
 
-.rule-card.default-chain {
-  border-style: dashed;
-}
-
-.rule-head {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.rule-id {
-  font-family: var(--mono);
-  font-size: 0.9em;
-  color: var(--vscode-charts-blue, #4a9eda);
-}
-
-.rule-desc {
-  font-size: 0.8em;
-  color: var(--muted);
-}
-
-.rule-match {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.match-chip {
+.chain-order {
+  width: 12px;
+  flex-shrink: 0;
   font-family: var(--mono);
   font-size: 0.72em;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 1px 7px;
-  color: var(--vscode-foreground);
-}
-
-.match-label {
   color: var(--muted);
-  text-transform: uppercase;
-  font-size: 0.9em;
-  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
 }
 
-.target-chain {
+.chain-target {
+  font-family: var(--mono);
+  font-size: 0.82em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chain-model {
+  color: var(--muted);
+}
+
+.chain-warn {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.68em;
+  color: var(--vscode-charts-yellow, #d0a54e);
+}
+
+.chain-btn {
+  width: 18px;
+  height: 18px;
+  opacity: 0.55;
+}
+
+.chain-btn:hover:not(:disabled) {
+  opacity: 1;
+}
+
+.chain-btn:disabled {
+  opacity: 0.18;
+  cursor: default;
+  background: transparent;
+}
+
+.chain-btn.remove:hover {
+  color: var(--vscode-errorForeground);
+}
+
+.chain-add {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 6px;
+  flex-wrap: wrap;
+}
+
+.add-target-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--control-h);
+}
+
+.ghost-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ghost-btn:disabled:hover {
+  background: transparent;
+}
+
+.ghost-btn.danger:hover {
+  border-color: var(--vscode-errorForeground);
+  color: var(--vscode-errorForeground);
+  background: transparent;
+}
+
+.chain-empty {
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  font-size: 0.8em;
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 .chain-pill {
@@ -2641,13 +3035,9 @@ body.resizing {
   padding: 2px 9px;
 }
 
-.chain-model {
-  color: var(--muted);
-}
-
-.chain-arrow {
-  color: var(--muted);
-  font-size: 0.85em;
+.rule-problem {
+  font-size: 0.78em;
+  color: var(--vscode-errorForeground);
 }
 
 .run-btn {
@@ -2701,138 +3091,137 @@ body.resizing {
 
 /* ── analytics ─────────────────────────────────────────── */
 
+/*
+ * The record every routing decision is calibrated on. Same vocabulary as the
+ * accounts screen — cards for the headline numbers, bars for rates, mono for
+ * anything you might compare against another row.
+ */
+
 .analytics-page {
   display: flex;
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
+  background: var(--vscode-editor-background);
 }
 
 .analytics-header {
-  padding: 16px;
-  border-bottom: 1px solid var(--border);
   display: flex;
-  justify-content: space-between;
   align-items: center;
-}
-
-.analytics-header h1 {
-  margin: 0;
-  font-size: 1.1em;
-  font-weight: 600;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
 }
 
 .analytics-controls {
   display: flex;
-  gap: 8px;
   align-items: center;
+  gap: 8px;
 }
 
-.filter-select {
-  padding: 4px 8px;
+/* Three ranges, all visible: a dropdown would hide two thirds of the choice. */
+.range-seg {
+  display: inline-flex;
   border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--vscode-input-background);
-  color: var(--vscode-foreground);
-  font-family: var(--vscode-font-family);
-  font-size: 0.9em;
-  cursor: pointer;
+  border-radius: 5px;
+  overflow: hidden;
 }
 
-.clear-btn {
-  padding: 4px 12px;
-  border: 1px solid var(--vscode-errorForeground);
-  border-radius: 4px;
+.seg-btn {
+  border: none;
   background: transparent;
-  color: var(--vscode-errorForeground);
-  font-family: var(--vscode-font-family);
-  font-size: 0.9em;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.74em;
+  padding: 4px 11px;
   cursor: pointer;
 }
 
-.clear-btn:hover {
-  background: var(--vscode-inputValidation-errorBackground, rgba(200, 60, 60, 0.15));
+.seg-btn + .seg-btn {
+  border-left: 1px solid var(--border);
 }
 
-.analytics-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-  padding: 16px;
-  background: var(--vscode-editor-background);
-  border-bottom: 1px solid var(--border);
+.seg-btn:hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-foreground);
 }
 
-.stat-card {
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+.seg-btn.active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--vscode-foreground);
 }
 
-.stat-label {
-  font-size: 0.75em;
-  color: var(--muted);
-  text-transform: uppercase;
-  margin-bottom: 4px;
-  letter-spacing: 0.5px;
+.analytics-body {
+  flex: 1;
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
-.stat-value {
-  font-size: 1.3em;
-  font-weight: 600;
-  font-family: var(--mono);
+.analytics-body .detail-section.wide {
+  max-width: none;
 }
 
-.stat-value.good {
-  color: #4ec9b0;
+.stat-grid {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
 
-.stat-value.ok {
-  color: #d7ba7d;
+/* Green reads "good" here, as it does on the quota bars. */
+.usage-card-pct.good,
+.learn-pct.good {
+  color: var(--vscode-charts-green, #6cbe6c);
 }
 
-.stat-value.bad {
-  color: #f48771;
+.usage-card-pct.ok,
+.learn-pct.ok {
+  color: var(--vscode-charts-yellow, #d0a54e);
 }
 
-.stat-foot {
-  margin-top: 6px;
-  font-size: 0.75em;
-  color: var(--muted);
-  line-height: 1.4;
+.usage-card-pct.bad,
+.learn-pct.bad {
+  color: var(--vscode-charts-red, #d05e5e);
+}
+
+.usage-fill.good,
+.learn-fill.good {
+  background: var(--vscode-charts-green, #6cbe6c);
+}
+
+.usage-fill.ok,
+.learn-fill.ok {
+  background: var(--vscode-charts-yellow, #d0a54e);
+}
+
+.usage-fill.bad,
+.learn-fill.bad {
+  background: var(--vscode-charts-red, #d05e5e);
 }
 
 .analytics-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  padding: 24px 48px;
-  color: var(--muted);
-  font-size: 0.9em;
-  line-height: 1.6;
-  text-align: center;
-}
-
-.analytics-section {
-  margin-bottom: 24px;
+  padding: 40px 16px;
 }
 
 .learn-rows {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 6px;
   overflow: hidden;
 }
 
 .learn-row {
   display: grid;
-  grid-template-columns: 18px minmax(120px, 1fr) 70px 100px 90px 80px 130px;
+  grid-template-columns: 18px minmax(120px, 1fr) 70px minmax(80px, 140px) 90px 80px 150px;
   gap: 10px;
   align-items: center;
   padding: 8px 12px;
-  background: var(--vscode-editor-background);
+  background: var(--vscode-sideBar-background);
   border-bottom: 1px solid var(--border);
   font-size: 0.85em;
 }
@@ -2849,7 +3238,6 @@ body.resizing {
 
 .learn-name {
   font-family: var(--mono);
-  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2861,12 +3249,14 @@ body.resizing {
   font-family: var(--mono);
   font-size: 0.9em;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .learn-bar {
   height: 5px;
   border-radius: 3px;
-  background: var(--vscode-input-background);
+  background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.15));
   overflow: hidden;
 }
 
@@ -2876,18 +3266,6 @@ body.resizing {
   border-radius: 3px;
 }
 
-.learn-fill.good {
-  background: #4ec9b0;
-}
-
-.learn-fill.ok {
-  background: #d7ba7d;
-}
-
-.learn-fill.bad {
-  background: #f48771;
-}
-
 .learn-pct {
   font-family: var(--mono);
   font-size: 0.9em;
@@ -2895,852 +3273,174 @@ body.resizing {
 }
 
 .analytics-note {
-  margin: 0 0 8px;
+  margin: 0;
   color: var(--muted);
-  font-size: 0.82em;
+  font-size: 0.8em;
   line-height: 1.6;
 }
 
-.analytics-breakdown {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-}
-
-.analytics-breakdown h2 {
-  margin-top: 0;
-  margin-bottom: 12px;
-  font-size: 0.95em;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: var(--muted);
-  letter-spacing: 0.5px;
-}
-
 .provider-group {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .group-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
-  background: var(--vscode-editor-background);
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--vscode-sideBar-background);
   border: 1px solid var(--border);
-  border-radius: 4px 4px 0 0;
-  border-bottom: none;
+  border-radius: 6px 6px 0 0;
 }
 
 .group-title {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-weight: 600;
+  gap: 8px;
   font-family: var(--mono);
-  font-size: 0.95em;
+  font-size: 0.88em;
+  min-width: 0;
 }
 
 .group-gone {
-  padding: 1px 6px;
-  border-radius: 3px;
-  background: var(--vscode-input-background);
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   color: var(--muted);
   font-size: 0.8em;
-  font-weight: 400;
 }
 
 .group-stats {
   display: flex;
   gap: 12px;
-  font-size: 0.85em;
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 0.76em;
   color: var(--muted);
 }
 
 .metric-rows {
   border: 1px solid var(--border);
   border-top: none;
-  border-radius: 0 0 4px 4px;
+  border-radius: 0 0 6px 6px;
   overflow: hidden;
 }
 
 .metric-row {
   display: grid;
-  grid-template-columns: 56px minmax(90px, 1fr) 150px 60px 56px 170px;
-  gap: 12px;
-  padding: 8px 12px;
+  grid-template-columns: 84px minmax(90px, 1fr) 118px 90px 62px 58px 48px minmax(90px, 210px);
+  gap: 10px;
+  padding: 6px 12px;
   align-items: center;
   background: var(--vscode-editor-background);
   border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
   font-family: var(--mono);
-  font-size: 0.85em;
+  font-size: 0.78em;
 }
 
-.metric-kind,
-.metric-burn,
-.metric-duration {
+.metric-row:last-child {
+  border-bottom: none;
+}
+
+.metric-row.status-success {
+  border-left-color: var(--vscode-charts-green, #6cbe6c);
+}
+
+.metric-row.status-error {
+  border-left-color: var(--vscode-charts-red, #d05e5e);
+  opacity: 0.75;
+}
+
+.metric-row.status-failover {
+  border-left-color: var(--accent);
+}
+
+.metric-time {
   color: var(--muted);
+}
+
+.metric-model,
+.metric-kind,
+.metric-tokens,
+.metric-duration,
+.metric-burn {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.metric-kind,
+.metric-tokens,
+.metric-duration,
+.metric-burn {
+  color: var(--muted);
+}
+
+.metric-cost {
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-duration,
+.metric-burn {
+  text-align: right;
 }
 
 .metric-flags {
   display: flex;
-  gap: 5px;
+  gap: 4px;
   justify-content: flex-end;
+  overflow: hidden;
 }
 
 .metric-flag {
-  padding: 1px 6px;
-  border-radius: 3px;
-  background: var(--vscode-input-background);
-  color: var(--muted);
-  font-size: 0.85em;
-}
-
-.metric-row:last-child {
-  border-bottom: none;
-}
-
-.metric-row.status-success {
-  border-left: 3px solid #4ec9b0;
-}
-
-.metric-row.status-error {
-  border-left: 3px solid #f48771;
-  opacity: 0.7;
-}
-
-.metric-row.status-failover {
-  border-left: 3px solid var(--accent);
-}
-
-.metric-time {
-  color: var(--muted);
-  font-size: 0.8em;
-}
-
-.metric-model {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.metric-tokens {
-  color: var(--muted);
-}
-
-.metric-cost {
-  font-weight: 500;
-}
-
-.metric-duration {
-  text-align: right;
-  color: var(--muted);
-}
-
-/* ── rules builder ──────────────────────────────────── */
-
-.rules-builder {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-}
-
-.builder-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.builder-header h1 {
-  margin: 0;
-  font-size: 1em;
-  font-weight: 600;
-}
-
-.new-rule-btn {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  background: var(--accent);
-  color: #ffffff;
-  font-family: var(--vscode-font-family);
-  font-size: 0.85em;
-  font-weight: 500;
-  cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s;
-}
-
-.new-rule-btn:hover {
-  background: #c40913;
-}
-
-.rules-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-}
-
-.empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.12));
   color: var(--muted);
-  font-size: 0.9em;
+  font-size: 0.88em;
 }
 
-.rule-card {
-  padding: 10px 12px;
-  margin-bottom: 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--vscode-editor-background);
-  transition: border-color 0.15s;
+.metric-flag.warn {
+  color: var(--vscode-charts-yellow, #d0a54e);
 }
 
-.rule-card:hover {
-  border-color: var(--vscode-focusBorder, var(--accent));
+.metric-flag.verify-passed {
+  color: var(--vscode-charts-green, #6cbe6c);
 }
 
-.rule-header {
-  margin-bottom: 8px;
+.metric-flag.verify-failed {
+  color: var(--vscode-charts-red, #d05e5e);
 }
 
-.rule-title {
-  font-weight: 500;
-  font-family: var(--mono);
-  font-size: 0.9em;
-  color: var(--vscode-foreground);
-}
-
-.rule-desc {
-  font-size: 0.8em;
-  color: var(--muted);
-  margin-top: 2px;
-}
-
-.rule-content {
-  margin-bottom: 10px;
-}
-
-.match-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  margin-bottom: 6px;
-  font-size: 0.8em;
-}
-
-.chip-label {
-  color: var(--muted);
-  text-transform: uppercase;
-  font-size: 0.7em;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-}
-
-.chip {
-  display: inline-block;
-  padding: 2px 6px;
-  border-radius: 10px;
-  background: var(--vscode-inputValidation-infoBackground, rgba(0, 122, 204, 0.1));
-  color: var(--vscode-inputValidation-infoBorder, #007acc);
-  font-size: 0.75em;
-}
-
-.chip.mono {
-  font-family: var(--mono);
-}
-
-.chain-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
-  font-size: 0.8em;
-}
-
-.chain-label {
-  color: var(--muted);
-  font-weight: 500;
-}
-
-.chain-pill {
-  display: inline-block;
-  padding: 3px 8px;
-  border-radius: 3px;
-  background: rgba(230, 10, 23, 0.08);
-  border: 1px solid rgba(230, 10, 23, 0.2);
-  font-family: var(--mono);
-  font-size: 0.75em;
-  color: var(--vscode-foreground);
-}
-
-.model-suffix {
-  opacity: 0.6;
-  font-size: 0.9em;
-}
-
-.rule-actions {
-  display: flex;
-  gap: 6px;
-  border-top: 1px solid var(--border);
-  padding-top: 8px;
-  margin-top: 8px;
-}
-
-.edit-btn,
-.delete-btn {
-  flex: 1;
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-foreground);
-  font-size: 0.8em;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.edit-btn:hover {
-  background: var(--vscode-list-hoverBackground);
-}
-
-.delete-btn {
-  background: transparent;
-  border-color: var(--vscode-errorForeground);
-  color: var(--vscode-errorForeground);
-}
-
-.delete-btn:hover {
-  background: rgba(255, 0, 0, 0.08);
-}
-
-.default-chain-section {
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-  background: var(--vscode-sideBar-background);
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.section-header h2 {
-  margin: 0;
-  font-size: 0.9em;
-  font-weight: 600;
-}
-
-.section-desc {
-  font-size: 0.75em;
-  color: var(--muted);
-}
-
-.empty-chain {
-  padding: 10px;
-  border: 1px dashed var(--border);
-  border-radius: 3px;
-  color: var(--muted);
-  text-align: center;
-  font-size: 0.8em;
-}
-
-.chain-display {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-/* ── rule editor ─────────────────────────────────────── */
-
-.rule-editor {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-}
-
-.editor-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.editor-header h2 {
-  margin: 0;
-  font-size: 1em;
-  font-weight: 600;
-}
-
-.editor-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.cancel-btn,
-.save-btn {
-  padding: 6px 14px;
-  border: none;
-  border-radius: 4px;
-  font-family: var(--vscode-font-family);
-  font-size: 0.85em;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.cancel-btn {
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-foreground);
-}
-
-.cancel-btn:hover {
-  background: var(--vscode-list-hoverBackground);
-}
-
-.save-btn {
-  background: var(--accent);
-  color: #ffffff;
-}
-
-.save-btn:hover {
-  background: #c40913;
-}
-
-.editor-form {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-}
-
-.form-group {
-  margin-bottom: 18px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 6px;
-  font-weight: 500;
-  font-size: 0.85em;
-  color: var(--vscode-foreground);
-}
-
-.form-group input[type='text'],
-.form-group input[type='number'],
-.form-group select {
-  width: 100%;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: var(--vscode-input-background);
-  color: var(--vscode-foreground);
-  font-family: var(--vscode-font-family);
-  font-size: 0.85em;
-  transition: border-color 0.15s;
-}
-
-.form-group input:focus,
-.form-group select:focus {
-  outline: none;
-  border-color: var(--vscode-focusBorder, var(--accent));
-}
-
-.number-input {
-  max-width: 200px;
-}
-
-.error-text {
-  color: var(--vscode-errorForeground);
-  font-size: 0.75em;
-  margin-top: 4px;
-}
-
-/* ── match condition editor ─────────────────────────── */
-
-.match-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 12px;
-  background: var(--vscode-editor-background);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-}
-
-.condition-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.condition-group label {
-  font-size: 0.8em;
-  font-weight: 600;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  min-height: 24px;
-}
-
-.tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 6px;
-  border-radius: 3px;
-  background: rgba(0, 122, 204, 0.1);
-  color: var(--vscode-inputValidation-infoBorder, #007acc);
-  font-size: 0.75em;
-}
-
-.tag-remove {
-  background: none;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-  font-size: 1.1em;
-  padding: 0;
-  width: 16px;
-  height: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.7;
-  transition: opacity 0.15s;
-}
+/*
+ * Half a screen wide — the analytics tab beside a chat — is a normal place to
+ * read this from. The columns that are context rather than measurement give way
+ * first, so what is left still lines up instead of wrapping into mush.
+ */
+@media (max-width: 900px) {
+  .metric-row {
+    grid-template-columns: 84px minmax(80px, 1fr) 84px 58px 54px minmax(70px, 150px);
+  }
 
-.tag-remove:hover {
-  opacity: 1;
-}
-
-.tag-input {
-  display: flex;
-  gap: 4px;
-}
-
-.tag-input input {
-  flex: 1;
-}
-
-.add-btn {
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-foreground);
-  font-size: 0.8em;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.add-btn:hover {
-  background: var(--vscode-list-hoverBackground);
-}
-
-/* ── target list ────────────────────────────────────── */
-
-.target-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.target-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: var(--vscode-editor-background);
-  font-size: 0.8em;
-  transition: border-color 0.15s;
-}
-
-.target-item:hover {
-  border-color: var(--vscode-focusBorder, var(--accent));
-}
-
-.target-label {
-  font-family: var(--mono);
-  flex: 1;
-  color: var(--vscode-foreground);
-}
-
-.target-model {
-  opacity: 0.6;
-  font-size: 0.85em;
-}
-
-.target-remove {
-  padding: 2px 6px;
-  margin-left: 8px;
-  border: none;
-  background: transparent;
-  color: var(--vscode-errorForeground);
-  cursor: pointer;
-  font-size: 0.75em;
-  transition: background 0.15s;
-}
-
-.target-remove:hover {
-  background: rgba(255, 0, 0, 0.08);
-}
-
-.add-target {
-  display: flex;
-  gap: 6px;
-}
-
-.add-target select,
-.add-target input {
-  flex: 1;
-  font-size: 0.85em;
-}
-
-.default-chain-editor {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-}
-
-.default-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-/* ── analytics ─────────────────────────────────────────── */
-
-.analytics-page {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-}
-
-.analytics-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.analytics-header h1 {
-  margin: 0;
-  font-size: 1em;
-  font-weight: 600;
-}
-
-.analytics-controls {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.filter-select {
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: var(--vscode-input-background);
-  color: var(--vscode-foreground);
-  font-family: var(--vscode-font-family);
-  font-size: 0.8em;
-  cursor: pointer;
-}
-
-.clear-btn {
-  padding: 4px 10px;
-  border: 1px solid var(--vscode-errorForeground);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--vscode-errorForeground);
-  font-family: var(--vscode-font-family);
-  font-size: 0.8em;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.clear-btn:hover {
-  background: rgba(255, 0, 0, 0.08);
-}
-
-.analytics-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
-  gap: 10px;
-  padding: 12px 16px;
-  background: var(--vscode-editor-background);
-  border-bottom: 1px solid var(--border);
-}
-
-.stat-card {
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: var(--vscode-sideBar-background);
-}
-
-.stat-label {
-  font-size: 0.7em;
-  color: var(--muted);
-  text-transform: uppercase;
-  margin-bottom: 4px;
-  letter-spacing: 0.3px;
-  font-weight: 600;
-}
-
-.stat-value {
-  font-size: 1.2em;
-  font-weight: 600;
-  font-family: var(--mono);
-  color: var(--vscode-foreground);
-}
-
-.analytics-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  color: var(--muted);
-  font-size: 0.9em;
-}
-
-.analytics-breakdown {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px 16px;
-}
-
-.analytics-breakdown h2 {
-  margin: 0 0 10px 0;
-  font-size: 0.8em;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: var(--muted);
-  letter-spacing: 0.3px;
-}
-
-.provider-group {
-  margin-bottom: 12px;
-}
-
-.group-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 10px;
-  background: var(--vscode-editor-background);
-  border: 1px solid var(--border);
-  border-radius: 3px 3px 0 0;
-  border-bottom: none;
-}
-
-.group-title {
-  font-weight: 500;
-  font-family: var(--mono);
-  font-size: 0.85em;
-}
-
-.group-stats {
-  display: flex;
-  gap: 10px;
-  font-size: 0.75em;
-  color: var(--muted);
-}
-
-.metric-rows {
-  border: 1px solid var(--border);
-  border-top: none;
-  border-radius: 0 0 3px 3px;
-  overflow: hidden;
-}
-
-.metric-row {
-  display: grid;
-  grid-template-columns: 60px 60px 80px 50px 60px;
-  gap: 8px;
-  padding: 6px 10px;
-  align-items: center;
-  background: var(--vscode-editor-background);
-  border-bottom: 1px solid var(--border);
-  font-family: var(--mono);
-  font-size: 0.75em;
-  transition: background 0.15s;
-}
-
-.metric-row:hover {
-  background: var(--vscode-list-hoverBackground);
-}
-
-.metric-row:last-child {
-  border-bottom: none;
-}
+  .metric-kind,
+  .metric-burn {
+    display: none;
+  }
 
-.metric-row.status-success {
-  border-left: 2px solid #4ec9b0;
-}
-
-.metric-row.status-error {
-  border-left: 2px solid #f48771;
-  opacity: 0.8;
-}
-
-.metric-row.status-failover {
-  border-left: 2px solid var(--accent);
-}
-
-.metric-time {
-  color: var(--muted);
-  font-size: 0.85em;
-}
-
-.metric-model {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+  .learn-row {
+    grid-template-columns: 18px minmax(100px, 1fr) 62px minmax(60px, 110px) 84px;
+  }
 
-.metric-tokens {
-  color: var(--muted);
-}
-
-.metric-cost {
-  font-weight: 500;
-}
+  .learn-row .learn-sub {
+    display: none;
+  }
 
-.metric-duration {
-  text-align: right;
-  color: var(--muted);
+  .group-stats span:nth-child(3) {
+    display: none;
+  }
 }
 
 /* ── motion ─────────────────────────────────────────────── */

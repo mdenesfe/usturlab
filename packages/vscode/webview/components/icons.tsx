@@ -90,6 +90,26 @@ export const IconRoute = ({ size }: IconProps) => (
   </svg>
 );
 
+/* Order is meaning in a rules list — the first match wins — so moving a rule
+ * up or down is an edit, not a cosmetic sort. */
+export const IconUp = ({ size }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M4.5 9.5L8 6l3.5 3.5" />
+  </svg>
+);
+
+export const IconDown = ({ size }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M4.5 6.5L8 10l3.5-3.5" />
+  </svg>
+);
+
+export const IconClose = ({ size }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" />
+  </svg>
+);
+
 export const IconAnalytics = ({ size }: IconProps) => (
   <svg {...base(size)}>
     <rect x="3" y="9" width="2" height="5" rx="0.5" fill="currentColor" stroke="none" />

@@ -89,7 +89,7 @@ interface ConversationRecord {
 }
 
 interface Surface {
-  mode: 'sidebar' | 'tab' | 'accounts' | 'rules' | 'rulesBuilder' | 'analytics';
+  mode: 'sidebar' | 'tab' | 'accounts' | 'rules' | 'analytics';
   conversationId?: string;
 }
 
@@ -109,7 +109,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private panels = new Map<string, vscode.WebviewPanel>();
   private accountsPanel?: vscode.WebviewPanel;
   private rulesPanel?: vscode.WebviewPanel;
-  private rulesBuilderPanel?: vscode.WebviewPanel;
   private analyticsPanel?: vscode.WebviewPanel;
   private conversations = new Map<string, ConversationRecord>();
   private tasks = new Map<string, AbortController>();
@@ -270,6 +269,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     'sidebar',
     'tab',
     'accounts',
+    'rules',
     'analytics',
   ]);
 
@@ -388,29 +388,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     panel.onDidDispose(() => {
       this.surfaces.delete(panel.webview);
       this.rulesPanel = undefined;
-    });
-  }
-
-  /** Opens (or reveals) the visual rules builder tab. */
-  openRulesBuilderTab(): void {
-    if (this.safeReveal(this.rulesBuilderPanel)) return;
-    this.rulesBuilderPanel = undefined;
-    const panel = vscode.window.createWebviewPanel(
-      'usturlab.rulesBuilderTab',
-      'usturlab · Rules Builder',
-      vscode.ViewColumn.Active,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: [vscode.Uri.joinPath(this.ctx.extensionUri, 'media')],
-      },
-    );
-    panel.iconPath = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'tab-icon.svg');
-    this.rulesBuilderPanel = panel;
-    this.attach(panel.webview, { mode: 'rulesBuilder' });
-    panel.onDidDispose(() => {
-      this.surfaces.delete(panel.webview);
-      this.rulesBuilderPanel = undefined;
     });
   }
 
@@ -644,10 +621,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (surface.mode === 'rules') {
       this.safePost(webview, this.rulesMessage());
       this.safePost(webview, this.modesMessage());
-      return;
-    }
-    if (surface.mode === 'rulesBuilder') {
-      this.safePost(webview, this.rulesMessage());
+      // The rule editor picks targets from the accounts that actually exist.
       this.safePost(webview, {
         kind: 'accounts',
         accounts: this.accountDtos(),
@@ -718,9 +692,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
       case 'editRules':
         void vscode.commands.executeCommand('usturlab.editRules');
-        break;
-      case 'openRulesBuilder':
-        this.openRulesBuilderTab();
         break;
       case 'saveRule':
         void this.rules.saveRule(msg.rule, msg.ruleIndex);

@@ -1,161 +1,149 @@
 import { useState } from 'preact/hooks';
 import type { RuleMatch } from '../../../core/src/rules/schema.js';
+import { IconClose } from './icons.js';
 
-interface MatchConditionEditorProps {
-  match: RuleMatch;
-  onChange: (match: RuleMatch) => void;
+/**
+ * One condition, as a row of values you can add to and take from. Every field
+ * here behaves the same way — values inside a field are OR-ed, and the fields
+ * you fill in are AND-ed — so they are all drawn the same way too.
+ */
+function ChipField({
+  label,
+  hint,
+  values,
+  placeholder,
+  mono,
+  prefix,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  values: string[];
+  placeholder: string;
+  mono?: boolean;
+  prefix?: string;
+  onChange: (values: string[] | undefined) => void;
+}) {
+  const [draft, setDraft] = useState('');
+
+  const add = () => {
+    const value = draft.trim().replace(/^#/, '');
+    if (!value || values.includes(value)) {
+      setDraft('');
+      return;
+    }
+    onChange([...values, value]);
+    setDraft('');
+  };
+
+  // An empty list is not the same as "no condition": the field has to leave the
+  // rule entirely, or it would match nothing at all.
+  const remove = (index: number) => {
+    const next = values.filter((_, i) => i !== index);
+    onChange(next.length > 0 ? next : undefined);
+  };
+
+  return (
+    <div class="match-field">
+      <div class="field-head">
+        <span class="field-label">{label}</span>
+        <span class="field-note">{hint}</span>
+      </div>
+      <div class="chip-row">
+        {values.map((value, i) => (
+          <span key={value} class={`edit-chip ${mono ? 'mono' : ''}`}>
+            {prefix}
+            {value}
+            <button class="chip-x" title={`Remove ${value}`} onClick={() => remove(i)}>
+              <IconClose size={9} />
+            </button>
+          </span>
+        ))}
+        <input
+          class={`chip-input ${mono ? 'mono' : ''}`}
+          type="text"
+          placeholder={values.length === 0 ? placeholder : '+'}
+          value={draft}
+          onInput={(e) => setDraft((e.target as HTMLInputElement).value)}
+          onBlur={add}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              add();
+            }
+            if (e.key === 'Backspace' && draft === '' && values.length > 0) {
+              remove(values.length - 1);
+            }
+          }}
+        />
+      </div>
+    </div>
+  );
 }
 
-export function MatchConditionEditor({ match, onChange }: MatchConditionEditorProps) {
-  const [newKeyword, setNewKeyword] = useState('');
-  const [newGlob, setNewGlob] = useState('');
-  const [newTag, setNewTag] = useState('');
-
-  const keywords = match.keywords ?? [];
-  const globs = match.globs ?? [];
-  const tags = match.tags ?? [];
-
-  const addKeyword = () => {
-    if (newKeyword.trim()) {
-      onChange({ ...match, keywords: [...keywords, newKeyword.trim()] });
-      setNewKeyword('');
-    }
-  };
-
-  const removeKeyword = (idx: number) => {
-    onChange({ ...match, keywords: keywords.filter((_, i) => i !== idx) });
-  };
-
-  const addGlob = () => {
-    if (newGlob.trim()) {
-      onChange({ ...match, globs: [...globs, newGlob.trim()] });
-      setNewGlob('');
-    }
-  };
-
-  const removeGlob = (idx: number) => {
-    onChange({ ...match, globs: globs.filter((_, i) => i !== idx) });
-  };
-
-  const addTag = () => {
-    if (newTag.trim()) {
-      onChange({ ...match, tags: [...tags, newTag.trim()] });
-      setNewTag('');
-    }
-  };
-
-  const removeTag = (idx: number) => {
-    onChange({ ...match, tags: tags.filter((_, i) => i !== idx) });
+export function MatchConditionEditor({
+  match,
+  onChange,
+}: {
+  match: RuleMatch;
+  onChange: (match: RuleMatch) => void;
+}) {
+  const set = (key: keyof RuleMatch, value: string[] | number | undefined) => {
+    const next = { ...match } as Record<string, unknown>;
+    if (value === undefined) delete next[key];
+    else next[key] = value;
+    onChange(next as RuleMatch);
   };
 
   return (
     <div class="match-editor">
-      <div class="condition-group">
-        <label>Keywords</label>
-        <div class="tag-list">
-          {keywords.map((kw, idx) => (
-            <span key={idx} class="tag">
-              {kw}
-              <button type="button" class="tag-remove" onClick={() => removeKeyword(idx)}>
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-        <div class="tag-input">
-          <input
-            type="text"
-            placeholder="e.g., test, debug"
-            value={newKeyword}
-            onInput={(e) => setNewKeyword((e.target as HTMLInputElement).value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                addKeyword();
-              }
-            }}
-          />
-          <button type="button" class="add-btn" onClick={addKeyword}>
-            Add
-          </button>
-        </div>
-      </div>
+      <ChipField
+        label="prompt contains"
+        hint="any one of these words"
+        values={match.keywords ?? []}
+        placeholder="test, refactor, güvenlik"
+        onChange={(v) => set('keywords', v)}
+      />
+      <ChipField
+        label="open file matches"
+        hint="glob against the active editor"
+        values={match.globs ?? []}
+        placeholder="**/*.test.ts"
+        mono
+        onChange={(v) => set('globs', v)}
+      />
+      <ChipField
+        label="language is"
+        hint="VS Code language id"
+        values={match.languages ?? []}
+        placeholder="typescript, python"
+        mono
+        onChange={(v) => set('languages', v)}
+      />
+      <ChipField
+        label="tagged"
+        hint="#tag typed in the prompt"
+        values={match.tags ?? []}
+        placeholder="urgent"
+        prefix="#"
+        onChange={(v) => set('tags', v)}
+      />
 
-      <div class="condition-group">
-        <label>File Globs</label>
-        <div class="tag-list">
-          {globs.map((g, idx) => (
-            <span key={idx} class="tag mono">
-              {g}
-              <button type="button" class="tag-remove" onClick={() => removeGlob(idx)}>
-                ×
-              </button>
-            </span>
-          ))}
+      <div class="match-field">
+        <div class="field-head">
+          <span class="field-label">prompt length</span>
+          <span class="field-note">no longer than, in characters</span>
         </div>
-        <div class="tag-input">
-          <input
-            type="text"
-            placeholder="e.g., **/*.test.ts"
-            value={newGlob}
-            onInput={(e) => setNewGlob((e.target as HTMLInputElement).value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                addGlob();
-              }
-            }}
-          />
-          <button type="button" class="add-btn" onClick={addGlob}>
-            Add
-          </button>
-        </div>
-      </div>
-
-      <div class="condition-group">
-        <label>Tags</label>
-        <div class="tag-list">
-          {tags.map((t, idx) => (
-            <span key={idx} class="tag">
-              #{t}
-              <button type="button" class="tag-remove" onClick={() => removeTag(idx)}>
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-        <div class="tag-input">
-          <input
-            type="text"
-            placeholder="e.g., urgent, performance"
-            value={newTag}
-            onInput={(e) => setNewTag((e.target as HTMLInputElement).value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                addTag();
-              }
-            }}
-          />
-          <button type="button" class="add-btn" onClick={addTag}>
-            Add
-          </button>
-        </div>
-      </div>
-
-      <div class="condition-group">
-        <label>Max Prompt Chars</label>
         <input
+          class="field-input narrow"
           type="number"
-          class="number-input"
+          min="1"
+          placeholder="any length"
           value={match.maxPromptChars ?? ''}
           onInput={(e) => {
-            const val = parseInt((e.target as HTMLInputElement).value);
-            if (val > 0) {
-              onChange({ ...match, maxPromptChars: val });
-            } else {
-              const { maxPromptChars, ...rest } = match;
-              onChange(rest as RuleMatch);
-            }
+            const value = parseInt((e.target as HTMLInputElement).value, 10);
+            set('maxPromptChars', Number.isFinite(value) && value > 0 ? value : undefined);
           }}
-          placeholder="Optional limit"
         />
       </div>
     </div>

@@ -52,7 +52,8 @@ export function registerCommands(
 
     vscode.commands.registerCommand('usturlab.editRules', () => rules.openOrCreate()),
 
-    vscode.commands.registerCommand('usturlab.openRulesBuilder', () => chat.openRulesBuilderTab()),
+    // Kept as an alias: the builder and the rules tab are one screen now.
+    vscode.commands.registerCommand('usturlab.openRulesBuilder', () => chat.openRulesTab()),
 
     vscode.commands.registerCommand('usturlab.editCommands', () => rules.openOrCreateCommands()),
 

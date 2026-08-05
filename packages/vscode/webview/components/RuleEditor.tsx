@@ -1,186 +1,255 @@
 import { useState } from 'preact/hooks';
-import type { Rule, RuleTarget } from '../../../core/src/rules/schema.js';
+import type { Rule, RuleExclusion, RuleMatch, RuleTarget } from '../../../core/src/rules/schema.js';
 import type { AccountStatusDto } from '../../src/panel/protocol.js';
+import { vscode } from '../vscodeApi.js';
 import { MatchConditionEditor } from './MatchConditionEditor.js';
+import { TargetChainEditor } from './TargetChainEditor.js';
+import { BRAND_COLOR, BrandMark } from './brandIcons.js';
+import { IconClose, IconPlus, IconRoute, IconTrash } from './icons.js';
 
-interface RuleEditorProps {
+const PROVIDERS = ['claude', 'codex', 'gemini', 'copilot'] as const;
+type ChainProvider = (typeof PROVIDERS)[number];
+
+const conditionCount = (m: RuleMatch): number =>
+  Object.values(m).filter((v) => (Array.isArray(v) ? v.length > 0 : v !== undefined)).length;
+
+/**
+ * One rule, edited as a sentence: when this matches, route there, and never
+ * there. Saving writes the whole rule back to the file, so the form carries
+ * every field it did not touch rather than dropping it.
+ */
+export function RuleEditor({
+  rule,
+  index,
+  accounts,
+  takenIds,
+  onSaved,
+  onDiscard,
+}: {
   rule?: Rule;
+  index?: number;
   accounts: AccountStatusDto[];
-  onSave: (rule: Rule) => void;
-  onCancel: () => void;
-}
-
-export function RuleEditor({ rule, accounts, onSave, onCancel }: RuleEditorProps) {
+  takenIds: string[];
+  onSaved: (id: string) => void;
+  onDiscard: () => void;
+}) {
   const [id, setId] = useState(rule?.id ?? '');
   const [description, setDescription] = useState(rule?.description ?? '');
-  const [match, setMatch] = useState(rule?.match ?? {});
-  const [targets, setTargets] = useState<RuleTarget[]>(rule?.target ?? []);
-  const [newTargetProvider, setNewTargetProvider] = useState<'claude' | 'codex' | 'gemini' | 'copilot'>('claude');
-  const [newTargetAccount, setNewTargetAccount] = useState('');
-  const [newTargetModel, setNewTargetModel] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [match, setMatch] = useState<RuleMatch>(rule?.match ?? ({} as RuleMatch));
+  const [target, setTarget] = useState<RuleTarget[]>(rule?.target ?? []);
+  const [exclude, setExclude] = useState<RuleExclusion[]>(rule?.exclude ?? []);
+  const [excludeProvider, setExcludeProvider] = useState<ChainProvider>('gemini');
+  const [excludeAccount, setExcludeAccount] = useState('');
+  const [showErrors, setShowErrors] = useState(false);
 
-  const handleSave = () => {
-    const newErrors: Record<string, string> = {};
-    if (!id.trim()) newErrors.id = 'ID is required';
-    // A rule that only says where work must NOT go is complete without a target.
-    if (targets.length === 0 && !rule?.exclude?.length) {
-      newErrors.targets = 'At least one target is required';
-    }
+  const draft: Rule = {
+    id: id.trim(),
+    match,
+    target,
+    ...(description.trim() && { description: description.trim() }),
+    ...(exclude.length > 0 && { exclude }),
+  };
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+  // A rule that does not exist yet is unsaved by definition.
+  const dirty = !rule || JSON.stringify(draft) !== JSON.stringify(normalize(rule));
+
+  const problem = validate(draft, takenIds);
+  const lead = target[0]?.provider;
+
+  const revert = () => {
+    if (!rule) {
+      onDiscard();
       return;
     }
-
-    const newRule: Rule = {
-      id: id.trim(),
-      match,
-      target: targets,
-      ...(description.trim() && { description: description.trim() }),
-      // Exclusions are authored in the rules file; this form rebuilds the rule
-      // from its own state, so carry them through rather than dropping them.
-      ...(rule?.exclude?.length ? { exclude: rule.exclude } : {}),
-    };
-
-    onSave(newRule);
+    setId(rule.id);
+    setDescription(rule.description ?? '');
+    setMatch(rule.match);
+    setTarget(rule.target);
+    setExclude(rule.exclude ?? []);
+    setShowErrors(false);
   };
 
-  const addTarget = () => {
-    if (!newTargetAccount.trim()) return;
-    const newTarget: RuleTarget = {
-      provider: newTargetProvider,
-      account: newTargetAccount.trim(),
-      ...(newTargetModel.trim() && { model: newTargetModel.trim() }),
-    };
-    setTargets([...targets, newTarget]);
-    setNewTargetAccount('');
-    setNewTargetModel('');
+  const save = () => {
+    if (problem) {
+      setShowErrors(true);
+      return;
+    }
+    vscode.postMessage({ kind: 'saveRule', rule: draft, ruleIndex: index });
+    setShowErrors(false);
+    onSaved(draft.id);
   };
-
-  const removeTarget = (idx: number) => {
-    setTargets(targets.filter((_, i) => i !== idx));
-  };
-
-  const getAccountLabel = (provider: string, account: string) => {
-    const acc = accounts.find((a) => a.provider === provider && a.label === account);
-    return acc ? `${acc.provider}:${acc.label}` : `${provider}:${account}`;
-  };
-
-  const availableAccounts = accounts.filter((a) => a.provider === newTargetProvider);
 
   return (
-    <div class="rule-editor">
-      <div class="editor-header">
-        <h2>{rule ? 'Edit Rule' : 'New Rule'}</h2>
-        <div class="editor-actions">
-          <button type="button" class="cancel-btn" onClick={onCancel}>
-            Cancel
-          </button>
-          <button type="button" class="save-btn" onClick={handleSave}>
-            Save
-          </button>
+    <div class="rule-detail">
+      <div class="detail-header">
+        <span
+          class="brand-badge big"
+          style={{
+            background: lead
+              ? `color-mix(in srgb, ${BRAND_COLOR[lead]} 14%, transparent)`
+              : 'transparent',
+          }}
+        >
+          {lead ? <BrandMark provider={lead} size={26} /> : <IconRoute size={22} />}
+        </span>
+        <div class="detail-title">
+          <input
+            class="title-input"
+            type="text"
+            spellcheck={false}
+            placeholder="rule-id"
+            value={id}
+            onInput={(e) => setId((e.target as HTMLInputElement).value)}
+          />
+          <input
+            class="sub-input"
+            type="text"
+            placeholder="what this rule is for — optional"
+            value={description}
+            onInput={(e) => setDescription((e.target as HTMLInputElement).value)}
+          />
+        </div>
+        <div class="detail-actions">
+          {rule && (
+            <button
+              class="icon-btn account-del"
+              title="Delete this rule"
+              onClick={() => vscode.postMessage({ kind: 'deleteRule', ruleId: rule.id })}
+            >
+              <IconTrash size={13} />
+            </button>
+          )}
         </div>
       </div>
 
-      <div class="editor-form">
-        <div class="form-group">
-          <label>Rule ID *</label>
-          <input
-            type="text"
-            value={id}
-            onInput={(e) => setId((e.target as HTMLInputElement).value)}
-            placeholder="e.g., tests-to-codex"
-          />
-          {errors.id && <div class="error-text">{errors.id}</div>}
+      <div class="detail-section wide">
+        <div class="detail-section-title">
+          When <span class="section-note">every condition you fill in has to hold</span>
         </div>
+        <MatchConditionEditor match={match} onChange={setMatch} />
+      </div>
 
-        <div class="form-group">
-          <label>Description</label>
-          <input
-            type="text"
-            value={description}
-            onInput={(e) => setDescription((e.target as HTMLInputElement).value)}
-            placeholder="Optional human-readable description"
-          />
+      <div class="detail-section wide">
+        <div class="detail-section-title">
+          Route to <span class="section-note">first one that can take it wins</span>
         </div>
+        <TargetChainEditor
+          chain={target}
+          accounts={accounts}
+          onChange={setTarget}
+          emptyHint="No target — this rule only says where the work must not go, and the default chain decides the rest."
+        />
+      </div>
 
-        <div class="form-group">
-          <label>Match Conditions</label>
-          <MatchConditionEditor match={match} onChange={setMatch} />
+      <div class="detail-section wide">
+        <div class="detail-section-title">
+          Never route to <span class="section-note">applies to the whole chain, default included</span>
         </div>
-
-        {(rule?.exclude?.length ?? 0) > 0 && (
-          <div class="form-group">
-            <label>Never route here</label>
-            <div class="target-list">
-              {rule!.exclude!.map((e, idx) => (
-                <div key={idx} class="target-item">
-                  <div class="target-label">
-                    {e.account ? `${e.provider}:${e.account}` : `every ${e.provider} account`}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div class="field-hint">
-              Kept as written. Exclusions are edited in the rules file for now.
-            </div>
-          </div>
-        )}
-
-        <div class="form-group">
-          <label>Failover Chain *</label>
-          <div class="target-list">
-            {targets.map((t, idx) => (
-              <div key={idx} class="target-item">
-                <div class="target-label">
-                  {getAccountLabel(t.provider, t.account)}
-                  {t.model && <span class="target-model"> / {t.model}</span>}
-                </div>
-                <button type="button" class="target-remove" onClick={() => removeTarget(idx)}>
-                  Remove
+        {exclude.length > 0 && (
+          <div class="chip-row">
+            {exclude.map((e, i) => (
+              <span key={`${e.provider}:${e.account ?? '*'}`} class="edit-chip mono">
+                {e.account ? `${e.provider}:${e.account}` : `every ${e.provider}`}
+                <button
+                  class="chip-x"
+                  title="Allow this one again"
+                  onClick={() => setExclude(exclude.filter((_, idx) => idx !== i))}
+                >
+                  <IconClose size={9} />
                 </button>
-              </div>
+              </span>
             ))}
           </div>
-          {errors.targets && <div class="error-text">{errors.targets}</div>}
-
-          <div class="add-target">
-            <select
-              value={newTargetProvider}
-              onChange={(e) => setNewTargetProvider((e.target as HTMLSelectElement).value as any)}
-            >
-              <option value="claude">Claude</option>
-              <option value="codex">Codex</option>
-              <option value="gemini">Gemini</option>
-              <option value="copilot">Copilot</option>
-            </select>
-
-            <select
-              value={newTargetAccount}
-              onChange={(e) => setNewTargetAccount((e.target as HTMLSelectElement).value)}
-            >
-              <option value="">Select account</option>
-              {availableAccounts.map((a) => (
+        )}
+        <div class="chain-add">
+          <select
+            class="field-select"
+            value={excludeProvider}
+            onChange={(e) => {
+              setExcludeProvider((e.target as HTMLSelectElement).value as ChainProvider);
+              setExcludeAccount('');
+            }}
+          >
+            {PROVIDERS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+          <select
+            class="field-select"
+            value={excludeAccount}
+            onChange={(e) => setExcludeAccount((e.target as HTMLSelectElement).value)}
+          >
+            <option value="">every account</option>
+            {accounts
+              .filter((a) => a.provider === excludeProvider)
+              .map((a) => (
                 <option key={a.id} value={a.label}>
                   {a.label}
                 </option>
               ))}
-            </select>
-
-            <input
-              type="text"
-              placeholder="Model (optional)"
-              value={newTargetModel}
-              onInput={(e) => setNewTargetModel((e.target as HTMLInputElement).value)}
-            />
-
-            <button type="button" class="add-btn" onClick={addTarget}>
-              Add Target
-            </button>
-          </div>
+          </select>
+          <button
+            class="ghost-btn add-target-btn"
+            onClick={() => {
+              const entry: RuleExclusion = {
+                provider: excludeProvider,
+                ...(excludeAccount && { account: excludeAccount }),
+              };
+              const key = `${entry.provider}:${entry.account ?? '*'}`;
+              if (exclude.some((e) => `${e.provider}:${e.account ?? '*'}` === key)) return;
+              setExclude([...exclude, entry]);
+              setExcludeAccount('');
+            }}
+          >
+            <IconPlus size={11} /> Bar it
+          </button>
         </div>
+      </div>
+
+      <div class="detail-footer">
+        {showErrors && problem ? (
+          <span class="rule-problem">{problem}</span>
+        ) : (
+          <span class="accounts-hint">
+            {conditionCount(match) === 0
+              ? 'A rule with no condition would match every task — add at least one.'
+              : 'Saved straight into the rules file; routing picks it up on the next task.'}
+          </span>
+        )}
+        <div class="header-gap" />
+        {dirty && (
+          <button class="ghost-btn" onClick={revert}>
+            {rule ? 'Revert' : 'Discard'}
+          </button>
+        )}
+        <button class="run-btn send" disabled={!dirty} onClick={save}>
+          {rule ? 'Save rule' : 'Create rule'}
+        </button>
       </div>
     </div>
   );
+}
+
+/** The shape `saveRule` would write, so "dirty" compares like with like. */
+function normalize(rule: Rule): Rule {
+  return {
+    id: rule.id,
+    match: rule.match,
+    target: rule.target,
+    ...(rule.description && { description: rule.description }),
+    ...(rule.exclude?.length ? { exclude: rule.exclude } : {}),
+  };
+}
+
+/** Everything the rules schema would reject, said before the file is written. */
+function validate(draft: Rule, takenIds: string[]): string | undefined {
+  if (!draft.id) return 'A rule needs an id — it is how the router names it in the transcript.';
+  if (takenIds.includes(draft.id)) return `Another rule is already called "${draft.id}".`;
+  if (conditionCount(draft.match) === 0) return 'Add at least one condition, or this rule matches everything.';
+  if (draft.target.length === 0 && (draft.exclude?.length ?? 0) === 0) {
+    return 'Add a target to route to, or an account to bar.';
+  }
+  return undefined;
 }
