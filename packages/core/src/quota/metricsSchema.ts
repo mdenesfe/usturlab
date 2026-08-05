@@ -26,9 +26,17 @@ export interface TaskMetric {
   complexity?: string;
 
   // Cost of the run
+  /** Everything the model read, cache included — see `Usage`. */
   inputTokens?: number;
   outputTokens?: number;
+  /** The part of `inputTokens` served from cache. */
+  cachedInputTokens?: number;
   costUsd?: number;
+  /**
+   * Whether `costUsd` was actually charged. False for subscription accounts,
+   * where it is the API list price of tokens nobody was billed for.
+   */
+  metered?: boolean;
   durationMs?: number;
   /** Percentage points of the account's tightest window consumed by this run. */
   burnPct?: number;
@@ -96,8 +104,13 @@ export interface MetricStats {
   successRate: number;
   /** Share of runs the user had to interrupt, retry or escalate. */
   frictionRate: number;
-  totalCost: number;
+  /** Money actually charged — API-key accounts only. */
+  billedCost: number;
+  /** List price of what subscription accounts ran for free. */
+  equivalentCost: number;
   totalTokens: number;
+  /** True when at least one run reported a cost, so 0 can be told from silence. */
+  costReported: boolean;
   avgDurationMs: number;
   medianDurationMs: number;
 }
@@ -115,14 +128,22 @@ export function calculateStats(metrics: TaskMetric[]): MetricStats {
   const friction = metrics.filter((m) => m.steered || m.retried || m.escalated || m.status !== 'success');
   const durations = successful.map((m) => m.durationMs ?? 0).filter((d) => d > 0);
 
+  const withCost = metrics.filter((m) => m.costUsd !== undefined);
+  const sumCost = (of: (m: TaskMetric) => boolean): number =>
+    withCost.filter(of).reduce((sum, m) => sum + (m.costUsd ?? 0), 0);
+
   return {
     total: metrics.length,
     successful: successful.length,
     failed: failed.length,
     successRate: metrics.length > 0 ? (successful.length / metrics.length) * 100 : 0,
     frictionRate: metrics.length > 0 ? (friction.length / metrics.length) * 100 : 0,
-    totalCost: metrics.reduce((sum, m) => sum + (m.costUsd ?? 0), 0),
+    // Kept apart rather than summed: one is a bill and the other is a
+    // hypothetical, and adding them produces a number that is neither.
+    billedCost: sumCost((m) => m.metered === true),
+    equivalentCost: sumCost((m) => m.metered !== true),
     totalTokens: metrics.reduce((sum, m) => sum + (m.inputTokens ?? 0) + (m.outputTokens ?? 0), 0),
+    costReported: withCost.length > 0,
     avgDurationMs:
       durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0,
     medianDurationMs: median(durations),

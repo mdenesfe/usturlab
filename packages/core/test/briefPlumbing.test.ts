@@ -73,6 +73,31 @@ describe('brief plumbing', () => {
     expect(run.systemBrief).toBe('- Read a file before you edit it.');
   });
 
+  it('builds the brief for the run that will happen, not the one requested', async () => {
+    const fake = new FakeAdapter('claude');
+    fake.script('claude-a', [{ type: 'result', text: 'ok' }]);
+    const seen: string[] = [];
+    const { orchestrator } = setup(fake, {
+      getBrief: (t) => {
+        seen.push(t.permissionMode);
+        return '';
+      },
+    });
+
+    // A heavy edit the router downgrades to planning: the brief must be told
+    // it is planning, or it would frame work that is not allowed to happen.
+    await drain(
+      orchestrator.run(
+        task({
+          prompt:
+            'redesign the whole authentication architecture across the codebase and migrate every caller',
+        }),
+        new AbortController().signal,
+      ),
+    );
+    expect(seen).toEqual(['safe']);
+  });
+
   it('announces the brief lines a run carried, so outcomes can be attributed', async () => {
     const fake = new FakeAdapter('claude');
     fake.script('claude-a', [{ type: 'result', text: 'ok' }]);

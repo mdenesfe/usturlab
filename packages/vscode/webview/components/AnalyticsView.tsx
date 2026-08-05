@@ -2,7 +2,16 @@ import { useState } from 'preact/hooks';
 import type { TaskMetric } from '../../../core/src/quota/metricsSchema.js';
 import { calculateStats, groupMetricsByAccount } from '../../../core/src/quota/metricsSchema.js';
 import type { AccountStatusDto } from '../../src/panel/protocol.js';
+import { formatCost } from '../../../core/src/accounts/billing.js';
 import { vscode } from '../vscodeApi.js';
+
+/** 24816 → 24.8k. These are five-figure numbers now that cache reads count. */
+function tokens(n: number | undefined): string {
+  if (!n) return '0';
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`;
+  return `${(n / 1_000_000).toFixed(1)}M`;
+}
 
 export function AnalyticsView({ metrics, accounts }: { metrics: TaskMetric[]; accounts: AccountStatusDto[] }) {
   const [filter, setFilter] = useState<'7d' | '30d' | 'all'>('7d');
@@ -48,10 +57,27 @@ export function AnalyticsView({ metrics, accounts }: { metrics: TaskMetric[]; ac
           <div class="stat-label">Success</div>
           <div class="stat-value">{stats.successRate.toFixed(0)}%</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">Cost</div>
-          <div class="stat-value">${stats.totalCost.toFixed(2)}</div>
-        </div>
+        {stats.billedCost > 0 && (
+          <div class="stat-card" title="Charged to your API-key accounts">
+            <div class="stat-label">Billed</div>
+            <div class="stat-value">${stats.billedCost.toFixed(2)}</div>
+          </div>
+        )}
+        {(stats.equivalentCost > 0 || stats.billedCost === 0) && (
+          <div
+            class="stat-card"
+            title={
+              stats.costReported
+                ? 'What the subscription runs would have cost on the API — nobody was charged for them. Only providers that report a cost are counted.'
+                : 'No provider in this period reported a cost'
+            }
+          >
+            <div class="stat-label">Would have cost</div>
+            <div class="stat-value">
+              {stats.costReported ? `~$${stats.equivalentCost.toFixed(2)}` : '—'}
+            </div>
+          </div>
+        )}
         <div class="stat-card">
           <div class="stat-label">Avg Time</div>
           <div class="stat-value">{Math.round(stats.avgDurationMs)}ms</div>
@@ -73,7 +99,14 @@ export function AnalyticsView({ metrics, accounts }: { metrics: TaskMetric[]; ac
                   <div class="group-title">{key}</div>
                   <div class="group-stats">
                     <span>{itemStats.total}</span>
-                    <span>${itemStats.totalCost.toFixed(2)}</span>
+                    <span>
+                      {itemStats.costReported
+                        ? formatCost(
+                            itemStats.billedCost + itemStats.equivalentCost,
+                            itemStats.billedCost > 0,
+                          )
+                        : '—'}
+                    </span>
                     <span>{itemStats.successRate.toFixed(0)}%</span>
                   </div>
                 </div>
@@ -82,8 +115,17 @@ export function AnalyticsView({ metrics, accounts }: { metrics: TaskMetric[]; ac
                     <div key={m.id} class={`metric-row status-${m.status}`}>
                       <div class="metric-time">{new Date(m.timestamp).toLocaleTimeString()}</div>
                       <div class="metric-model">{m.model || 'default'}</div>
-                      <div class="metric-tokens">{m.inputTokens || 0}→{m.outputTokens || 0}</div>
-                      <div class="metric-cost">${(m.costUsd ?? 0).toFixed(2)}</div>
+                      <div
+                        class="metric-tokens"
+                        title={
+                          m.cachedInputTokens
+                            ? `${m.cachedInputTokens.toLocaleString()} of the input came from cache`
+                            : undefined
+                        }
+                      >
+                        {tokens(m.inputTokens)}→{tokens(m.outputTokens)}
+                      </div>
+                      <div class="metric-cost">{formatCost(m.costUsd, m.metered)}</div>
                       <div class="metric-duration">{m.durationMs || 0}ms</div>
                     </div>
                   ))}

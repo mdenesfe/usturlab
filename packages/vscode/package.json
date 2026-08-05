@@ -2,7 +2,7 @@
   "name": "usturlab",
   "displayName": "usturlab \u2014 AI Subscription Router",
   "description": "Add all your AI subscriptions (multiple Claude accounts, Codex, Gemini, Copilot) and route every task to the best account and model with user-defined rules and automatic quota failover.",
-  "version": "0.8.0",
+  "version": "0.8.2",
   "publisher": "mdenesfe",
   "license": "MIT",
   "icon": "media/marketplace-icon.png",
@@ -194,6 +194,11 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Tell the model what it would have known sitting where you are: the open file and your selection, the branch and uncommitted changes, and the project's own convention files. Whatever a CLI already reads by itself is not sent twice."
+        },
+        "usturlab.frameTasks": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Add the framing a request is missing before it runs: the exact check the model should run when it is done, reproducing a bug before fixing it, naming files before editing them, and staying inside the scope you asked for. Only ever adds what your prompt did not already cover, never rewrites it. Requires `#usturlab.sendWorkspaceContext#`."
         },
         "usturlab.standingInstructions": {
           "type": "boolean",

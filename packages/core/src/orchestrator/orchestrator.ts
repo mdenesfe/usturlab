@@ -157,7 +157,13 @@ export class Orchestrator {
         }
         // Workspace context rides with the message; standing instructions go
         // through each CLI's own system-prompt channel.
-        const brief = this.deps.getBrief?.(task, target.provider) ?? '';
+        // The brief describes the run that is about to happen, not the one that
+        // was requested: an auto-planned edit runs in plan mode, and telling it
+        // to run the project's checks there would be an instruction it cannot
+        // follow.
+        const brief =
+          this.deps.getBrief?.({ ...task, permissionMode: effectivePermission }, target.provider) ??
+          '';
         basePrompt = withBrief(basePrompt, brief);
 
         const providerBrief = this.deps.getProviderBrief?.(target.provider, effectivePermission);

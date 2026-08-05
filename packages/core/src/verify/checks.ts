@@ -107,6 +107,20 @@ export function selectChecks(
   return available.filter((c) => wanted.includes(c.kind));
 }
 
+/**
+ * The same checks written out as something a model can run.
+ *
+ * Telling it up front exactly what will be run against it afterwards is the
+ * cheapest way to close the loop without a second round trip — and it is the
+ * same list, so a run that passes its own check passes ours.
+ */
+export function describeChecks(commands: VerifyCommand[]): string | undefined {
+  // `--silent` is there to keep our own capture readable; in a prompt it is noise.
+  const rendered = commands.map((c) => c.argv.filter((a) => a !== '--silent').join(' '));
+  if (rendered.length === 0) return undefined;
+  return rendered.join(' && ');
+}
+
 const MAX_OUTPUT_CHARS = 3000;
 
 /** Keeps the end of the output — that is where the failure is reported. */
@@ -135,8 +149,10 @@ export function repairPrompt(report: VerifyReport, changedFiles: string[]): stri
     `${report.failureText}\n\n` +
     (changedFiles.length > 0 ? `Files you changed: ${changedFiles.join(', ')}\n\n` : '') +
     'Fix the cause, not the symptom. Do not revert unrelated work, do not weaken or skip the ' +
-    'check to make it pass, and re-run the check yourself to confirm. If the failure is ' +
-    'pre-existing and unrelated to your change, say so plainly instead of fixing it.'
+    'check to make it pass, and re-run the check yourself to confirm. Editing, deleting or ' +
+    'skipping a test, or stubbing the code it exercises, is not a fix — a green check bought ' +
+    'that way hides the very bug it was there to catch. If the failure is pre-existing and ' +
+    'unrelated to your change, say so plainly instead of fixing it.'
   );
 }
 

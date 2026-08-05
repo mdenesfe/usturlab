@@ -110,13 +110,19 @@ export function activate(ctx: vscode.ExtensionContext): void {
       vscode.workspace.getConfiguration('usturlab').get<'auto' | 'manual'>('routingMode', 'auto'),
     getAccounts: () => accounts.all(),
     resolveAccount: (target) => accounts.resolve(target),
-    getBrief: (task, provider) =>
-      vscode.workspace.getConfiguration('usturlab').get<boolean>('sendWorkspaceContext', true)
-        ? workspaceContext.buildFor(task, provider, {
-            preferences: preferences.preferences(),
-            ...chatRef?.threadFiles(task.conversationId),
-          })
-        : '',
+    getBrief: (task, provider) => {
+      const config = vscode.workspace.getConfiguration('usturlab');
+      if (!config.get<boolean>('sendWorkspaceContext', true)) return '';
+      return workspaceContext.buildFor(task, provider, {
+        preferences: preferences.preferences(),
+        // The same commands verification would run, so the model is told the
+        // check it is about to be judged by — and told it even when we are not
+        // running it ourselves, which is when it matters most.
+        checks: verifier.available(),
+        shapeTasks: config.get<boolean>('frameTasks', true),
+        ...chatRef?.threadFiles(task.conversationId),
+      });
+    },
     getAskPermission: () =>
       vscode.workspace.getConfiguration('usturlab').get<boolean>('askPermission', false),
     getHostArgs: (provider) => (provider === 'claude' ? bridge.claudeArgs() : undefined),

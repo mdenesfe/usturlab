@@ -56,6 +56,8 @@ export interface BriefInput {
   thread?: ThreadContextSummary;
   /** Durable rules the user has confirmed — see the learned-instruction loop. */
   preferences?: string[];
+  /** How to approach this particular request — see `shapeTask`. */
+  shaping?: string[];
   /** Total character budget for the whole brief. */
   budget?: number;
 }
@@ -106,14 +108,24 @@ function listSection(title: string, items: string[] | undefined, max = 12): Sect
 }
 
 /**
- * Builds the brief. Ordering is the design: the editor state is what the user
- * is looking at right now and is useless a minute later, so it leads; repo
- * conventions are stable and can be dropped when the budget is tight because
- * they are usually also on disk where the model can read them.
+ * Builds the brief. Ordering is the design: how to approach the task decides
+ * whether the run needs a second attempt at all, so it leads and survives every
+ * budget; the editor state is what the user is looking at right now and is
+ * useless a minute later, so it comes next; repo conventions are stable and can
+ * be dropped when the budget is tight because they are usually also on disk
+ * where the model can read them.
  */
 export function buildBrief(input: BriefInput): string {
   const budget = input.budget ?? DEFAULT_BRIEF_BUDGET;
   const sections: Array<Section | undefined> = [];
+
+  const shaping = (input.shaping ?? []).filter((line) => line.trim());
+  if (shaping.length > 0) {
+    sections.push({
+      title: 'How to approach this one',
+      body: shaping.map((line) => `- ${line}`).join('\n'),
+    });
+  }
 
   const editor = input.editor;
   if (editor?.activeFile) {
@@ -183,8 +195,9 @@ export function buildBrief(input: BriefInput): string {
   }
 
   if (parts.length === 0) return '';
+  const subject = shaping.length > 0 ? 'the workspace and this task' : 'the workspace';
   return (
-    'The following is context about the workspace, provided automatically. ' +
+    `The following is context about ${subject}, provided automatically. ` +
     'Use it; do not restate it back to the user.\n\n' +
     parts.join('\n\n')
   );

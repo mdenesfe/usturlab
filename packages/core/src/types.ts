@@ -69,9 +69,22 @@ export interface TaskRequest {
   routingMode?: 'auto' | 'manual';
 }
 
+/**
+ * What a turn actually read and wrote.
+ *
+ * The providers do not agree on what "input tokens" means, and taking each at
+ * face value understates Claude by orders of magnitude: it reports only the
+ * tokens that were neither served from cache nor written to it, so a turn that
+ * read 25k tokens of context reports 2. Codex reports the full figure with the
+ * cached part broken out. The adapters normalize to the same meaning here.
+ */
 export interface Usage {
+  /** Everything the model read this turn, cache included. */
   inputTokens?: number;
+  /** Everything it wrote, including reasoning tokens where they are billed as output. */
   outputTokens?: number;
+  /** The part of `inputTokens` that came from cache, when the provider says. */
+  cachedInputTokens?: number;
 }
 
 export type LimitScope = 'session' | 'daily' | 'weekly' | 'credits' | 'unknown';

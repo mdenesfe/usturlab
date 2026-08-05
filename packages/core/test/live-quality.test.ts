@@ -4,7 +4,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { ClaudeAdapter } from '../src/adapters/claude.js';
 import { CodexAdapter } from '../src/adapters/codex.js';
-import { discoverChecks, selectChecks } from '../src/verify/checks.js';
+import { describeChecks, discoverChecks, selectChecks } from '../src/verify/checks.js';
+import { shapeTask } from '../src/context/taskShape.js';
 import { isClean, reviewPrompt } from '../src/review/secondOpinion.js';
 import { parsePlan, planPrompt } from '../src/review/planExecute.js';
 import type { ProviderAdapter } from '../src/adapters/adapter.js';
@@ -80,6 +81,31 @@ describe('check discovery against this repo', () => {
     const commands = discoverChecks({ scripts: { dev: 'vite', start: 'node .' } });
     expect(commands).toEqual([]);
     expect(selectChecks(commands, { wroteCode: true, complexity: 'hard' })).toEqual([]);
+  });
+
+  it('tells a model to run the command this repo actually has', () => {
+    const pkg = JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8')) as {
+      scripts?: Record<string, string>;
+      packageManager?: string;
+    };
+    const available = discoverChecks({ scripts: pkg.scripts, packageManager: pkg.packageManager });
+    const selected = selectChecks(available, {
+      kind: 'refactor',
+      complexity: 'hard',
+      wroteCode: true,
+    });
+    const lines = shapeTask({
+      prompt: 'split the router into two modules',
+      classification: { kind: 'refactor', complexity: 'hard', writesCode: true },
+      check: describeChecks(selected),
+      permissionMode: 'edits',
+    });
+    const verify = lines.find((l) => l.id === 'verify-with-check');
+    expect(verify, 'no verification line for a repo that declares checks').toBeDefined();
+    for (const command of selected) {
+      const script = command.source.replace('package.json scripts.', '');
+      expect(verify!.text).toContain(script);
+    }
   });
 });
 

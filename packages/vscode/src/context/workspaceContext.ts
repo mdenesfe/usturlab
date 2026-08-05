@@ -5,11 +5,16 @@ import { join, relative } from 'node:path';
 import { promisify } from 'node:util';
 import {
   buildBrief,
+  classifyTask,
+  describeChecks,
+  selectChecks,
+  shapeTask,
   type ConventionSource,
   type EditorContext,
   type ProviderId,
   type RepoContext,
   type TaskRequest,
+  type VerifyCommand,
 } from '@usturlab/core';
 
 const exec = promisify(execFile);
@@ -160,10 +165,39 @@ export class WorkspaceContext {
     this.snapshot = { editor: this.editorContext(), repo: await this.repoContext() };
   }
 
+  /**
+   * How this request should be approached, including the exact check that will
+   * be run against it afterwards. The classification is recomputed here rather
+   * than threaded through the orchestrator: it is pure and cheap, and the brief
+   * must not depend on routing having happened first.
+   */
+  private shapingFor(task: TaskRequest, checks: VerifyCommand[]): string[] {
+    const classification = classifyTask(task);
+    const selected = selectChecks(checks, {
+      kind: classification.kind,
+      complexity: classification.complexity,
+      wroteCode: classification.writesCode,
+    });
+    return shapeTask({
+      prompt: task.prompt,
+      classification,
+      check: describeChecks(selected),
+      activeFile: this.snapshot.editor.activeFile,
+      permissionMode: task.permissionMode,
+    }).map((line) => line.text);
+  }
+
   buildFor(
     task: TaskRequest,
     provider: ProviderId,
-    extras: { preferences?: string[]; touchedFiles?: string[]; lastFailure?: string } = {},
+    extras: {
+      preferences?: string[];
+      touchedFiles?: string[];
+      lastFailure?: string;
+      /** Checks this repo declares, so the brief can name the one that will run. */
+      checks?: VerifyCommand[];
+      shapeTasks?: boolean;
+    } = {},
   ): string {
     try {
       return buildBrief({
@@ -172,6 +206,8 @@ export class WorkspaceContext {
         repo: this.snapshot.repo,
         conventions: this.conventions(),
         preferences: extras.preferences,
+        shaping:
+          extras.shapeTasks === false ? undefined : this.shapingFor(task, extras.checks ?? []),
         thread: { touchedFiles: extras.touchedFiles, lastFailure: extras.lastFailure },
       });
     } catch (e) {

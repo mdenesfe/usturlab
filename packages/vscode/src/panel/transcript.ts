@@ -69,6 +69,8 @@ export type TranscriptItem =
       ruleId?: string;
       reason?: string;
       costUsd?: number;
+      /** Whether that cost was charged, or is only what it would have cost. */
+      metered?: boolean;
       durationMs?: number;
     }
   | { kind: 'review'; by: string; text: string }
@@ -295,7 +297,13 @@ export function applyHostMessage(items: TranscriptItem[], msg: HostToWebview): T
         // outlives the turn that spawned it, and Claude keeps answering while
         // it works. A lane's status stays the last thing we were actually told;
         // whether it is still going is a question about the run, not the turn.
-        next[i] = { ...item, done: true, costUsd: msg.costUsd, durationMs: msg.durationMs };
+        next[i] = {
+          ...item,
+          done: true,
+          costUsd: msg.costUsd,
+          metered: msg.metered,
+          durationMs: msg.durationMs,
+        };
       }
       break;
     }

@@ -28,11 +28,15 @@ A model's output quality is a function of the context it gets, the constraints i
 
 **It knows what you know.** Each run carries a task brief: the file you have open with your selection and its line range, the branch and uncommitted changes, and the project's convention files — `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md` — normalized so every provider gets them. Nothing is sent twice: Claude already loads `CLAUDE.md` and Codex `AGENTS.md`, so their briefs carry only what they cannot know.
 
+**Every request gets the framing it is missing.** Before a run starts, the brief adds only what your prompt did not already cover: the exact check that will be run against it afterwards (`pnpm run typecheck && pnpm run test` — this repo's own, never invented), reproducing a failure before fixing it when a bug report has no output in it, naming files before editing them when nothing anchors the work, and staying inside the scope you asked for on heavy changes. Never more than three lines, never a rewrite of what you typed — instructions that get ignored are worse than instructions never sent.
+
 **Every CLI gets the instructions it is missing**, through its own real channel — Claude `--append-system-prompt`, Codex `developerInstructions`, and for the ACP agents, which have no system slot, the session's first prompt, restated only when it changes. The content is compensation for what each CLI does not do by default, so Claude's list is the shortest.
 
 **The work gets checked.** After a run changes files, the project's *own* typecheck/test script runs and, on failure, the model gets one repair round with the real output. Commands are never invented — only what `package.json` or a `Makefile` declares — and nothing runs in Plan mode.
 
 **A different model looks for what the checks cannot see.** On hard work a different provider reviews the diff adversarially, told that finding nothing (`LGTM`) is a valid answer. Different labs have different blind spots; that is the whole reason to own several subscriptions. Connect a free [OpenRouter](#how-it-works-and-why-its-tos-friendly) account and the review runs on an open-weight model instead, so checking the work costs no quota at all.
+
+**It says when a chat has turned against itself.** Two corrections, or checks left red twice, and the thread is now feeding the model its own failed attempts every turn. usturlab says so once and suggests a fresh chat — length alone is never the trigger, only evidence of circling.
 
 **It learns.** Auto routing calibrates each account from your own clean-run rate — runs you did not have to steer, retry, or escalate — keyed by weight class so a scrappy run on the cheap model is not held against the expensive one, and on light work a measurably faster account wins. It estimates how much of a quota window a task will burn before choosing. Corrections you type mid-run are collected, and a recurring one is *offered* (never silently applied) as a standing rule every provider inherits.
 
@@ -131,6 +135,7 @@ Secrets (tokens, API keys) live in the VS Code secret store. Profile directories
 | `usturlab.permissionMode` | `safe` | `safe` (read/plan), `edits` (auto-accept edits), `full` (skip approvals) |
 | `usturlab.routingMode` | `auto` | `auto` reads the task and picks the model; `manual` follows your chain exactly. Your rules win in both |
 | `usturlab.sendWorkspaceContext` | `true` | Send the open file, selection, git state and convention files |
+| `usturlab.frameTasks` | `true` | Add the framing a request is missing — the check to run, reproduce first, name files, stay in scope |
 | `usturlab.standingInstructions` | `true` | Give each provider the instructions it needs to behave like the best one |
 | `usturlab.verifyChanges` | `true` | Run the project's own checks after a change, and let the model fix a failure once |
 | `usturlab.secondOpinion` | `hard` | Have a different provider review the work: `never` / `hard` / `always` |

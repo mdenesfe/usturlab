@@ -96,7 +96,7 @@ export type HostToWebview =
   | { kind: 'failover'; messageId: string; from: Target; to: Target; reason: string; resetAt?: number }
   | { kind: 'downgraded'; messageId: string; from: string; to: string }
   | { kind: 'notice'; text: string }
-  | { kind: 'done'; messageId: string; costUsd?: number; durationMs?: number }
+  | { kind: 'done'; messageId: string; costUsd?: number; metered?: boolean; durationMs?: number }
   /** The run ended without an answer — cancelled, restarted or shut down. */
   | { kind: 'stopped'; messageId: string; reason?: string }
   | { kind: 'error'; messageId: string; message: string }

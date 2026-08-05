@@ -15,7 +15,9 @@ import {
   isRetry,
   isTransientFailure,
   accountHeadroom,
+  assessThread,
   describeReport,
+  isMetered,
   repairPrompt,
   pickReviewer,
   reviewPrompt,
@@ -148,8 +150,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       /** Files this thread has touched, and what last went wrong — brief material. */
       touchedFiles?: string[];
       lastFailure?: string;
+      /** Evidence the thread is circling: runs steered, checks left red. */
+      corrections?: number;
+      failedVerifications?: number;
     }
   >();
+  /** Threads already told they are crowded — said once, not every turn. */
+  private crowdedThreads = new Set<string>();
 
   constructor(
     private ctx: vscode.ExtensionContext,
@@ -202,10 +209,39 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.onTargetChosen = cb;
   }
 
+  /** True when this account pays per token, so a reported cost is real money. */
+  private isMetered(target: Target | undefined): boolean {
+    if (!target) return false;
+    const profile = this.accounts
+      .all()
+      .find((a) => a.provider === target.provider && a.label === target.account);
+    return profile ? isMetered(profile) : false;
+  }
+
   /** What this thread has already done, for the workspace brief. */
   threadFiles(conversationId: string): { touchedFiles?: string[]; lastFailure?: string } {
     const ctx = this.threadContext.get(conversationId);
     return { touchedFiles: ctx?.touchedFiles, lastFailure: ctx?.lastFailure };
+  }
+
+  /**
+   * Say once, when the evidence is there, that this chat is now working against
+   * itself. It is advice, not a mode: the user keeps typing either way.
+   */
+  private warnIfCrowded(
+    conversationId: string,
+    ctx: { turnCount: number; corrections?: number; failedVerifications?: number },
+    post: (msg: HostToWebview) => void,
+  ): void {
+    if (this.crowdedThreads.has(conversationId)) return;
+    const verdict = assessThread({
+      turnCount: ctx.turnCount,
+      corrections: ctx.corrections ?? 0,
+      failedVerifications: ctx.failedVerifications ?? 0,
+    });
+    if (!verdict.crowded) return;
+    this.crowdedThreads.add(conversationId);
+    post({ kind: 'notice', text: `${verdict.reason} — ${verdict.advice}` });
   }
 
   /** Conversation memory for the router: same thread → same model unless work escalates. */
@@ -480,6 +516,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     rec.title = '';
     this.sessions.clearConversation(id);
     this.threadContext.delete(id);
+    // A cleared chat is the fresh start the warning asked for.
+    this.crowdedThreads.delete(id);
     const panel = this.panels.get(id);
     if (panel) panel.title = 'New chat';
     for (const [webview, surface] of this.surfaces) {
@@ -1209,11 +1247,24 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             }
             gotResult = true;
             const durationMs = Date.now() - startedAt;
-            metric = { ...metric, inputTokens: ev.usage?.inputTokens, outputTokens: ev.usage?.outputTokens, costUsd: ev.costUsd, durationMs, status: 'success' };
+            // Whether that dollar figure is a bill or a hypothetical depends on
+            // how the account authenticates, which only the host knows.
+            const metered = this.isMetered(live.lastTarget);
+            metric = {
+              ...metric,
+              inputTokens: ev.usage?.inputTokens,
+              outputTokens: ev.usage?.outputTokens,
+              cachedInputTokens: ev.usage?.cachedInputTokens,
+              costUsd: ev.costUsd,
+              metered,
+              durationMs,
+              status: 'success',
+            };
             post({
               kind: 'done',
               messageId: currentId(),
               costUsd: ev.costUsd,
+              metered,
               durationMs,
             });
             live.turnIdx++;
@@ -1271,8 +1322,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       ctx.lastFailure = (e as Error).message.slice(0, 300);
       this.threadContext.set(conversationId, ctx);
     } finally {
+      const steered = this.steeredRuns.delete(conversationId);
       if (metric.status && metric.provider && metric.account) {
-        const steered = this.steeredRuns.delete(conversationId);
         const target = live.lastTarget;
         const usageAfter = target ? this.usagePctForTarget(target) : undefined;
         void this.metrics.record({
@@ -1288,7 +1339,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           complexity: metric.complexity,
           inputTokens: metric.inputTokens,
           outputTokens: metric.outputTokens,
+          cachedInputTokens: metric.cachedInputTokens,
           costUsd: metric.costUsd,
+          metered: metric.metered,
           durationMs: metric.durationMs,
           burnPct: observedBurn(usageBefore, usageAfter),
           status: metric.status as 'success' | 'error' | 'failover',
@@ -1312,7 +1365,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         ctx.lastPrompt = text;
         ctx.lastFinishedAt = Date.now();
         ctx.lastMetricId = metric.status ? metric.id : undefined;
+        if (steered) ctx.corrections = (ctx.corrections ?? 0) + 1;
+        if (metric.verified === 'failed') {
+          ctx.failedVerifications = (ctx.failedVerifications ?? 0) + 1;
+        }
         this.threadContext.set(conversationId, ctx);
+        this.warnIfCrowded(conversationId, ctx, post);
       }
       if (this.tasks.get(conversationId) === controller) this.tasks.delete(conversationId);
       if (this.liveRuns.get(conversationId) === live) this.liveRuns.delete(conversationId);

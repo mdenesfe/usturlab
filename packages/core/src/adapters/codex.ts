@@ -8,13 +8,31 @@ import { describeToolUse } from './toolDetail.js';
 import { sameTasks, tasksFromCodexPlan } from './taskList.js';
 import { PermissionGate, codexApprovalKind } from './permission.js';
 import { buildChildEnv } from '../accounts/env.js';
-import type { AdapterEvent, PermissionMode, ResolvedAccount } from '../types.js';
+import type { AdapterEvent, PermissionMode, ResolvedAccount, Usage } from '../types.js';
 
 const SANDBOX: Record<PermissionMode, string> = {
   safe: 'read-only',
   edits: 'workspace-write',
   full: 'danger-full-access',
 };
+
+/**
+ * Codex already counts the cache into `input_tokens` and breaks out the cached
+ * part, so the input side needs no arithmetic. Its reasoning tokens are billed
+ * and produced like output but reported separately, so they belong in the
+ * output figure rather than nowhere.
+ */
+export function codexUsage(usage: Record<string, unknown> | undefined): Usage {
+  const at = (key: string): number => getNumber(usage, key) ?? 0;
+  const input = at('input_tokens');
+  const cached = at('cached_input_tokens');
+  const output = at('output_tokens') + at('reasoning_output_tokens');
+  const result: Usage = {};
+  if (input > 0) result.inputTokens = input;
+  if (output > 0) result.outputTokens = output;
+  if (cached > 0) result.cachedInputTokens = cached;
+  return result;
+}
 
 /** Item types worth showing in the tool timeline, mapped to display names. */
 const TOOL_ITEM_NAMES: Record<string, string> = {
@@ -178,14 +196,7 @@ export class CodexAdapter implements ProviderAdapter {
             finish(limit ? { type: 'limit', ...limit } : { type: 'error', message, retryable: isTransientFailure(message) });
             break;
           }
-          finish({
-            type: 'result',
-            text,
-            usage: {
-              inputTokens: getNumber(n.params, 'turn', 'usage', 'input_tokens'),
-              outputTokens: getNumber(n.params, 'turn', 'usage', 'output_tokens'),
-            },
-          });
+          finish({ type: 'result', text, usage: codexUsage(getObject(turn, 'usage')) });
           break;
         }
         case 'error': {

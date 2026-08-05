@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { buildBrief, readsNatively, withBrief } from '../src/context/brief.js';
 import { briefLinesFor, buildProviderBrief } from '../src/context/providerBrief.js';
+import { shapeTask } from '../src/context/taskShape.js';
+import { assessThread } from '../src/context/threadHealth.js';
 import {
+  describeChecks,
   discoverChecks,
   repairPrompt,
   selectChecks,
@@ -79,6 +82,141 @@ describe('task brief', () => {
     });
     expect(brief).toContain('src/a.ts');
     expect(brief).toContain('typecheck failed');
+  });
+});
+
+describe('task framing', () => {
+  const shape = (
+    prompt: string,
+    over: Partial<Parameters<typeof shapeTask>[0]> = {},
+  ): string[] => {
+    const classification = {
+      kind: 'edit' as const,
+      complexity: 'moderate' as const,
+      writesCode: true,
+      ...(over.classification ?? {}),
+    };
+    return shapeTask({ permissionMode: 'edits', ...over, prompt, classification }).map((l) => l.id);
+  };
+
+  it('names the check the run will be judged by', () => {
+    const lines = shapeTask({
+      prompt: 'add a logout button',
+      classification: { kind: 'edit', complexity: 'moderate', writesCode: true },
+      check: 'pnpm run typecheck && pnpm run test',
+      permissionMode: 'edits',
+    });
+    expect(lines[0]!.id).toBe('verify-with-check');
+    expect(lines[0]!.text).toContain('pnpm run typecheck && pnpm run test');
+  });
+
+  it('asks for evidence instead when the repo declares no check', () => {
+    expect(shape('add a logout button')[0]).toBe('verify-no-check');
+  });
+
+  it('says nothing about work that writes no code', () => {
+    expect(shape('how does routing work?', {
+      classification: { kind: 'explain', complexity: 'moderate', writesCode: false },
+    })).toEqual([]);
+  });
+
+  it('says nothing in plan mode — there is nothing to verify yet', () => {
+    expect(shape('rewrite the router', { permissionMode: 'safe' })).toEqual([]);
+  });
+
+  it('asks a bug report with no failure in it to reproduce first', () => {
+    const bare = shape('the login is broken, fix it', {
+      classification: { kind: 'debug', complexity: 'moderate', writesCode: true },
+    });
+    expect(bare).toContain('repro-first');
+
+    const withOutput = shape('login fails: TypeError: cannot read x of undefined at auth.ts:31', {
+      classification: { kind: 'debug', complexity: 'moderate', writesCode: true },
+    });
+    expect(withOutput).not.toContain('repro-first');
+  });
+
+  it('makes "make it faster" name what it is optimising — unless it already does', () => {
+    expect(shape('make the panel faster')).toContain('criteria-first');
+    expect(shape('make the panel faster — first render under 50ms')).not.toContain('criteria-first');
+  });
+
+  it('only asks for scope when nothing anchors the work', () => {
+    expect(shape('add a retry')).toContain('name-scope');
+    expect(shape('add a retry to src/adapters/spawn.ts')).not.toContain('name-scope');
+    expect(shape('add a retry', { activeFile: 'src/adapters/spawn.ts' })).not.toContain('name-scope');
+  });
+
+  it('fences the scope on hard work and follows the house pattern on a refactor', () => {
+    expect(
+      shape('redesign the quota tracker in src/quota/quotaTracker.ts', {
+        classification: { kind: 'refactor', complexity: 'hard', writesCode: true },
+      }),
+    ).toEqual(['verify-no-check', 'follow-pattern', 'scope-fence']);
+  });
+
+  it('never grows into a preamble', () => {
+    const everything = shape('make the whole thing better and fix the bug', {
+      classification: { kind: 'agentic', complexity: 'hard', writesCode: true },
+    });
+    expect(everything.length).toBeLessThanOrEqual(3);
+    expect(everything[0]).toBe('verify-no-check');
+  });
+
+  it('gives a typo fix the check and nothing else', () => {
+    expect(
+      shape('fix the typo', { classification: { kind: 'edit', complexity: 'trivial', writesCode: true } }),
+    ).toEqual(['verify-no-check']);
+  });
+
+  it('does not read "go ahead" as if it were the request', () => {
+    expect(shape('yap')).toEqual(['verify-no-check']);
+  });
+
+  it('drops a line the user turned off', () => {
+    expect(shape('add a retry', { disabledLineIds: ['name-scope'] })).not.toContain('name-scope');
+  });
+
+  it('renders the checks as something a model can actually run', () => {
+    const commands = discoverChecks({ scripts: { typecheck: 'tsc', test: 'vitest run' } });
+    expect(describeChecks(commands)).toBe('npm run typecheck && npm run test');
+    expect(describeChecks([])).toBeUndefined();
+  });
+
+  it('leads the brief and survives a tight budget', () => {
+    const brief = buildBrief({
+      provider: 'codex',
+      shaping: ['run `pnpm test` when you are done'],
+      conventions: [{ path: 'NOTES.md', text: 'x'.repeat(5000) }],
+      budget: 300,
+    });
+    expect(brief.indexOf('How to approach this one')).toBeGreaterThan(-1);
+    expect(brief).toContain('pnpm test');
+    expect(brief).not.toContain('NOTES.md');
+  });
+});
+
+describe('thread health', () => {
+  const healthy = { turnCount: 3, corrections: 0, failedVerifications: 0 };
+
+  it('says nothing about a thread that is simply long', () => {
+    expect(assessThread({ ...healthy, turnCount: 40 }).crowded).toBe(false);
+  });
+
+  it('speaks up after the second correction', () => {
+    expect(assessThread({ ...healthy, corrections: 1 }).crowded).toBe(false);
+    const verdict = assessThread({ ...healthy, corrections: 2 });
+    expect(verdict.crowded).toBe(true);
+    expect(verdict.advice).toMatch(/new chat/i);
+  });
+
+  it('speaks up when the checks stay red', () => {
+    expect(assessThread({ ...healthy, failedVerifications: 2 }).crowded).toBe(true);
+  });
+
+  it('counts a long thread that is still being steered', () => {
+    expect(assessThread({ turnCount: 20, corrections: 1, failedVerifications: 0 }).crowded).toBe(true);
+    expect(assessThread({ turnCount: 19, corrections: 1, failedVerifications: 0 }).crowded).toBe(false);
   });
 });
 

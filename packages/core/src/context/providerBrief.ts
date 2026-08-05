@@ -40,6 +40,12 @@ const UNIVERSAL: BriefLine[] = [
       'Match the conventions of the code you are editing — its naming, comment density and idiom — ' +
       'rather than importing a different house style.',
   },
+  {
+    id: 'no-suppress',
+    text:
+      'Fix causes, not symptoms. Do not silence a failing check, swallow an error, widen a type, ' +
+      'or weaken a test to make something pass — if the real fix is out of scope, say so instead.',
+  },
 ];
 
 /**
@@ -58,6 +64,27 @@ const PER_PROVIDER: Record<ProviderId, BriefLine[]> = {
       text:
         "After changing code, run the project's own check (its test or build script) and report the " +
         'real result.',
+    },
+    // OpenAI's own Codex guidance: the model reads files one at a time unless
+    // told otherwise, and a turn of serial reads is a turn of latency.
+    {
+      id: 'codex-parallel',
+      text:
+        'Batch your file reads and searches into parallel calls. Do not walk the codebase one ' +
+        'file per turn when you already know the several places you need to see.',
+    },
+    // Its other documented default: answering a build request with a proposal.
+    {
+      id: 'codex-deliver',
+      text:
+        'The deliverable is working code, not a plan. Unless you were asked only to investigate, ' +
+        'make the change in this turn rather than describing what you would do.',
+    },
+    {
+      id: 'codex-reuse',
+      text:
+        'Search for an existing helper before writing a new one, and prefer extending what is ' +
+        'there to adding a parallel implementation.',
     },
   ],
   gemini: [

@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.8.2 — 2026-08-05
+
+### The numbers were wrong
+
+Both figures in the analytics tab were plausible and wrong. Verified against real CLI output, not assumed:
+
+**Tokens were off by four orders of magnitude.** Claude's `usage.input_tokens` counts only what was neither served from cache nor written to it. A real turn reported `input_tokens: 2` while reading 18,726 tokens from cache and writing 6,088 more into it — usturlab stored the 2. Adapters now normalize to what the model actually read, with the cached share kept separately:
+
+| | before | after |
+|---|---|---|
+| Claude | `input_tokens` alone | `+ cache_creation + cache_read` |
+| Codex | `output_tokens` alone | `+ reasoning_output_tokens` (billed as output) |
+
+Codex's input side needed no change — it already counts the cache and breaks out the cached part. The analytics row now reads `24.8k→4` instead of `2→4`, and hovering shows how much of it came from cache.
+
+### Dollars that were never charged
+
+`total_cost_usd` is the API list price of the tokens, and Claude Code reports it whether or not anyone was billed. On a subscription — which is the entire point of this extension — the run cost nothing. Three identical trivial prompts reported `$0.070939`, `$0.070420` and `$0.012668`; the last was 5.6× cheaper only because the cache was warm.
+
+The figure is worth keeping — it is exactly *what the subscription saved you* — so it is labelled rather than hidden:
+
+- A cost from an API-key account reads `$0.07`. From a subscription account it reads `~$0.07`, and the tooltip says nothing was charged.
+- The analytics summary splits **Billed** (money) from **Would have cost** (list price of the free runs). They are never added together, because the sum is neither number.
+- A provider that reports no cost at all — Codex, Gemini and Copilot report none — now shows `—` instead of `$0.00`. "Not reported" is not "free".
+- Sub-cent runs show three decimals instead of rounding to `$0.00`.
+
+Runs recorded before this release have no billing flag and are counted as unbilled, which is right for subscription accounts and wrong for API-key ones; there is no way to recover it retroactively.
+
+## 0.8.1 — 2026-08-05
+
+### The check comes before the run, not after
+
+usturlab already ran this project's own typecheck and tests after a change and handed back the failure. That closed the loop one round trip too late: the model had already declared victory, and every repair round is a turn the user paid for.
+
+Now the same commands are named **in the brief, before the work starts** — `pnpm run typecheck && pnpm run test`, discovered from `package.json` or a `Makefile`, never invented — with the instruction to run them and keep working until they pass, and to show what they printed instead of asserting success. The list is the same one verification would run, so a model that passes its own check passes ours. It is told even when `verifyChanges` is off, which is exactly when it matters most.
+
+### Framing, only where the request is missing it
+
+The brief now leads with **how to approach this one** — never more than three lines, and only ones that answer a gap actually present in what you typed:
+
+| when | what it adds |
+|---|---|
+| always, on work that writes code | the check above, or — if the repo declares none — say how you verified it |
+| a bug report with no output pasted in it | reproduce the failure first, then fix the cause |
+| "make it faster" with nothing to measure | name the property you are improving and how you'd know it improved |
+| nothing names a file, and no editor file is open | find the place and say which files you'll change before changing them |
+| a refactor or a multi-step job | follow the pattern already here, and name where you took it from |
+| hard or multi-step work | do what was asked; list other problems instead of fixing them |
+
+Your prompt is never rewritten — the framing sits beside it and can be read separately. A typo fix gets the check and nothing else. Plan mode gets none of it: there is nothing to verify yet. `usturlab.frameTasks` turns it off.
+
+### A chat that has turned against itself now says so
+
+Two corrections, or checks left red twice, and the thread is feeding the model its own failed attempts on every turn. usturlab says this once and suggests starting fresh with what you learned. Length alone is never the trigger — a long thread deep in one problem is where accumulated context earns its place; only evidence of circling counts.
+
+### Sharper standing instructions
+
+- **Every provider** is now told not to buy a green check: no silencing a failing check, swallowing an error, widening a type, or weakening a test. If the real fix is out of scope, say so.
+- **Codex** gets three lines for its documented defaults — batch reads in parallel instead of walking the tree one file per turn, deliver working code rather than a proposal, and look for an existing helper before writing a parallel one.
+- **The repair prompt** now says outright that editing, deleting or skipping a test — or stubbing what it exercises — is not a fix, because a check bought that way hides the bug it existed to catch.
+
+Every line still carries an id and stays subject to the A/B loop that drops one when the evidence says it hurts. The framing lines deliberately sit outside that loop: they appear only when their gap does, so "with" and "without" would be different populations of task and the comparison would measure difficulty, not the line.
+
 ## 0.8.0 — 2026-08-04
 
 ### Parallel agents, drawn as parallel

@@ -1,5 +1,6 @@
 import type { Segment, ToolStep, TranscriptItem } from '../../src/panel/transcript.js';
 import type { PermissionDecision } from '../../../core/src/adapters/permission.js';
+import { formatCost } from '../../../core/src/accounts/billing.js';
 import { Markdown } from './Markdown.js';
 import { IconUsturlab } from './icons.js';
 import { BRAND_COLOR, BrandMark, PROVIDER_NAME } from './brandIcons.js';
@@ -220,9 +221,13 @@ export function Transcript({
                     {item.done && item.costUsd !== undefined && (
                       <span
                         class="assistant-meta"
-                        title="API-equivalent value — subscription usage is not billed per request"
+                        title={
+                          item.metered
+                            ? 'Billed to this account at list price'
+                            : 'What these tokens would have cost on the API. This account is a subscription — nothing was charged for this run.'
+                        }
                       >
-                        · ≈${item.costUsd.toFixed(2)}
+                        · {formatCost(item.costUsd, item.metered)}
                       </span>
                     )}
                     {answer && (

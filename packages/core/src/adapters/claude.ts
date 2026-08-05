@@ -6,7 +6,13 @@ import { detectClaudeLimit, isTransientFailure } from './limits.js';
 import { describeToolUse } from './toolDetail.js';
 import { sameTasks, tasksFromTodoWrite } from './taskList.js';
 import { buildChildEnv } from '../accounts/env.js';
-import type { AdapterEvent, AgentStatus, PermissionMode, ResolvedAccount } from '../types.js';
+import type {
+  AdapterEvent,
+  AgentStatus,
+  PermissionMode,
+  ResolvedAccount,
+  Usage,
+} from '../types.js';
 
 const PERMISSION_ARGS: Record<PermissionMode, string[]> = {
   safe: ['--permission-mode', 'plan'],
@@ -48,6 +54,24 @@ function resultText(content: unknown): string | undefined {
     .join('')
     .trim();
   return text || undefined;
+}
+
+/**
+ * Claude's `input_tokens` counts only what was neither cached nor being written
+ * to cache, which on a warm session is a rounding error next to what the model
+ * actually read — a real turn reported `input_tokens: 2` against 18,726 read
+ * from cache. The window it worked in is the sum, so that is what we report.
+ */
+export function claudeUsage(msg: Record<string, unknown>): Usage {
+  const at = (...path: string[]): number => getNumber(msg, 'usage', ...path) ?? 0;
+  const cacheRead = at('cache_read_input_tokens');
+  const input = at('input_tokens') + at('cache_creation_input_tokens') + cacheRead;
+  const output = at('output_tokens');
+  const usage: Usage = {};
+  if (input > 0) usage.inputTokens = input;
+  if (output > 0) usage.outputTokens = output;
+  if (cacheRead > 0) usage.cachedInputTokens = cacheRead;
+  return usage;
 }
 
 export class ClaudeAdapter implements ProviderAdapter {
@@ -360,10 +384,7 @@ export class ClaudeAdapter implements ProviderAdapter {
             type: 'result',
             text,
             costUsd: getNumber(msg, 'total_cost_usd'),
-            usage: {
-              inputTokens: getNumber(msg, 'usage', 'input_tokens'),
-              outputTokens: getNumber(msg, 'usage', 'output_tokens'),
-            },
+            usage: claudeUsage(msg),
           };
         }
         // One result per turn: keep the session open while injected turns
