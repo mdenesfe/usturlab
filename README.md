@@ -1,4 +1,6 @@
-# usturlab
+<p align="center">
+  <img src="docs/media/hero.png" alt="usturlab" width="900">
+</p>
 
 **Route every AI coding task to the best subscription you own — and make every model behave like the best one.**
 
@@ -6,21 +8,11 @@ usturlab is an open-source VS Code extension for people who juggle multiple AI s
 
 It does not stop at picking who runs the task. Every provider is given the context it would otherwise lack, held to the same standing instructions through its own system-prompt channel, and — for hard work — checked by a *different* model before you rely on the answer.
 
-```
-            ┌──────────────────────────────┐
-  task ───▶ │  router (your rules.json)    │
-            │  tests → codex:work          │
-            │  quick Qs → claude/haiku     │
-            │  default → claude:personal   │
-            └──────────┬───────────────────┘
-                       ▼
-        ┌──────────────┼──────────────┬─────────────┐
-        ▼              ▼              ▼             ▼
-   claude:personal claude:work    codex:work   gemini:main
-   (Pro)           (Max)          (ChatGPT)    (AI Pro)
-        │  limit hit → automatic failover to next in chain
-        └──────────────▶ ...
-```
+<img src="docs/media/routing.png" alt="A prompt enters the router, which matches your rules and picks an account; when that account reports its limit the full prompt is re-sent to the next one in the chain." width="100%">
+
+Subagents get their own lane, so a fan-out reads as a fan-out — and the cost line says `~$0.47` with a tilde, because that is what the run *would* have cost: on a subscription nobody was charged.
+
+<img src="docs/media/ui-agents.png" alt="A run routed to the personal account: two agents in parallel, each lane showing its tool count, tokens and duration." width="100%">
 
 ## Making every model smarter
 
@@ -34,7 +26,7 @@ A model's output quality is a function of the context it gets, the constraints i
 
 **The work gets checked.** After a run changes files, the project's *own* typecheck/test script runs and, on failure, the model gets one repair round with the real output. Commands are never invented — only what `package.json` or a `Makefile` declares — and nothing runs in Plan mode.
 
-**A different model looks for what the checks cannot see.** On hard work a different provider reviews the diff adversarially, told that finding nothing (`LGTM`) is a valid answer. Different labs have different blind spots; that is the whole reason to own several subscriptions. Connect a free [OpenRouter](#how-it-works-and-why-its-tos-friendly) account and the review runs on an open-weight model instead, so checking the work costs no quota at all.
+**A different model looks for what the checks cannot see.** On hard work a different provider reviews the diff adversarially, told that finding nothing (`LGTM`) is a valid answer. Different labs have different blind spots; that is the whole reason to own several subscriptions. Connect a free [OpenRouter](#how-it-works) account and the review runs on an open-weight model instead, so checking the work costs no quota at all.
 
 **It says when a chat has turned against itself.** Two corrections, or checks left red twice, and the thread is now feeding the model its own failed attempts every turn. usturlab says so once and suggests a fresh chat — length alone is never the trigger, only evidence of circling.
 
@@ -54,6 +46,20 @@ Claude-panel style, built for a developer environment:
 - **Rules tab** — your routing rules visualized: match conditions as chips, failover chains as pill sequences. Edits to the JSON apply live.
 
 Conversations persist across VS Code restarts, including native CLI session ids, so old chats keep their context.
+
+<img src="docs/media/ui-panel.png" alt="The usturlab panel: chat list on the left, an empty conversation in the editor, and a composer with one chip per registered account." width="100%">
+
+**Every account is a chip in the composer.** When one reports its limit, its chip dims and the next in your chain picks the task up — the badge on the reply says which account actually ran it.
+
+<img src="docs/media/ui-failover.png" alt="After the personal account hits its limit its chip is dimmed, the reply is badged work, and the status bar reads claude:work." width="100%">
+
+**Accounts are managed in a tab, not a settings blob** — one row per account, with its auth type, profile directory, and the models it can be asked for.
+
+<img src="docs/media/ui-accounts.png" alt="The Accounts tab: four accounts listed, with the selected one showing subscription login, its profile path and available models." width="100%">
+
+**Analytics separates what you were billed from what you weren't.** `Would have cost` is the list price of work your subscriptions covered — it is never added to money actually charged, because that sum is neither number.
+
+<img src="docs/media/ui-analytics.png" alt="Analytics: clean-run rate, task count, median duration, and a would-have-cost figure labelled as work the subscription covered." width="100%">
 
 ## How it works
 

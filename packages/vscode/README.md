@@ -1,26 +1,26 @@
-# usturlab
+<img src="https://raw.githubusercontent.com/mdenesfe/usturlab/main/docs/media/hero.png" alt="usturlab" width="100%">
 
 **Route every AI coding task to the best subscription you own.**
 
 usturlab is an open-source VS Code extension for people who juggle multiple AI subscriptions — two Claude accounts, a ChatGPT plan for Codex, a Google AI subscription, GitHub Copilot. You register all of them once; usturlab then routes each task to the right account and model using **your own routing rules**, and **fails over automatically** when an account hits its usage limit.
 
-```
-            ┌──────────────────────────────┐
-  task ───▶ │  router (your rules.json)    │
-            │  tests → codex:work          │
-            │  quick Qs → claude/haiku     │
-            │  default → claude:personal   │
-            └──────────┬───────────────────┘
-                       ▼
-        ┌──────────────┼──────────────┬─────────────┐
-        ▼              ▼              ▼             ▼
-   claude:personal claude:work    codex:work   gemini:main
-   (Pro)           (Max)          (ChatGPT)    (AI Pro)
-        │  limit hit → automatic failover to next in chain
-        └──────────────▶ ...
-```
+<img src="https://raw.githubusercontent.com/mdenesfe/usturlab/main/docs/media/routing.png" alt="A prompt enters the router, which matches your rules and picks an account; when that account reports its limit the full prompt is re-sent to the next one in the chain." width="100%">
+
+Subagents get their own lane, so a fan-out reads as a fan-out — and the cost line says `~$0.47` with a tilde, because that is what the run *would* have cost: on a subscription nobody was charged.
+
+<img src="https://raw.githubusercontent.com/mdenesfe/usturlab/main/docs/media/ui-agents.png" alt="A run routed to the personal account: two agents in parallel, each lane showing its tool count, tokens and duration." width="100%">
 
 ## The UI
+
+<img src="https://raw.githubusercontent.com/mdenesfe/usturlab/main/docs/media/ui-panel.png" alt="The usturlab panel: chat list on the left, an empty conversation in the editor, and a composer with one chip per registered account." width="100%">
+
+Every account is a chip in the composer. When one reports its limit, its chip dims and the next in your chain picks the task up — the badge on the reply says which account actually ran it.
+
+<img src="https://raw.githubusercontent.com/mdenesfe/usturlab/main/docs/media/ui-failover.png" alt="After the personal account hits its limit its chip is dimmed, the reply is badged work, and the status bar reads claude:work." width="100%">
+
+Analytics separates what you were billed from what you weren't: `Would have cost` is the list price of work your subscriptions covered, and it is never added to money actually charged.
+
+<img src="https://raw.githubusercontent.com/mdenesfe/usturlab/main/docs/media/ui-analytics.png" alt="Analytics: clean-run rate, task count, median duration, and a would-have-cost figure labelled as work the subscription covered." width="100%">
 
 Claude-panel style, built for a developer environment:
 
