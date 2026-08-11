@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   COMMANDS_TEMPLATE,
   EMPTY_RULES,
@@ -28,13 +28,32 @@ export class RulesManager implements vscode.Disposable {
   private emitter = new vscode.EventEmitter<void>();
   readonly onDidChange = this.emitter.event;
   private diagnostics = vscode.languages.createDiagnosticCollection('usturlab');
-  private watcher: vscode.FileSystemWatcher;
+  private watchers: vscode.FileSystemWatcher[] = [];
 
   constructor() {
-    this.watcher = vscode.workspace.createFileSystemWatcher('**/.usturlab/{rules,commands}.json');
-    this.watcher.onDidChange(() => this.load());
-    this.watcher.onDidCreate(() => this.load());
-    this.watcher.onDidDelete(() => this.load());
+    // Every location `locate()` is willing to read from has to be watched, or
+    // "edits to the JSON apply live" is only true for the workspace copy: the
+    // home-directory fallbacks sit outside the workspace and need a watcher of
+    // their own, and the legacy .usrouter paths are still read.
+    const patterns: Array<string | vscode.RelativePattern> = [
+      '**/.usturlab/{rules,commands}.json',
+      '**/.usrouter/{rules,commands}.json',
+      new vscode.RelativePattern(
+        vscode.Uri.file(join(homedir(), '.usturlab')),
+        '{rules,commands}.json',
+      ),
+      new vscode.RelativePattern(
+        vscode.Uri.file(join(homedir(), '.usrouter')),
+        '{rules,commands}.json',
+      ),
+    ];
+    for (const pattern of patterns) {
+      const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+      watcher.onDidChange(() => this.load());
+      watcher.onDidCreate(() => this.load());
+      watcher.onDidDelete(() => this.load());
+      this.watchers.push(watcher);
+    }
     this.load();
   }
 
@@ -95,6 +114,7 @@ export class RulesManager implements vscode.Disposable {
       (ws ? join(ws.uri.fsPath, '.usturlab', 'commands.json') : join(homedir(), '.usturlab', 'commands.json'));
     const uri = vscode.Uri.file(path);
     if (!existing) {
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(dirname(path)));
       await vscode.workspace.fs.writeFile(uri, Buffer.from(COMMANDS_TEMPLATE, 'utf8'));
     }
     await vscode.window.showTextDocument(uri);
@@ -147,6 +167,7 @@ export class RulesManager implements vscode.Disposable {
     const { path, exists } = this.locate();
     const uri = vscode.Uri.file(path);
     if (!exists) {
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(dirname(path)));
       await vscode.workspace.fs.writeFile(uri, Buffer.from(RULES_TEMPLATE, 'utf8'));
     }
     await vscode.window.showTextDocument(uri);
@@ -189,19 +210,35 @@ export class RulesManager implements vscode.Disposable {
     await this.write({ ...this.current, defaultChain: chain });
   }
 
+  /**
+   * True when a rules file exists on disk that we could not parse. Everything
+   * that writes has to check this: a file that failed to parse was replaced in
+   * memory by EMPTY_RULES, so writing that back would delete every rule still
+   * in it over a fixable syntax error.
+   */
+  isUnparsed(): boolean {
+    return this.lastError !== undefined && this.locate().exists;
+  }
+
   private async write(rules: RulesFile): Promise<void> {
     const { path, exists } = this.locate();
-    const uri = vscode.Uri.file(path);
-    if (!exists) {
-      const dir = path.substring(0, path.lastIndexOf('/'));
-      await vscode.workspace.fs.createDirectory(vscode.Uri.file(dir));
+    if (this.isUnparsed()) {
+      const open = 'Open rules.json';
+      const pick = await vscode.window.showErrorMessage(
+        `usturlab did not save: ${path} does not parse, and writing over it would discard the rules still in it. Fix the JSON first.`,
+        open,
+      );
+      if (pick === open) await this.openOrCreate();
+      return;
     }
+    const uri = vscode.Uri.file(path);
+    if (!exists) await vscode.workspace.fs.createDirectory(vscode.Uri.file(dirname(path)));
     const content = JSON.stringify(rules, null, 2);
     await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf8'));
   }
 
   dispose(): void {
-    this.watcher.dispose();
+    for (const watcher of this.watchers) watcher.dispose();
     this.diagnostics.dispose();
     this.emitter.dispose();
   }

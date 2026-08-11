@@ -55,7 +55,10 @@ const AUTH_OPTIONS: Record<ProviderId, AuthOption[]> = {
   gemini: [
     {
       label: 'Google account',
-      description: 'Login with Google (free tier / Google AI Pro & Ultra)',
+      // The free individual tier is refused by the CLI itself (IneligibleTierError,
+      // pointing at Antigravity), so promising it here only sends people down a
+      // login that cannot finish.
+      description: 'Login with Google — Google AI Pro or Ultra; the free tier is refused',
       mode: 'managed-home',
     },
     { label: 'Gemini API key', description: 'GEMINI_API_KEY', mode: 'api-key' },

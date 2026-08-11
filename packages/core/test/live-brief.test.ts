@@ -88,7 +88,6 @@ async function run(entry: Case, prompt: string, systemBrief?: string): Promise<A
 }
 
 const report = (label: string, answer: Answer) => {
-  // eslint-disable-next-line no-console
   console.log(
     `\n[${label}] ${answer.text.trim() || '(empty)'}${answer.error ? `\nERROR: ${answer.error}` : ''}`,
   );

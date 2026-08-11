@@ -67,7 +67,7 @@ Consumer AI subscriptions can't be called directly over the API. usturlab theref
 
 | Provider | Multi-account isolation | Auth options |
 |---|---|---|
-| Claude Code | `CLAUDE_CODE_OAUTH_TOKEN` (via `claude setup-token`) or `CLAUDE_CONFIG_DIR` | subscription token, isolated profile, API key |
+| Claude Code | `CLAUDE_CONFIG_DIR` per profile, or `CLAUDE_CODE_OAUTH_TOKEN` | isolated profile login (recommended — the only one that carries usage scope), `claude setup-token`, API key |
 | Codex CLI | `CODEX_HOME` per profile | ChatGPT login, API key |
 | Gemini CLI | `HOME` override per profile | Google login (paid tiers — see caveats), API key |
 | Copilot CLI | `COPILOT_HOME` per profile | GitHub login, fine-grained PAT |
@@ -77,7 +77,9 @@ The one exception to "no APIs" is **OpenRouter**, which is not a subscription: i
 
 Secrets (tokens, API keys) live in the VS Code secret store. Profile directories live under `~/.usturlab/profiles/`. usturlab also scrubs hijacking env vars (e.g. a stray `ANTHROPIC_API_KEY` silently overrides Claude subscription auth) from every subprocess.
 
-**Adding an account is one authorize click**: the wizard opens a login terminal per account and detects completion automatically — by watching for the auth file (Codex/Gemini), polling `claude auth status`, or capturing the token straight from terminal output (Claude `setup-token`). No copy-pasting.
+**Adding an account is one authorize click**: the wizard opens a login terminal per account and detects completion automatically — by polling `claude auth status` for a profile login, watching for the auth file (Codex/Gemini), or capturing the token straight from terminal output when you pick `claude setup-token` instead. No copy-pasting.
+
+For Claude, the wizard's first option is a full `claude auth login` inside an isolated `CLAUDE_CONFIG_DIR`. `setup-token` is offered second because the token it hands back has no usage scope: chat works, but the Accounts tab cannot show that account's quota.
 
 **Limit detection is first-class**: Claude's stream emits `rate_limit_event` with the exact reset time; Codex/Gemini/Copilot limit messages are fingerprinted in `packages/core/src/adapters/limits.ts`. On a limit, the full original prompt is re-sent to the next account in the chain and the account goes on cooldown until its stated reset.
 
@@ -146,6 +148,9 @@ Secrets (tokens, API keys) live in the VS Code secret store. Profile directories
 | `usturlab.verifyChanges` | `true` | Run the project's own checks after a change, and let the model fix a failure once |
 | `usturlab.secondOpinion` | `hard` | Have a different provider review the work: `never` / `hard` / `always` |
 | `usturlab.autoPlanHeavyEdits` | `true` | Plan heavy code-writing work before it edits |
+| `usturlab.askPermission` | `false` | Ask before every tool call, on every provider — not just the ones with a native prompt |
+| `usturlab.midRunStrategy` | `queue` | A message sent mid-run on a provider without live input: `queue` after the current task, or `restart` it with both merged |
+| `usturlab.notifyOnFinish` | `true` | Notify when a task finishes while its tab is not focused |
 | `usturlab.pollUsage` | `false` | Proactively poll quota (Claude 5h/weekly window, Copilot AI credits) |
 | `usturlab.cliPath.*` | CLI name | Override binary paths |
 
@@ -155,6 +160,9 @@ Secrets (tokens, API keys) live in the VS Code secret store. Profile directories
 - `usturlab: Routing Rules` / `Edit Routing Rules` (raw JSON)
 - `usturlab: New Conversation`, `Open Chat`, `Cancel Running Task`
 - `usturlab: Open Session in Terminal`
+- `usturlab: Toggle Ask Before Acting` — flip `askPermission` without leaving the chat
+- `usturlab: Edit Custom Slash Commands` — your own `/name` prompts, in `.usturlab/commands.json`
+- `usturlab: Sync MCP Servers to All Profiles` — write `.usturlab/mcp.json` into each CLI's own config
 - `usturlab: Analytics` — what the router learned: clean-run rate and confidence per account, median burn per run, performance per kind of work
 - `usturlab: Simulate Usage Limit (debug)` — test failover without burning quota
 

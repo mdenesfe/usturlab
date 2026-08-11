@@ -73,7 +73,6 @@ describe('check discovery against this repo', () => {
       expect(pkg.scripts?.[script], `${script} is not a real script`).toBeDefined();
     }
     expect(commands.length, 'no checks discovered for a repo that has scripts').toBeGreaterThan(0);
-    // eslint-disable-next-line no-console
     console.log('discovered:', commands.map((c) => c.argv.join(' ')).join(' | '));
   });
 
@@ -127,7 +126,6 @@ export function median(values: number[]): number {
       authorProvider: 'claude',
     });
     const review = await ask(new CodexAdapter(), account('codex', 'codex-personal'), prompt);
-    // eslint-disable-next-line no-console
     console.log('\n[review by codex]\n' + review.text.trim());
     expect(review.error).toBeUndefined();
     expect(isClean(review.text), 'reviewer waved through broken code').toBe(false);
@@ -142,7 +140,6 @@ export function median(values: number[]): number {
       authorProvider: 'claude',
     });
     const review = await ask(new CodexAdapter(), account('codex', 'codex-personal'), prompt);
-    // eslint-disable-next-line no-console
     console.log('\n[review of correct code]\n' + review.text.trim());
     expect(review.error).toBeUndefined();
     expect(isClean(review.text), 'reviewer invented problems in correct code').toBe(true);
@@ -158,7 +155,6 @@ describe.skipIf(!LIVE)('live: a real plan is specific enough to hand off', () =>
         'In packages/core, make the sticky-conversation bonus configurable instead of a constant.',
       ),
     );
-    // eslint-disable-next-line no-console
     console.log('\n[plan by claude]\n' + plan.text.trim().slice(0, 1200));
     expect(plan.error).toBeUndefined();
     const parsed = parsePlan(plan.text);

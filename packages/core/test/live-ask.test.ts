@@ -66,7 +66,6 @@ describe.skipIf(!LIVE)('live: the model waits for permission', () => {
         }
         clearTimeout(timer);
 
-        // eslint-disable-next-line no-console
         console.log(`\n[${entry.provider}] asked ${asked.length}×:\n  ${asked.join('\n  ')}`);
         expect(asked.length, `${entry.provider} never asked`).toBeGreaterThan(0);
         expect(events.some((e) => e.type === 'permission-resolved')).toBe(true);

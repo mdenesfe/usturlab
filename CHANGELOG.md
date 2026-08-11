@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.9.0 — 2026-08-12
+
+### One place to write a rule
+
+The rules builder was a second screen showing the same file, so it drifted from the tab beside it. There is one screen now: the ordered list on the left *is* the order the router tries them in, and the pane on the right is the rule that row stands for. Reordering is two buttons instead of an argument with the JSON. The default chain is a row in that same list rather than a special case somewhere else, and the failover chain has a real editor. The JSON file is still the source of truth, still one button away, and edits made there still show up here immediately.
+
+Analytics was rebuilt on the same lines, and the CSS underneath both lost about a third of its weight.
+
+### A broken rules file no longer costs you your rules
+
+A rules file that does not parse is replaced in memory by an empty one, because that is what routing has to fall back to. The Rules tab then showed *empty* and kept its editors live — so saving anything wrote that empty file over the rules still sitting on disk. A misplaced comma cost you the lot.
+
+Now the pane says what actually happened: the list reads empty because routing fell back, your rules are still in the file, and everything that writes is off until it parses. `RulesManager` refuses the write independently, so nothing reaching it by another path can do it either.
+
+### Fixed
+
+- **Saving a rule failed on Windows.** The parent directory was derived with `lastIndexOf('/')`, which finds nothing in a path built out of backslashes. It uses `dirname` now, like the MCP writer next to it always did. CI runs on Windows from this release so the next one of these is caught rather than reported.
+- **`~/.usturlab/rules.json` now applies live.** The watcher only covered the workspace copy, so "edits to the JSON apply live" was false for anyone whose rules live in their home directory — and for the legacy `.usrouter` paths, which are still read. All four locations are watched.
+- **The default chain pane no longer holds a stale draft** when the chain is changed in the JSON underneath it. The rule pane already reloaded on an external edit; this one didn't.
+- **The rules template pointed `$schema` at a repository that does not exist**, so editor validation silently did nothing for every file created from it.
+- **Two raw NUL bytes in `RulesView.tsx`** made git treat the file as binary — no diff, no blame, no merge — and made grep skip it entirely. They were sentinel prefixes that only needed escaping.
+- **Adding a Gemini account no longer offers the free tier**, which the CLI itself refuses (`IneligibleTierError`). It says Pro or Ultra, which is what works.
+- The rules and commands templates create their parent directory before writing, instead of assuming `.usturlab/` is already there.
+
+### Documentation
+
+The marketplace README had stopped describing the extension: no mention of the brief, the framing, the standing instructions, verification or the second opinion; three of sixteen settings; four missing commands; a disclaimer naming OpenRouter that appeared nowhere else in the page; and a relative source link that resolved to nothing. It is back in step with the repository README. Both now lead the Claude row with the isolated-profile login the wizard actually recommends, rather than the `setup-token` that cannot read usage.
+
 ## 0.8.2 — 2026-08-05
 
 ### The numbers were wrong

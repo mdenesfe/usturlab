@@ -3,7 +3,9 @@ import { existsSync } from 'node:fs';
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-// eslint-disable-next-line no-control-regex
+// Matches control characters on purpose: CSI sequences and OSC strings are how
+// a CLI paints its login prompt, and they have to come out before the text can
+// be searched for the token.
 const ANSI_RE = /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g;
 
 export function stripAnsi(text: string): string {
