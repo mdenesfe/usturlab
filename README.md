@@ -12,7 +12,7 @@ It does not stop at picking who runs the task. Every provider is given the conte
 
 Subagents get their own lane, so a fan-out reads as a fan-out — and the cost line says `~$0.47` with a tilde, because that is what the run *would* have cost: on a subscription nobody was charged.
 
-<img src="docs/media/ui-agents.png" alt="A run routed to the personal account: two agents in parallel, each lane showing its tool count, tokens and duration." width="100%">
+<img src="docs/media/ui-agents.png" alt="A run routed to the personal account: two subagents in parallel, each lane showing what it is doing and how long it took." width="100%">
 
 ## Making every model smarter
 
@@ -34,24 +34,26 @@ A model's output quality is a function of the context it gets, the constraints i
 
 ## The UI
 
-Claude-panel style, built for a developer environment:
+One timeline, and nothing boxed:
 
 - **Sidebar** — your chat list, grouped by date (Today / Yesterday / Last 7 days / Older). Running chats show a pulsing dot. Nothing is typed here; it's a clean index.
-- **Chats open in the editor area** — one tab per conversation, centered column, monospace prompts, markdown + syntax-highlighted code blocks, a routing badge on every reply (`⤳ codex:work /gpt-5.4 [tests-to-codex]`), failover dividers when an account hits its limit mid-task. Two chats side-by-side run concurrently.
-- **Parallel agents get lanes.** When a model splits the work across subagents, each one is its own lane — its tool calls, what it is doing right now, its token spend, and what it reported back. Agents whose lifetimes overlap share one block under a single trunk, so concurrency is visible as concurrency; when they finish, each lane keeps a duration bar proportional to the slowest, so you can see which part of the work was expensive.
-- **The run never scrolls away.** A bar above the composer holds the elapsed time and the current activity — `thinking`, the file being edited, how many agents are working, or `waiting for you` when the model is blocked on a permission question. Live tool activity expands itself while it happens and collapses when it's done. Scroll up to read and a **jump to latest** appears, telling you whether anything happened while you were away.
+- **Chats open in the editor area** — one tab per conversation, a reading-width column, markdown + syntax-highlighted code blocks. A hairline rail runs down the transcript and every event is a dot on it: your message, the answer, the routing that changed mid-task. The dot takes the account's own colour, so a run that failed over reads as two providers without reading a word. Two chats side-by-side run concurrently.
+- **The work stays out of the answer's way.** Everything the model did — files read, commands run, subagents dispatched — is one dim line under the reply (`3 steps · 2 agents`) that opens on click. The model's own checklist is one line too (`tasks 2/4`). The numbers beside a line — model, duration, what it would have cost — fade in when you look at the row they belong to.
+- **Parallel agents get lanes.** When a model splits the work across subagents, each one is its own lane — its tool calls, what it is doing right now, and what it reported back; when they finish, each lane keeps a duration bar proportional to the slowest, so you can see which part of the work was expensive.
+- **The run never scrolls away.** A bar above the composer holds the elapsed time and the current activity — `thinking`, the file being edited, how many agents are working, or `waiting for you` when the model is blocked on a permission question. Scroll up to read and a **jump to latest** appears, telling you whether anything happened while you were away.
 - **A run that ends, ends.** Stop it and the turn closes with `⊘ stopped by you`; when every account fails, the error closes it and offers **Retry**. Copy sits on every code block and every answer.
 - **Usable without a mouse.** The chat list is keyboard-navigable, the transcript is a `log` and the work bar a `status` — so state is announced without reading every streamed token aloud — and nothing conveys state by colour alone.
-- **Accounts tab** — provider cards with status (`● ready` / `◌ limited · resets 18:30`), auth type, usage bars, add/remove.
+- **A composer with nothing in it but your task.** The text you are writing, a `+`, one word — `Plan` — and Send. That word opens both switches: what the model may do (plan, edit, full, ask) and how it is routed (auto, manual), each with the sentence saying what it actually does. Typing `@` completes account and model names, `#` your tag rules, `/` the commands.
+- **Accounts tab** — one row per account with status (`● ready` / `◌ limited · resets 18:30`), auth type, usage bars, add/remove.
 - **Rules tab** — your routing rules visualized: match conditions as chips, failover chains as pill sequences. Edits to the JSON apply live.
 
 Conversations persist across VS Code restarts, including native CLI session ids, so old chats keep their context.
 
-<img src="docs/media/ui-panel.png" alt="The usturlab panel: chat list on the left, an empty conversation in the editor, and a composer with one chip per registered account." width="100%">
+<img src="docs/media/ui-panel.png" alt="The usturlab panel: chat list on the left, an empty conversation in the editor, and the composer at the bottom." width="100%">
 
-**Every account is a chip in the composer.** When one reports its limit, its chip dims and the next in your chain picks the task up — the badge on the reply says which account actually ran it.
+**Failover is visible where it happened.** When an account reports its limit, the transcript says so on the rail and the next account in your chain picks the task up — the reply that follows carries that account's name and colour, so who actually ran it is never a guess.
 
-<img src="docs/media/ui-failover.png" alt="After the personal account hits its limit its chip is dimmed, the reply is badged work, and the status bar reads claude:work." width="100%">
+<img src="docs/media/ui-failover.png" alt="A run that moved from the personal account to work after a limit, with both replies on the same timeline." width="100%">
 
 **Accounts are managed in a tab, not a settings blob** — one row per account, with its auth type, profile directory, and the models it can be asked for.
 
@@ -95,7 +97,7 @@ For Claude, the wizard's first option is a full `claude auth login` inside an is
 ## Quick start
 
 1. Click the usturlab icon in the activity bar → **Add account** (or `usturlab: Add Account` from the command palette). Each account gets an isolated profile, so two Claude accounts never collide.
-2. Click **+ New chat** — the chat opens as an editor tab. Type your task; the routing badge shows which account/model was picked and why.
+2. Click **+ New chat** — the chat opens as an editor tab. Type your task; the reply is headed with the account and model that ran it, and the rule that picked them is in its tooltip.
 3. Open the **Rules** tab (or `usturlab: Routing Rules`) and create your rules file:
 
 ```jsonc

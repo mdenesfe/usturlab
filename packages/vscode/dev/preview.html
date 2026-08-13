@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>usturlab — webview preview</title>
+<!--
+  Design harness. Loads the real built webview against fake host messages, so
+  every screen can be looked at in a browser without a VS Code window, an
+  account, or a running CLI. Build first (`pnpm -C packages/vscode build`),
+  then open this file — or `pnpm -C packages/vscode preview`.
+-->
+<link href="../media/webview.css" rel="stylesheet">
+<style>
+  /* Stands in for the variables VS Code injects into a real webview. */
+  :root {
+    --vscode-font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+    --vscode-font-size: 13px;
+    --vscode-editor-font-family: "SF Mono", Menlo, Consolas, monospace;
+    --vscode-editor-font-size: 12px;
+    --vscode-foreground: #cdd3de;
+    --vscode-editor-background: #16171b;
+    --vscode-sideBar-background: #131417;
+    --vscode-descriptionForeground: #878c96;
+    --vscode-input-background: #1c1e23;
+    --vscode-input-foreground: #cdd3de;
+    --vscode-editorWidget-background: #1c1e23;
+    --vscode-textCodeBlock-background: rgba(128, 128, 128, 0.1);
+    --vscode-list-hoverBackground: rgba(255, 255, 255, 0.05);
+    --vscode-list-activeSelectionBackground: rgba(255, 255, 255, 0.09);
+    --vscode-list-activeSelectionForeground: #fff;
+    --vscode-toolbar-hoverBackground: rgba(255, 255, 255, 0.08);
+    --vscode-scrollbarSlider-background: rgba(255, 255, 255, 0.12);
+    --vscode-focusBorder: #4a9eda;
+    --vscode-errorForeground: #e46a6a;
+    --vscode-textLink-foreground: #6cb6ff;
+    --vscode-charts-green: #6cbe6c;
+    --vscode-charts-yellow: #d0a54e;
+    --vscode-charts-blue: #4a9eda;
+    --vscode-charts-purple: #b18cd9;
+    --vscode-charts-orange: #d08a4e;
+    --vscode-charts-red: #d05e5e;
+    --vscode-icon-foreground: #cdd3de;
+    --vscode-button-foreground: #fff;
+    --vscode-inputValidation-errorBackground: rgba(200, 60, 60, 0.12);
+  }
+
+  /* VS Code injects its theme variables on :root, and webview.css derives its
+     own tokens there — so the stand-in has to land in the same place. */
+  :root[data-theme='light'] {
+    --vscode-foreground: #20242c;
+    --vscode-editor-background: #ffffff;
+    --vscode-sideBar-background: #f7f8fa;
+    --vscode-descriptionForeground: #6b7280;
+    --vscode-input-background: #ffffff;
+    --vscode-input-foreground: #20242c;
+    --vscode-editorWidget-background: #ffffff;
+    --vscode-textCodeBlock-background: rgba(20, 24, 34, 0.05);
+    --vscode-list-hoverBackground: rgba(20, 24, 34, 0.05);
+    --vscode-list-activeSelectionBackground: rgba(20, 24, 34, 0.08);
+    --vscode-list-activeSelectionForeground: #111;
+    --vscode-toolbar-hoverBackground: rgba(20, 24, 34, 0.08);
+    --vscode-scrollbarSlider-background: rgba(20, 24, 34, 0.16);
+    --vscode-errorForeground: #c2453f;
+    --vscode-icon-foreground: #20242c;
+    --vscode-charts-green: #2e9e4f;
+    --vscode-charts-yellow: #b4820e;
+    --vscode-charts-red: #c2453f;
+  }
+
+  html, body { height: 100%; }
+
+  /* The harness's own controls, deliberately unlike anything in the product. */
+  .harness {
+    position: fixed;
+    right: 10px;
+    bottom: 10px;
+    z-index: 999;
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 8px;
+    background: rgba(120, 120, 130, 0.18);
+    backdrop-filter: blur(10px);
+    font: 11px var(--vscode-editor-font-family);
+  }
+  .harness a {
+    padding: 2px 7px;
+    border-radius: 5px;
+    color: inherit;
+    opacity: 0.65;
+    text-decoration: none;
+  }
+  .harness a.on { background: rgba(255, 255, 255, 0.18); opacity: 1; }
+  .harness span { width: 1px; background: currentColor; opacity: 0.2; margin: 2px 3px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<nav class="harness" id="harness"></nav>
+<script>
+  const params = new URLSearchParams(location.search);
+  const mode = params.get('mode') || 'tab';
+  const theme = params.get('theme') || 'dark';
+
+  document.documentElement.dataset.theme = theme;
+  document.body.classList.add(theme === 'light' ? 'vscode-light' : 'vscode-dark');
+  window.__USTURLAB_MODE__ = mode;
+  // The panel talks to the host through this; here it just logs.
+  window.acquireVsCodeApi = () => ({
+    postMessage: (m) => console.log('→ host', m),
+    getState: () => ({}),
+    setState: () => {},
+  });
+
+  const link = (key, value, label, active) =>
+    `<a class="${active ? 'on' : ''}" href="?mode=${key === 'mode' ? value : mode}&theme=${key === 'theme' ? value : theme}">${label}</a>`;
+  document.getElementById('harness').innerHTML =
+    ['tab', 'sidebar', 'accounts', 'rules', 'analytics']
+      .map((m) => link('mode', m, m, m === mode))
+      .join('') +
+    '<span></span>' +
+    ['dark', 'light'].map((t) => link('theme', t, t, t === theme)).join('');
+</script>
+<script src="../media/webview.js"></script>
+<script src="./fixture.js"></script>
+</body>
+</html>

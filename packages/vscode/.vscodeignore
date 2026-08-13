@@ -1,5 +1,6 @@
 src/**
 webview/**
+dev/**
 node_modules/**
 test/**
 .vscode-test/**

@@ -2,12 +2,67 @@
   box-sizing: border-box;
 }
 
+/*
+ * One design system for every surface.
+ *
+ * Calm neutrals borrowed from the editor theme, hairlines instead of frames,
+ * and exactly two raised planes. Nothing here draws a card around content that
+ * is already grouped by position — the layout does the grouping, the ink only
+ * separates. Colour is reserved for state and for the four provider brands.
+ */
 :root {
   --accent: #e30a17; /* Türk kırmızısı */
-  --control-h: 24px;
+  --control-h: 26px;
   --mono: var(--vscode-editor-font-family, 'SF Mono', Menlo, Consolas, monospace);
-  --border: var(--vscode-widget-border, rgba(128, 128, 128, 0.22));
+
+  /* Ground, and the one plane that sits above it. */
+  --surface: var(--vscode-editor-background);
+  --raised: color-mix(in srgb, var(--vscode-foreground) 4%, var(--surface));
+  --sunken: color-mix(in srgb, var(--vscode-foreground) 7%, var(--surface));
+
+  /* Hairlines, not frames: visible at rest, never the loudest thing on screen. */
+  --hairline: color-mix(in srgb, var(--vscode-foreground) 13%, transparent);
+  --border: var(--hairline);
+  --rail: color-mix(in srgb, var(--vscode-foreground) 17%, transparent);
+
   --muted: var(--vscode-descriptionForeground);
+  --ok: var(--vscode-charts-green, #4ec9b0);
+  --warn: var(--vscode-charts-yellow, #d0a54e);
+  --danger: var(--vscode-errorForeground, #d05e5e);
+  --review: var(--vscode-charts-purple, #b18cd9);
+
+  /*
+   * Four radii, and nothing in between. Small for anything set into a line of
+   * text, the default for controls and rows, large for a surface that floats,
+   * and fully round for badges and bars — a pill is never "slightly rounded".
+   */
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  /* Depth by shadow, not by border — a lift you notice only if you look. */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.14);
+
+  /* Glass, only where a surface genuinely floats over moving content. */
+  --glass: color-mix(in srgb, var(--surface) 78%, transparent);
+  --glass-blur: saturate(150%) blur(16px);
+  /* A menu has words under it that must not be read through it. Same family,
+     no transparency — legibility outranks the effect. */
+  --popover: var(--raised);
+
+  /* Short enough to read as response, not as animation. */
+  --fast: 110ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  --slow: 200ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+/* Dark themes need deeper shadow and thinner glass to read the same way. */
+body.vscode-dark,
+body.vscode-high-contrast {
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 10px 34px rgba(0, 0, 0, 0.5);
+  --glass: color-mix(in srgb, var(--surface) 70%, transparent);
 }
 
 body {
@@ -17,12 +72,79 @@ body {
   font-size: var(--vscode-font-size);
   color: var(--vscode-foreground);
   background: var(--vscode-sideBar-background);
+  -webkit-font-smoothing: antialiased;
 }
 
 .app {
   display: flex;
   flex-direction: column;
   height: 100vh;
+}
+
+/* The panel is meant to be driven from the keyboard, so the focus ring is part
+   of the design rather than whatever the platform happened to leave behind. */
+:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/*
+ * Detail on demand.
+ *
+ * The numbers beside a line — which model, how long, how many tokens, which
+ * files — are worth having and not worth reading every time. They hold their
+ * space and fade in when you look at the row they belong to, so the resting
+ * state is one column of text instead of two. They stay in the DOM throughout:
+ * a screen reader still reads them, and a keyboard user still reaches them.
+ */
+.assistant-meta,
+.permission-by,
+.agent-fanout-total,
+.agent-meta,
+.agent-track,
+.history-time {
+  opacity: 0;
+  transition: opacity var(--fast);
+}
+
+.tl:hover .assistant-meta,
+.tl:hover .permission-by,
+.tl:hover .agent-fanout-total,
+.tl:hover .agent-meta,
+.tl:hover .agent-track,
+.tl:focus-within .assistant-meta,
+.tl:focus-within .permission-by,
+.tl:focus-within .agent-fanout-total,
+.tl:focus-within .agent-meta,
+.tl:focus-within .agent-track,
+.history-row:hover .history-time,
+.history-row:focus-within .history-time {
+  opacity: 0.75;
+}
+
+/* Nothing hovers on a touch screen, so there everything simply shows. */
+@media (hover: none) {
+  .assistant-meta,
+  .permission-by,
+  .agent-fanout-total,
+  .agent-meta,
+  .agent-track,
+  .history-time {
+    opacity: 0.75;
+  }
+}
+
+/* A key you are meant to press, written the way it looks on the keyboard. */
+kbd,
+.kbd {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  padding: 0 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  background: var(--sunken);
+  color: var(--muted);
 }
 
 /* ── shared controls ────────────────────────────────────── */
@@ -49,7 +171,7 @@ body {
   flex-shrink: 0;
   padding: 1px 6px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--vscode-sideBar-background);
   color: var(--muted);
   font-family: var(--mono);
@@ -73,12 +195,12 @@ body {
 }
 
 .copy-btn.done {
-  color: #4ec9b0;
-  border-color: color-mix(in srgb, #4ec9b0 45%, transparent);
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
 }
 
 .md-code:hover .copy-btn,
-.msg-assistant:hover .copy-btn {
+.tl-assistant:hover .copy-btn {
   opacity: 1;
 }
 
@@ -101,7 +223,7 @@ body {
   height: 22px;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--vscode-icon-foreground, var(--vscode-foreground));
   cursor: pointer;
@@ -123,22 +245,27 @@ body {
 .history-new {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   width: 100%;
-  padding: 5px 8px;
-  margin-bottom: 6px;
-  border: 1px dashed var(--border);
-  border-radius: 4px;
+  padding: 6px 9px;
+  margin-bottom: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
   background: transparent;
-  color: var(--vscode-foreground);
+  color: var(--muted);
   font-family: var(--mono);
   font-size: 0.85em;
   cursor: pointer;
+  transition:
+    background var(--fast),
+    color var(--fast),
+    border-color var(--fast);
 }
 
 .history-new:hover {
-  background: var(--vscode-list-hoverBackground);
-  border-style: solid;
+  background: var(--raised);
+  color: var(--vscode-foreground);
+  border-color: color-mix(in srgb, var(--vscode-foreground) 24%, transparent);
 }
 
 .history-empty {
@@ -168,13 +295,14 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 8px;
-  border-radius: 4px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
   cursor: pointer;
+  transition: background var(--fast);
 }
 
 .history-row:hover {
-  background: var(--vscode-list-hoverBackground);
+  background: var(--raised);
 }
 
 .history-title {
@@ -211,30 +339,34 @@ body {
 
 .sidebar-footer {
   display: flex;
-  gap: 6px;
-  padding: 8px;
-  border-top: 1px solid var(--border);
+  gap: 2px;
+  padding: 6px 8px 8px;
+  border-top: 1px solid var(--hairline);
   flex-shrink: 0;
 }
 
+/* Three destinations, one row, no chrome: they are navigation, not commands. */
 .footer-btn {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--radius);
   background: transparent;
-  color: var(--vscode-foreground);
+  color: var(--muted);
   font-size: 0.82em;
   cursor: pointer;
+  transition:
+    background var(--fast),
+    color var(--fast);
 }
 
 .footer-btn:hover {
-  background: var(--vscode-list-hoverBackground);
-  border-color: var(--accent);
+  background: var(--raised);
+  color: var(--vscode-foreground);
 }
 
 /* ── transcript ─────────────────────────────────────────── */
@@ -244,11 +376,16 @@ body {
   overflow-y: auto;
 }
 
+/*
+ * The conversation is one thread of events, so it is drawn as one: a hairline
+ * rail down the gutter, a dot per event, and nothing boxed. Bubbles and cards
+ * chop a single run into unrelated tiles; the rail says the opposite — these
+ * things happened in this order, to the same piece of work.
+ */
 .transcript {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px 0;
+  padding: 22px 0 8px;
 }
 
 .transcript.empty {
@@ -258,37 +395,96 @@ body {
   padding: 16px;
 }
 
+/* Every entry hangs off the rail. Padding rather than a gap keeps it unbroken. */
+.tl {
+  position: relative;
+  padding: 0 0 20px 24px;
+  --dot: color-mix(in srgb, var(--vscode-foreground) 45%, transparent);
+}
+
+.tl::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--rail);
+}
+
+/* The rail starts at the first dot and ends at the last: a line running off
+   both ends is a scrollbar, not a conversation. */
+.tl:first-child::before {
+  top: 7px;
+}
+
+.tl:last-child::before {
+  bottom: 20px;
+}
+
+.tl:only-child::before {
+  display: none;
+}
+
+.tl::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--dot);
+}
+
+/* Filled means "someone spoke"; hollow means "something happened". */
+.tl-user::after,
+.tl-assistant::after {
+  background: var(--dot);
+}
+
+/* The prompt sits a shade back from the answer: it is the thing you already
+   know, and the answer is the thing you came for. */
+.tl-user-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.65;
+  font-size: 0.95em;
+  color: color-mix(in srgb, var(--vscode-foreground) 78%, transparent);
+}
+
 .empty-box {
-  max-width: 300px;
+  max-width: 340px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 13px;
 }
 
 .empty-logo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   color: var(--vscode-foreground);
   font-family: var(--mono);
-  font-size: 1.05em;
-  letter-spacing: 0.02em;
+  font-size: 1.25em;
+  letter-spacing: -0.01em;
 }
 
 .empty-line {
   color: var(--muted);
-  font-size: 0.9em;
-  line-height: 1.5;
+  font-size: 0.92em;
+  line-height: 1.6;
 }
 
 .empty-hints {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   font-size: 0.82em;
   color: var(--muted);
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+  padding-top: 13px;
 }
 
 .empty-hints code,
@@ -297,62 +493,79 @@ body {
   font-size: 0.92em;
   background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.12));
   padding: 0 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
-.msg-user {
-  align-self: flex-end;
-  max-width: min(78%, 620px);
-  padding: 12px 14px;
-  background: var(--vscode-sideBar-background);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+/* Live work gets a target dot — a ring with a lit centre — so the eye finds
+   the one thing still moving without reading a word. */
+.tl-live::after {
+  background: radial-gradient(circle at center, var(--dot) 0 2px, var(--surface) 2.6px);
 }
 
-.msg-user-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.tl-user {
+  --dot: color-mix(in srgb, var(--vscode-foreground) 55%, transparent);
+}
+
+.tl-error {
+  --dot: var(--danger);
+}
+
+.tl-failover {
+  --dot: var(--warn);
+}
+
+.tl-permission.pending {
+  --dot: var(--accent);
+}
+
+.tl-permission.pending::after {
+  background: var(--dot);
+  animation: dot-pulse 1.8s ease-out infinite;
+}
+
+@keyframes dot-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+/* A note about the run, not an event in it: a quiet chip on the rail. */
+.tl-notice {
+  padding-bottom: 16px;
+}
+
+.tl-notice::after {
+  display: none;
+}
+
+.tl-notice span {
+  display: inline-block;
+  /* Sits across the rail, the way a date heading sits across a timeline. */
+  margin-left: -24px;
+  padding: 1px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--sunken);
   font-family: var(--mono);
-  font-size: 0.68em;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  font-size: 0.7em;
+  letter-spacing: 0.04em;
   color: var(--muted);
-  margin-bottom: 4px;
-  user-select: none;
 }
 
-.msg-user-label::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-.msg-user-text {
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.6;
-  font-size: 0.95em;
-}
-
-/* The answer gets the whole column — only the user's own message is a bubble. */
-.msg-assistant {
-  align-self: stretch;
-  width: 100%;
-  padding: 12px 14px;
-  border-radius: 8px;
-  line-height: 1.6;
+/* The answer gets the whole column: nothing tints or boxes it. */
+.tl-assistant {
+  line-height: 1.7;
 }
 
 .assistant-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 7px;
+  margin-bottom: 5px;
   font-family: var(--mono);
-  font-size: 0.76em;
+  font-size: 0.74em;
   flex-wrap: wrap;
 }
 
@@ -361,92 +574,87 @@ body {
 }
 
 .assistant-name {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .assistant-meta {
   color: var(--muted);
-  opacity: 0.8;
 }
 
 /* ── tool timeline (expandable) ─────────────────────────── */
 
-.tool-group {
-  margin: 6px 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--vscode-sideBar-background);
+
+
+
+
+
+
+
+
+
+
+/* ── activity: one line, opened only if you ask ─────────── */
+
+/*
+ * Everything the model did, folded into a single dim line under the answer.
+ * At rest the transcript is your message, the answer, and the things that
+ * need a decision — nothing else competes for the eye.
+ */
+.activity {
+  margin: 10px 0 2px;
   font-family: var(--mono);
-  font-size: 0.82em;
+  font-size: 0.78em;
 }
 
-.tool-summary {
-  display: flex;
+.activity-summary {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
+  gap: 7px;
+  padding: 2px 0;
   cursor: pointer;
   list-style: none;
   color: var(--muted);
+  opacity: 0.75;
   user-select: none;
+  transition: opacity var(--fast);
 }
 
-.tool-summary::-webkit-details-marker {
+.activity-summary::-webkit-details-marker {
   display: none;
 }
 
-.tool-summary::before {
+.activity-summary::before {
   content: '▸';
-  font-size: 0.85em;
-  transition: transform 0.15s ease;
+  font-size: 0.9em;
+  transition: transform var(--fast);
 }
 
-.tool-group[open] .tool-summary::before {
+.activity[open] .activity-summary::before {
   transform: rotate(90deg);
 }
 
-.tool-summary:hover {
-  color: var(--vscode-foreground);
+.activity-summary:hover {
+  opacity: 1;
 }
 
-.tool-count {
-  color: var(--vscode-foreground);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.tool-names {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 0 1 auto;
-  min-width: 0;
-}
-
-/* Mini preview of the files a collapsed group touched, right-aligned. */
-.tool-files {
-  margin-left: auto;
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-  opacity: 0.75;
-}
-
-.tool-running {
+/* Live, the line stops counting and starts naming what is happening. */
+.activity-now {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  color: var(--accent);
-  flex-shrink: 0;
-  margin-left: auto;
+  gap: 6px;
+  color: var(--vscode-foreground);
+}
+
+.activity[open] .activity-summary {
+  opacity: 1;
+}
+
+.activity-body {
+  padding: 4px 0 2px;
 }
 
 .tool-steps {
-  border-top: 1px solid var(--border);
-  padding: 5px 0;
+  padding: 2px 0 2px 14px;
   max-height: 420px;
   overflow-y: auto;
 }
@@ -458,7 +666,8 @@ body {
   grid-template-columns: 14px 58px minmax(0, 1fr) 10px;
   align-items: baseline;
   gap: 8px;
-  padding: 2px 10px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
 }
 
 /* An expandable row is the container for its own summary + preview. */
@@ -504,10 +713,10 @@ body {
   color: #d7ba7d;
 }
 .tool-step-action.write {
-  color: #4ec9b0;
+  color: var(--ok);
 }
 .tool-step-action.search {
-  color: #b18cd9;
+  color: var(--review);
 }
 .tool-step-action.run {
   color: var(--accent);
@@ -533,12 +742,11 @@ body {
 }
 
 .tool-step-preview {
-  /* 10px padding + 14 glyph + 8 gap + 58 name + 8 gap — the detail column. */
-  margin: 3px 10px 7px 98px;
+  /* 6px padding + 14 glyph + 8 gap + 58 name + 8 gap — the detail column. */
+  margin: 3px 6px 7px 94px;
   padding: 6px 9px;
-  border-left: 2px solid var(--border);
-  background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.08));
-  border-radius: 0 3px 3px 0;
+  background: var(--sunken);
+  border-radius: var(--radius-sm);
   font-family: var(--mono);
   font-size: 0.92em;
   line-height: 1.5;
@@ -562,13 +770,13 @@ body {
 }
 
 .diff-line.del {
-  background: color-mix(in srgb, #f48771 12%, transparent);
-  color: color-mix(in srgb, #f48771 75%, var(--vscode-foreground));
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: color-mix(in srgb, var(--danger) 75%, var(--vscode-foreground));
 }
 
 .diff-line.add {
-  background: color-mix(in srgb, #4ec9b0 12%, transparent);
-  color: color-mix(in srgb, #4ec9b0 75%, var(--vscode-foreground));
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  color: color-mix(in srgb, var(--ok) 75%, var(--vscode-foreground));
 }
 
 .assistant-body {
@@ -636,30 +844,14 @@ body {
   color: var(--muted);
 }
 
-.assistant-foot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 7px;
-  font-family: var(--mono);
-  font-size: 0.74em;
-  color: var(--muted);
-}
 
-.foot-check {
-  color: var(--vscode-charts-green, #6cbe6c);
-  font-weight: 700;
-}
 
+/* A routing event, said in one line — it needs the colour, not a banner. */
 .failover-banner {
-  align-self: stretch;
-  padding: 8px 12px;
-  border-left: 2px solid var(--vscode-charts-yellow, #d0a54e);
-  background: color-mix(in srgb, var(--vscode-charts-yellow, #d0a54e) 8%, transparent);
-  border-radius: 4px;
   font-family: var(--mono);
   font-size: 0.8em;
-  color: var(--vscode-foreground);
+  line-height: 1.5;
+  color: var(--warn);
 }
 
 /* ── subagents: concurrent lanes ────────────────────────── */
@@ -672,42 +864,32 @@ body {
  */
 .agent-fanout {
   align-self: stretch;
-  margin: 8px 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--vscode-sideBar-background);
+  margin: 10px 0;
   font-family: var(--mono);
   font-size: 0.82em;
   overflow: hidden;
-}
-
-.agent-fanout.live {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
 .agent-fanout-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 10px;
+  padding: 3px 0;
   color: var(--muted);
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--vscode-foreground) 3%, transparent);
 }
 
 .agent-fanout-count {
   color: var(--vscode-foreground);
-  font-weight: 600;
   flex-shrink: 0;
 }
 
 .agent-fanout-mode {
   flex-shrink: 0;
-  padding: 0 5px;
-  border-radius: 3px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
   font-size: 0.9em;
-  color: var(--accent);
-  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--muted);
+  background: var(--sunken);
 }
 
 .agent-fanout-state {
@@ -719,7 +901,6 @@ body {
 .agent-fanout-total {
   margin-left: auto;
   flex-shrink: 0;
-  opacity: 0.75;
   font-variant-numeric: tabular-nums;
 }
 
@@ -728,29 +909,8 @@ body {
   padding: 5px 0 5px 14px;
 }
 
-/* The trunk every branch hangs off — drawn only when there is more than one. */
-.agent-fanout.parallel .agent-lanes::before {
-  content: '';
-  position: absolute;
-  left: 7px;
-  top: 16px;
-  bottom: 16px;
-  width: 1px;
-  background: color-mix(in srgb, var(--accent) 35%, var(--border));
-}
-
 .agent-lane {
   position: relative;
-}
-
-.agent-fanout.parallel .agent-lane-head::before {
-  content: '';
-  position: absolute;
-  left: -7px;
-  top: 12px;
-  width: 7px;
-  height: 1px;
-  background: color-mix(in srgb, var(--accent) 35%, var(--border));
 }
 
 .agent-lane-head {
@@ -790,11 +950,11 @@ body {
 }
 
 .agent-lane.completed .agent-dot {
-  background: #4ec9b0;
+  background: var(--ok);
 }
 
 .agent-lane.failed .agent-dot {
-  background: #f48771;
+  background: var(--danger);
 }
 
 @keyframes agent-pulse {
@@ -808,11 +968,11 @@ body {
 
 .agent-kind {
   flex-shrink: 0;
-  padding: 0 4px;
-  border-radius: 3px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
   font-size: 0.88em;
-  color: var(--vscode-foreground);
-  background: color-mix(in srgb, var(--vscode-foreground) 9%, transparent);
+  color: var(--muted);
+  background: var(--sunken);
 }
 
 .agent-label {
@@ -826,7 +986,7 @@ body {
 .agent-bg {
   flex-shrink: 0;
   padding: 0 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   font-size: 0.85em;
   color: var(--muted);
   border: 1px solid var(--border);
@@ -846,7 +1006,8 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--accent);
+  color: var(--vscode-foreground);
+  opacity: 0.85;
 }
 
 /* The first line of what it reported back — the answer, without opening it. */
@@ -863,47 +1024,52 @@ body {
 }
 
 .agent-verdict.completed {
-  color: #4ec9b0;
+  color: var(--ok);
 }
 
 .agent-verdict.failed {
-  color: #f48771;
+  color: var(--danger);
 }
 
 .agent-meta {
   flex-shrink: 0;
-  opacity: 0.75;
   font-variant-numeric: tabular-nums;
 }
 
 /* How long this lane took, against the slowest one in the fan-out. */
 .agent-track {
   height: 2px;
-  margin: 3px 0 0 13px;
-  border-radius: 1px;
-  background: color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
+  /* Short enough to read as a measurement — a full-width bar reads as a rule
+     drawn under the row. */
+  max-width: 180px;
+  margin: 4px 0 0 13px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
   overflow: hidden;
 }
 
 .agent-track-fill {
   display: block;
   height: 100%;
-  border-radius: 1px;
-  background: var(--muted);
-  transition: width 0.3s ease;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+  transition: width var(--slow);
 }
 
-.agent-track-fill.completed {
-  background: #4ec9b0;
-}
-
+/* The bar is a length, not a verdict — the ✓ or ✕ on the row says how it went,
+   so the fill stays neutral and only the failed one is tinted. */
 .agent-track-fill.failed {
-  background: #f48771;
+  background: color-mix(in srgb, var(--danger) 55%, transparent);
 }
 
 /* Still running: no honest length to draw, so it sweeps instead. */
 .agent-track-fill.running {
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--accent) 65%, transparent),
+    transparent
+  );
   background-size: 40% 100%;
   background-repeat: no-repeat;
   animation: agent-sweep 1.6s linear infinite;
@@ -919,9 +1085,8 @@ body {
 }
 
 .agent-lane-body {
-  margin: 0 10px 6px 8px;
-  padding-left: 8px;
-  border-left: 1px solid var(--border);
+  margin: 0 10px 6px 0;
+  padding-left: 14px;
 }
 
 .agent-prompt {
@@ -952,7 +1117,7 @@ body {
 .agent-prompt-text {
   margin: 2px 0 6px;
   padding: 6px 9px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.08));
   color: var(--muted);
   white-space: pre-wrap;
@@ -969,10 +1134,9 @@ body {
 
 .agent-report {
   margin-top: 6px;
-  padding: 6px 9px;
-  border-left: 2px solid color-mix(in srgb, #4ec9b0 55%, transparent);
-  border-radius: 0 3px 3px 0;
-  background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.08));
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--sunken);
   font-family: var(--vscode-font-family);
   font-size: 1.08em;
   line-height: 1.55;
@@ -980,9 +1144,7 @@ body {
 
 .agent-report-label {
   font-family: var(--mono);
-  font-size: 0.72em;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  font-size: 0.78em;
   color: var(--muted);
   margin-bottom: 3px;
 }
@@ -1018,8 +1180,7 @@ body {
 }
 
 .agent-fanout-foot {
-  padding: 4px 10px 6px;
-  border-top: 1px solid var(--border);
+  padding: 4px 0 2px 14px;
   color: var(--muted);
   opacity: 0.75;
   overflow: hidden;
@@ -1027,18 +1188,11 @@ body {
   white-space: nowrap;
 }
 
-/* Live tool activity gets the same accent as a live fan-out. */
-.tool-group.live {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-}
 
 /* ── the model's own task list ──────────────────────────── */
 
 .task-block {
   align-self: stretch;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--vscode-sideBar-background);
   font-size: 0.85em;
 }
 
@@ -1046,11 +1200,17 @@ body {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 6px 10px;
+  padding: 3px 6px 3px 0;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   list-style: none;
   user-select: none;
   color: var(--muted);
+  transition: color var(--fast);
+}
+
+.task-summary:hover {
+  color: var(--vscode-foreground);
 }
 
 .task-summary::-webkit-details-marker {
@@ -1069,9 +1229,7 @@ body {
 
 .task-label {
   font-family: var(--mono);
-  font-size: 0.8em;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  font-size: 0.85em;
 }
 
 .task-count {
@@ -1082,9 +1240,9 @@ body {
 
 .task-bar {
   width: 60px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--vscode-input-background);
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--sunken);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -1092,8 +1250,8 @@ body {
 .task-fill {
   display: block;
   height: 100%;
-  background: #4ec9b0;
-  transition: width 0.25s ease;
+  background: var(--ok);
+  transition: width var(--slow);
 }
 
 .task-current {
@@ -1102,14 +1260,18 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--accent);
+  color: var(--vscode-foreground);
+}
+
+/* Once the list is open, the summary would just repeat the row you can see. */
+.task-block[open] .task-current {
+  display: none;
 }
 
 .task-items {
-  margin: 0;
-  padding: 4px 10px 8px;
+  margin: 4px 0 0;
+  padding: 2px 0 2px 14px;
   list-style: none;
-  border-top: 1px solid var(--border);
 }
 
 .task-item {
@@ -1127,7 +1289,7 @@ body {
 }
 
 .task-item.done .task-mark {
-  color: #4ec9b0;
+  color: var(--ok);
 }
 
 .task-item.done .task-text {
@@ -1136,30 +1298,29 @@ body {
   text-decoration-color: color-mix(in srgb, var(--muted) 50%, transparent);
 }
 
-.task-item.active .task-mark,
-.task-item.active .task-text {
+/* The mark carries "this one is running"; colouring the sentence too turns a
+   checklist into a warning. */
+.task-item.active .task-mark {
   color: var(--accent);
+}
+
+.task-item.active .task-text {
+  color: var(--vscode-foreground);
 }
 
 /* ── permission: the run is blocked until this is answered ── */
 
+/* The run is stopped here, and the pulsing dot on the rail says so. What is
+   left to draw is the question and its answers — no frame required. */
 .permission-block {
   align-self: stretch;
-  border: 1px solid var(--border);
-  border-radius: 6px;
   font-size: 0.9em;
-}
-
-.permission-block.pending {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
 }
 
 .permission-head {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 9px 12px 6px;
 }
 
 .permission-kind {
@@ -1184,10 +1345,9 @@ body {
 }
 
 .permission-detail {
-  margin: 0 12px 8px 32px;
-  padding: 6px 9px;
-  background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.1));
-  border-radius: 3px;
+  margin: 6px 0 9px 20px;
+  padding: 0;
+  color: var(--muted);
   font-family: var(--mono);
   font-size: 0.88em;
   line-height: 1.5;
@@ -1200,18 +1360,22 @@ body {
 .permission-actions {
   display: flex;
   gap: 6px;
-  padding: 0 12px 10px 32px;
+  margin: 8px 0 0 20px;
 }
 
 .perm-btn {
   padding: 4px 12px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--vscode-foreground);
   font-family: var(--vscode-font-family);
   font-size: 0.9em;
   cursor: pointer;
+  transition:
+    background var(--fast),
+    border-color var(--fast),
+    color var(--fast);
 }
 
 .perm-btn:hover {
@@ -1238,9 +1402,6 @@ body {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 5px 12px;
-  border: none;
-  background: none;
   color: var(--muted);
   font-size: 0.85em;
 }
@@ -1251,11 +1412,11 @@ body {
 }
 
 .permission-block.answered.allowed .permission-mark {
-  color: #4ec9b0;
+  color: var(--ok);
 }
 
 .permission-block.answered.denied .permission-mark {
-  color: #f48771;
+  color: var(--danger);
 }
 
 .permission-block.answered .permission-title {
@@ -1270,10 +1431,6 @@ body {
 /* A second provider's critique — collapsed by default, it is not the answer. */
 .review-block {
   align-self: stretch;
-  border: 1px solid var(--border);
-  border-left: 2px solid var(--vscode-charts-purple, #b18cd9);
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--vscode-charts-purple, #b18cd9) 5%, transparent);
   font-size: 0.9em;
 }
 
@@ -1281,10 +1438,12 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 10px;
+  padding: 3px 6px 3px 0;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   list-style: none;
   user-select: none;
+  transition: color var(--fast);
 }
 
 .review-summary::-webkit-details-marker {
@@ -1304,10 +1463,8 @@ body {
 
 .review-badge {
   font-family: var(--mono);
-  font-size: 0.72em;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--vscode-charts-purple, #b18cd9);
+  font-size: 0.85em;
+  color: var(--review);
 }
 
 .review-by {
@@ -1321,8 +1478,9 @@ body {
 }
 
 .review-body {
-  padding: 0 12px 10px 22px;
-  line-height: 1.6;
+  margin: 4px 0 0;
+  padding: 2px 0 2px 14px;
+  line-height: 1.65;
 }
 
 .msg-error {
@@ -1330,12 +1488,10 @@ body {
   align-items: flex-start;
   gap: 10px;
   align-self: stretch;
-  padding: 6px 10px;
-  border-left: 2px solid var(--vscode-errorForeground);
-  background: var(--vscode-inputValidation-errorBackground, rgba(200, 60, 60, 0.12));
-  border-radius: 3px;
   font-family: var(--mono);
   font-size: 0.85em;
+  line-height: 1.55;
+  color: var(--danger);
 }
 
 .msg-error-text {
@@ -1350,7 +1506,7 @@ body {
   flex-shrink: 0;
   padding: 1px 8px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius);
   background: transparent;
   color: var(--vscode-foreground);
   font-family: var(--mono);
@@ -1381,14 +1537,18 @@ body {
   display: block;
   margin: 0 auto 6px;
   padding: 3px 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--vscode-sideBar-background);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
   color: var(--muted);
   font-family: var(--mono);
   font-size: 0.74em;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-2);
+  transition:
+    color var(--fast),
+    border-color var(--fast);
 }
 
 .jump-latest:hover {
@@ -1399,57 +1559,6 @@ body {
 .jump-latest.missed {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-}
-
-/* routing badge */
-
-.routing-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  --routing-icon: var(--accent);
-  font-family: var(--mono);
-  font-size: 0.75em;
-  color: var(--muted);
-  margin-bottom: 5px;
-}
-
-.routing-target {
-  color: var(--vscode-charts-blue, #4a9eda);
-}
-
-.routing-model::before {
-  content: '/ ';
-  opacity: 0.6;
-}
-
-.routing-rule {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0 6px;
-  opacity: 0.85;
-}
-
-/* tools */
-
-.tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 6px;
-}
-
-.tool-chip {
-  font-family: var(--mono);
-  font-size: 0.72em;
-  color: var(--muted);
-  border: 1px solid var(--border);
-  padding: 1px 6px;
-  border-radius: 3px;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* markdown */
@@ -1479,7 +1588,7 @@ body {
   padding: 8px 10px;
   background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.1));
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius);
   font-family: var(--mono);
   font-size: var(--vscode-editor-font-size, 12px);
   line-height: 1.5;
@@ -1524,29 +1633,6 @@ body {
   color: var(--muted);
 }
 
-/* dividers */
-
-.divider {
-  display: flex;
-  align-items: center;
-  align-self: stretch;
-  gap: 8px;
-  font-family: var(--mono);
-  font-size: 0.75em;
-  color: var(--muted);
-}
-
-.divider::before,
-.divider::after {
-  content: '';
-  flex: 1;
-  border-top: 1px dashed var(--border);
-}
-
-.divider.failover span {
-  color: var(--vscode-charts-yellow, #d0a54e);
-}
-
 /* ── the run, pinned where it cannot scroll away ─────────── */
 
 .workbar {
@@ -1554,18 +1640,15 @@ body {
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
-  padding: 4px 10px;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  padding: 5px 11px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-1);
   font-family: var(--mono);
   font-size: 0.74em;
   color: var(--muted);
-}
-
-.workbar.blocked {
-  border-color: color-mix(in srgb, var(--vscode-charts-yellow, #d0a54e) 50%, var(--border));
-  background: color-mix(in srgb, var(--vscode-charts-yellow, #d0a54e) 8%, transparent);
 }
 
 .workbar-state {
@@ -1577,7 +1660,7 @@ body {
 }
 
 .workbar.blocked .workbar-state {
-  color: var(--vscode-charts-yellow, #d0a54e);
+  color: var(--warn);
 }
 
 .workbar-detail {
@@ -1613,38 +1696,121 @@ body {
 
 /* ── composer controls ──────────────────────────────────── */
 
-.mode-select {
-  font-family: var(--mono);
-  font-size: 0.72em;
-  height: var(--control-h);
-  padding: 0 6px;
-  border-radius: 5px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  flex-shrink: 0;
-}
 
-.mode-select:hover {
-  color: var(--vscode-foreground);
-  border-color: var(--vscode-focusBorder);
-}
 
-.mode-select:focus {
-  outline: 1px solid var(--vscode-focusBorder);
-}
+
+/* ── composer controls: a word, a plus, and Send ─────────── */
 
 .attach-btn {
   width: var(--control-h);
   height: var(--control-h);
-  border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius);
+  color: var(--muted);
 }
 
 .attach-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  color: var(--vscode-foreground);
+}
+
+.bar-gap {
+  flex: 1;
+}
+
+.mode-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* No border and no chevron: it reads as a word until you need it to be a
+   control, which is the only time it has to look like one. */
+.mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--control-h);
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.75em;
+  cursor: pointer;
+  transition:
+    background var(--fast),
+    color var(--fast);
+}
+
+.mode-btn:hover,
+.mode-btn.open {
+  background: var(--sunken);
+  color: var(--vscode-foreground);
+}
+
+.mode-extra {
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--sunken);
+  color: var(--muted);
+}
+
+.menu-popup {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 12;
+  min-width: 260px;
+  padding: 5px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  background: var(--popover);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-2);
+}
+
+.menu-label {
+  padding: 5px 9px 3px;
+  font-family: var(--mono);
+  font-size: 0.68em;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.menu-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 5px 9px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-font-family);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--fast);
+}
+
+.menu-row:hover {
+  background: var(--raised);
+}
+
+.menu-row.on {
+  background: var(--sunken);
+}
+
+.menu-name {
+  font-family: var(--mono);
+  font-size: 0.8em;
+}
+
+/* The sentence that says what choosing this actually does. */
+.menu-hint {
+  font-size: 0.75em;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 .attachment-strip {
@@ -1661,7 +1827,7 @@ body {
   font-family: var(--mono);
   font-size: 0.72em;
   padding: 2px 4px 2px 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.1));
   max-width: 220px;
@@ -1686,19 +1852,21 @@ body {
 
 /* ── suggestion popup (@ / # / /) ───────────────────────── */
 
+/* Floats over the transcript, so it is the one place glass is literal. */
 .suggest-popup {
   position: absolute;
-  bottom: calc(100% + 6px);
+  bottom: calc(100% + 8px);
   left: 0;
   right: 0;
   max-height: 260px;
   overflow-y: auto;
-  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.25);
+  background: var(--popover);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
   z-index: 10;
-  padding: 3px;
+  padding: 4px;
 }
 
 .suggest-row {
@@ -1706,7 +1874,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 5px 9px;
-  border-radius: 4px;
+  border-radius: var(--radius);
   cursor: pointer;
 }
 
@@ -1749,11 +1917,12 @@ body {
 }
 
 .chat-tab .composer:focus-within {
-  border-color: var(--vscode-focusBorder);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--hairline));
+  box-shadow: var(--shadow-2);
 }
 
 .chat-tab .composer.running {
-  border-color: var(--vscode-charts-yellow, #d0a54e);
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--hairline));
 }
 
 .composer textarea {
@@ -1763,10 +1932,10 @@ body {
   outline: none;
   background: transparent;
   color: var(--vscode-input-foreground);
-  padding: 8px 10px 4px;
+  padding: 11px 13px 5px;
   font-family: var(--mono);
   font-size: 0.92em;
-  line-height: 1.5;
+  line-height: 1.6;
   max-height: 180px;
   overflow-y: auto;
 }
@@ -1780,56 +1949,14 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px 8px;
+  padding: 6px 9px 9px;
 }
 
-.account-strip {
-  flex: 1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 0;
-}
 
-/* Equal-width pills on a shared grid: marks, names and percentages all
-   line up in columns however many accounts there are. */
-.account-pill {
-  height: var(--control-h);
-  width: 128px;
-  display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--mono);
-  font-size: 0.72em;
-  color: var(--muted);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0 8px;
-  cursor: pointer;
-  text-align: left;
-}
 
-.account-pill > span:nth-child(2),
-.account-pill > .pill-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.account-pill svg {
-  justify-self: center;
-}
 
-.account-pill:hover {
-  background: var(--vscode-list-hoverBackground);
-  color: var(--vscode-foreground);
-}
 
-.account-pill.limited {
-  opacity: 0.55;
-}
 
 .dot {
   width: 6px;
@@ -1840,11 +1967,11 @@ body {
 }
 
 .dot.ok {
-  background: var(--vscode-charts-green, #6cbe6c);
+  background: var(--ok);
 }
 
 .dot.off {
-  background: var(--vscode-charts-yellow, #d0a54e);
+  background: var(--warn);
 }
 
 .dot.pulse {
@@ -1857,18 +1984,43 @@ body {
   background: var(--vscode-editor-background);
 }
 
+/* A reading measure, not the width of the window: a line of prose that runs
+   the full width of a wide editor is a line nobody finishes. */
 .chat-column {
   width: 100%;
+  max-width: 820px;
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 24px;
 }
 
+/* Fills the scroller so an empty conversation centres in the window rather
+   than clinging to the top of a column that is only as tall as its content. */
 .scroll-area .chat-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
   padding-bottom: 14px;
 }
 
+.scroll-area .transcript.empty {
+  flex: 1;
+}
+
+/* The transcript dissolves into the composer instead of hitting an edge. */
 .composer-holder {
-  padding-bottom: 10px;
+  position: relative;
+  padding-bottom: 12px;
+}
+
+.composer-holder::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 28px;
+  pointer-events: none;
+  background: linear-gradient(to top, var(--surface), transparent);
 }
 
 .empty-cta {
@@ -1877,24 +2029,29 @@ body {
 }
 
 .chat-tab .composer {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--vscode-sideBar-background);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-1);
+  transition:
+    border-color var(--fast),
+    box-shadow var(--fast);
 }
 
 /* ── accounts page ──────────────────────────────────────── */
 
 .accounts-page {
-  max-width: 640px;
+  max-width: 680px;
   width: 100%;
   margin: 0 auto;
-  padding: 24px 16px;
+  padding: 32px 20px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
   flex: 1;
   overflow-y: auto;
-  background: var(--vscode-editor-background);
+  background: var(--surface);
 }
 
 .app:has(.accounts-page) {
@@ -1911,34 +2068,35 @@ body {
 .accounts-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   font-family: var(--mono);
-  font-size: 1.05em;
+  font-size: 1.15em;
+  letter-spacing: -0.01em;
 }
 
 .accounts-count {
   font-size: 0.75em;
   color: var(--muted);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   padding: 0 7px;
 }
 
+/* Nothing here yet is not an error state — it gets air, not a dashed box. */
 .accounts-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   text-align: center;
-  padding: 48px 16px;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
+  padding: 72px 16px;
   color: var(--muted);
 }
 
 .accounts-empty-title {
   font-family: var(--mono);
-  font-size: 1em;
+  font-size: 1.1em;
+  letter-spacing: -0.01em;
   color: var(--vscode-foreground);
 }
 
@@ -1948,20 +2106,23 @@ body {
   max-width: 380px;
 }
 
+/* A list of accounts, separated by hairlines. Boxing each row would make five
+   accounts look like five unrelated things. */
 .account-cards {
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 
 .account-card {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--vscode-sideBar-background);
+  gap: 13px;
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.account-card:last-child {
+  border-bottom: none;
 }
 
 .account-card.limited {
@@ -1971,7 +2132,7 @@ body {
 .provider-glyph {
   width: 30px;
   height: 30px;
-  border-radius: 6px;
+  border-radius: var(--radius);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1987,7 +2148,7 @@ body {
 }
 
 .p-codex {
-  background: var(--vscode-charts-green, #6cbe6c);
+  background: var(--ok);
 }
 
 .p-gemini {
@@ -2022,7 +2183,7 @@ body {
   font-size: 0.72em;
   color: var(--muted);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   padding: 0 7px;
 }
 
@@ -2045,26 +2206,26 @@ body {
 .usage-bar {
   flex: 0 0 120px;
   height: 3px;
-  border-radius: 2px;
+  border-radius: var(--radius-pill);
   background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.15));
   overflow: hidden;
 }
 
 .usage-fill {
   height: 100%;
-  border-radius: 2px;
+  border-radius: var(--radius-pill);
 }
 
 .usage-fill.low {
-  background: var(--vscode-charts-green, #6cbe6c);
+  background: var(--ok);
 }
 
 .usage-fill.mid {
-  background: var(--vscode-charts-yellow, #d0a54e);
+  background: var(--warn);
 }
 
 .usage-fill.high {
-  background: var(--vscode-charts-red, #d05e5e);
+  background: var(--danger);
 }
 
 .usage-label {
@@ -2073,20 +2234,21 @@ body {
   color: var(--muted);
 }
 
-.pill-pct {
-  color: var(--vscode-foreground);
-  opacity: 0.8;
-  justify-self: end;
-  font-variant-numeric: tabular-nums;
-}
 
 /* ── accounts: master-detail split ──────────────────────── */
 
+/* ── the shell every workbench screen shares ────────────── */
+
+/*
+ * A quiet list on the left, one focused surface on the right. Accounts and
+ * rules are the same kind of screen, so they get the same shell rather than
+ * two dialects of it.
+ */
 .accounts-split {
   display: flex;
   flex: 1;
   min-height: 0;
-  background: var(--vscode-editor-background);
+  background: var(--surface);
 }
 
 body.resizing {
@@ -2097,21 +2259,28 @@ body.resizing {
 .accounts-list {
   flex-shrink: 0;
   overflow-y: auto;
-  border-right: 1px solid var(--border);
-  background: var(--vscode-sideBar-background);
-  padding: 6px;
+  border-right: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--vscode-foreground) 2%, var(--surface));
+  padding: 0 8px 8px;
 }
 
+/* Stays put while the list scrolls under it — hence the glass. */
 .accounts-list-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 6px 8px;
+  padding: 12px 4px 10px;
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
 }
 
 .accounts-list-title {
   font-family: var(--mono);
   font-size: 0.9em;
+  letter-spacing: -0.01em;
 }
 
 .header-gap {
@@ -2123,17 +2292,20 @@ body.resizing {
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius);
   cursor: pointer;
+  transition: background var(--fast);
 }
 
 .accounts-row:hover {
   background: var(--vscode-list-hoverBackground);
 }
 
+/* Selection is a resting state: the row lifts and its text comes forward,
+   rather than being marked with a stripe or a slab of theme blue. */
 .accounts-row.active {
-  background: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
+  background: var(--sunken);
+  color: var(--vscode-foreground);
 }
 
 .accounts-row-name {
@@ -2157,15 +2329,15 @@ body.resizing {
 }
 
 .row-pct.low {
-  color: var(--vscode-charts-green, #6cbe6c);
+  color: var(--ok);
 }
 
 .row-pct.mid {
-  color: var(--vscode-charts-yellow, #d0a54e);
+  color: var(--warn);
 }
 
 .row-pct.high {
-  color: var(--vscode-charts-red, #d05e5e);
+  color: var(--danger);
 }
 
 .splitter {
@@ -2173,21 +2345,21 @@ body.resizing {
   cursor: col-resize;
   flex-shrink: 0;
   background: transparent;
-  transition: background 0.15s ease;
+  transition: background var(--fast);
 }
 
 .splitter:hover {
-  background: var(--accent);
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
 .account-detail {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  padding: 24px 28px;
+  padding: 34px 36px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 30px;
 }
 
 .detail-header {
@@ -2199,14 +2371,14 @@ body.resizing {
 .provider-glyph.small {
   width: 22px;
   height: 22px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   font-size: 0.78em;
 }
 
 .provider-glyph.big {
   width: 42px;
   height: 42px;
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   font-size: 1.25em;
 }
 
@@ -2220,7 +2392,8 @@ body.resizing {
 
 .detail-name {
   font-family: var(--mono);
-  font-size: 1.15em;
+  font-size: 1.3em;
+  letter-spacing: -0.015em;
 }
 
 .detail-sub {
@@ -2255,12 +2428,12 @@ body.resizing {
 
 .detail-section-title {
   font-family: var(--mono);
-  font-size: 0.72em;
+  font-size: 0.7em;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   color: var(--muted);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 5px;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 7px;
 }
 
 .usage-block {
@@ -2287,22 +2460,22 @@ body.resizing {
 }
 
 .usage-block-pct.low {
-  color: var(--vscode-charts-green, #6cbe6c);
+  color: var(--ok);
 }
 
 .usage-block-pct.mid {
-  color: var(--vscode-charts-yellow, #d0a54e);
+  color: var(--warn);
 }
 
 .usage-block-pct.high {
-  color: var(--vscode-charts-red, #d05e5e);
+  color: var(--danger);
 }
 
 .usage-bar.big {
   flex: none;
   width: 100%;
   height: 7px;
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
 }
 
 /* ── brand badges + usage cards ─────────────────────────── */
@@ -2317,13 +2490,13 @@ body.resizing {
 .brand-badge.small {
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 
 .brand-badge.big {
   width: 46px;
   height: 46px;
-  border-radius: 11px;
+  border-radius: var(--radius-lg);
 }
 
 .detail-provider {
@@ -2338,14 +2511,11 @@ body.resizing {
 .usage-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
+  gap: 26px 32px;
 }
 
+/* A number and its label, on the page. Space separates these, not rules. */
 .usage-card {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px 16px;
-  background: var(--vscode-sideBar-background);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2361,9 +2531,11 @@ body.resizing {
 
 .usage-card-pct {
   font-family: var(--mono);
-  font-size: 1.9em;
-  font-weight: 700;
+  font-size: 2.1em;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .usage-card-pct .pct-sign {
@@ -2374,15 +2546,15 @@ body.resizing {
 }
 
 .usage-card-pct.low {
-  color: var(--vscode-charts-green, #6cbe6c);
+  color: var(--ok);
 }
 
 .usage-card-pct.mid {
-  color: var(--vscode-charts-yellow, #d0a54e);
+  color: var(--warn);
 }
 
 .usage-card-pct.high {
-  color: var(--vscode-charts-red, #d05e5e);
+  color: var(--danger);
 }
 
 .usage-card-reset {
@@ -2435,7 +2607,7 @@ body.resizing {
 .info-val code {
   background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.12));
   padding: 0 5px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 .usage-block-reset {
@@ -2488,16 +2660,21 @@ body.resizing {
 
 .ghost-btn {
   background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
   color: var(--vscode-foreground);
-  padding: 3px 10px;
+  padding: 4px 11px;
   font-size: 0.82em;
   cursor: pointer;
+  transition:
+    background var(--fast),
+    border-color var(--fast),
+    color var(--fast);
 }
 
 .ghost-btn:hover {
-  background: var(--vscode-list-hoverBackground);
+  background: var(--raised);
+  border-color: color-mix(in srgb, var(--vscode-foreground) 24%, transparent);
 }
 
 .accounts-hint,
@@ -2514,7 +2691,7 @@ body.resizing {
   font-family: var(--mono);
   background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.12));
   padding: 0 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 /* ── syntax highlighting ────────────────────────────────── */
@@ -2541,12 +2718,12 @@ body.resizing {
 
 .setup-banner {
   margin: 8px;
-  padding: 12px;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  background: var(--raised);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   align-items: flex-start;
 }
 
@@ -2707,7 +2884,7 @@ body.resizing {
   padding: 0 6px;
   font-size: 0.7em;
   line-height: 1.45;
-  color: var(--vscode-charts-yellow, #d0a54e);
+  color: var(--warn);
 }
 
 .rules-detail-holder {
@@ -2737,10 +2914,10 @@ body.resizing {
 .rule-detail {
   flex: 1;
   min-height: 0;
-  padding: 24px 28px;
+  padding: 34px 36px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 30px;
 }
 
 /* The id and the description are the rule's name — edited where they are read. */
@@ -2748,7 +2925,7 @@ body.resizing {
 .sub-input {
   width: 100%;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--vscode-foreground);
   padding: 1px 5px;
@@ -2757,7 +2934,8 @@ body.resizing {
 
 .title-input {
   font-family: var(--mono);
-  font-size: 1.15em;
+  font-size: 1.3em;
+  letter-spacing: -0.015em;
 }
 
 .sub-input {
@@ -2829,7 +3007,7 @@ body.resizing {
   gap: 5px;
   padding: 4px 6px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--vscode-input-background);
 }
 
@@ -2843,7 +3021,7 @@ body.resizing {
   gap: 3px;
   padding: 1px 3px 1px 8px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-pill);
   background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.12));
   font-size: 0.78em;
 }
@@ -2893,7 +3071,7 @@ body.resizing {
   height: var(--control-h);
   padding: 0 6px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius);
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground, var(--vscode-foreground));
   font-family: var(--mono);
@@ -2932,10 +3110,14 @@ body.resizing {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--vscode-sideBar-background);
+  padding: 6px 9px;
+  border-radius: var(--radius);
+  background: var(--raised);
+  transition: background var(--fast);
+}
+
+.chain-item:hover {
+  background: var(--sunken);
 }
 
 .chain-order {
@@ -2963,9 +3145,9 @@ body.resizing {
   flex-shrink: 0;
   padding: 0 6px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   font-size: 0.68em;
-  color: var(--vscode-charts-yellow, #d0a54e);
+  color: var(--warn);
 }
 
 .chain-btn {
@@ -3018,11 +3200,11 @@ body.resizing {
 }
 
 .chain-empty {
-  padding: 8px 10px;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
+  padding: 9px 11px;
+  border-radius: var(--radius);
+  background: var(--sunken);
   font-size: 0.8em;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--muted);
 }
 
@@ -3031,7 +3213,7 @@ body.resizing {
   font-size: 0.78em;
   background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.1));
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-pill);
   padding: 2px 9px;
 }
 
@@ -3046,7 +3228,7 @@ body.resizing {
   justify-content: center;
   gap: 5px;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius);
   height: var(--control-h);
   padding: 0 12px;
   font-size: 0.82em;
@@ -3110,8 +3292,11 @@ body.resizing {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  z-index: 2;
 }
 
 .analytics-controls {
@@ -3123,33 +3308,35 @@ body.resizing {
 /* Three ranges, all visible: a dropdown would hide two thirds of the choice. */
 .range-seg {
   display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  overflow: hidden;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius);
+  background: var(--sunken);
 }
 
 .seg-btn {
   border: none;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
   font-family: var(--mono);
   font-size: 0.74em;
   padding: 4px 11px;
   cursor: pointer;
-}
-
-.seg-btn + .seg-btn {
-  border-left: 1px solid var(--border);
+  transition:
+    background var(--fast),
+    color var(--fast);
 }
 
 .seg-btn:hover {
-  background: var(--vscode-list-hoverBackground);
   color: var(--vscode-foreground);
 }
 
+/* The selected range lifts out of the track instead of being painted on it. */
 .seg-btn.active {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  background: var(--surface);
   color: var(--vscode-foreground);
+  box-shadow: var(--shadow-1);
 }
 
 .analytics-body {
@@ -3158,10 +3345,10 @@ body.resizing {
   max-width: 1080px;
   margin: 0 auto;
   overflow-y: auto;
-  padding: 20px;
+  padding: 28px 24px 36px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 34px;
 }
 
 .analytics-body .detail-section.wide {
@@ -3175,44 +3362,42 @@ body.resizing {
 /* Green reads "good" here, as it does on the quota bars. */
 .usage-card-pct.good,
 .learn-pct.good {
-  color: var(--vscode-charts-green, #6cbe6c);
+  color: var(--ok);
 }
 
 .usage-card-pct.ok,
 .learn-pct.ok {
-  color: var(--vscode-charts-yellow, #d0a54e);
+  color: var(--warn);
 }
 
 .usage-card-pct.bad,
 .learn-pct.bad {
-  color: var(--vscode-charts-red, #d05e5e);
+  color: var(--danger);
 }
 
 .usage-fill.good,
 .learn-fill.good {
-  background: var(--vscode-charts-green, #6cbe6c);
+  background: var(--ok);
 }
 
 .usage-fill.ok,
 .learn-fill.ok {
-  background: var(--vscode-charts-yellow, #d0a54e);
+  background: var(--warn);
 }
 
 .usage-fill.bad,
 .learn-fill.bad {
-  background: var(--vscode-charts-red, #d05e5e);
+  background: var(--danger);
 }
 
 .analytics-empty {
   padding: 40px 16px;
 }
 
+/* Rows separated by hairlines, not a table with a frame around it. */
 .learn-rows {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  overflow: hidden;
 }
 
 .learn-row {
@@ -3220,10 +3405,15 @@ body.resizing {
   grid-template-columns: 18px minmax(120px, 1fr) 70px minmax(80px, 140px) 90px 80px 150px;
   gap: 10px;
   align-items: center;
-  padding: 8px 12px;
-  background: var(--vscode-sideBar-background);
-  border-bottom: 1px solid var(--border);
+  padding: 9px 8px;
+  border-radius: var(--radius-sm);
+  border-bottom: 1px solid var(--hairline);
   font-size: 0.85em;
+  transition: background var(--fast);
+}
+
+.learn-row:hover {
+  background: var(--raised);
 }
 
 .learn-row:last-child {
@@ -3255,7 +3445,7 @@ body.resizing {
 
 .learn-bar {
   height: 5px;
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.15));
   overflow: hidden;
 }
@@ -3263,7 +3453,7 @@ body.resizing {
 .learn-fill {
   display: block;
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
 }
 
 .learn-pct {
@@ -3280,18 +3470,23 @@ body.resizing {
 }
 
 .provider-group {
-  margin-bottom: 14px;
+  margin-bottom: 22px;
 }
 
+/* Sticks while its own runs scroll past, so you never lose which provider you
+   are reading. */
 .group-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  background: var(--vscode-sideBar-background);
-  border: 1px solid var(--border);
-  border-radius: 6px 6px 0 0;
+  padding: 8px 10px;
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--hairline);
 }
 
 .group-title {
@@ -3300,13 +3495,14 @@ body.resizing {
   gap: 8px;
   font-family: var(--mono);
   font-size: 0.88em;
+  letter-spacing: -0.01em;
   min-width: 0;
 }
 
 .group-gone {
   padding: 0 6px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
   font-size: 0.8em;
 }
@@ -3321,40 +3517,34 @@ body.resizing {
 }
 
 .metric-rows {
-  border: 1px solid var(--border);
-  border-top: none;
-  border-radius: 0 0 6px 6px;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .metric-row {
   display: grid;
   grid-template-columns: 84px minmax(90px, 1fr) 118px 90px 62px 58px 48px minmax(90px, 210px);
   gap: 10px;
-  padding: 6px 12px;
+  padding: 7px 10px;
   align-items: center;
-  background: var(--vscode-editor-background);
-  border-bottom: 1px solid var(--border);
-  border-left: 3px solid transparent;
+  border-bottom: 1px solid var(--hairline);
   font-family: var(--mono);
   font-size: 0.78em;
+  transition: background var(--fast);
+}
+
+.metric-row:hover {
+  background: var(--raised);
 }
 
 .metric-row:last-child {
   border-bottom: none;
 }
 
-.metric-row.status-success {
-  border-left-color: var(--vscode-charts-green, #6cbe6c);
-}
-
+/* A run that failed or moved says so in its own flag chip on the right, so the
+   row needs no coloured edge to repeat it — only the dimming. */
 .metric-row.status-error {
-  border-left-color: var(--vscode-charts-red, #d05e5e);
-  opacity: 0.75;
-}
-
-.metric-row.status-failover {
-  border-left-color: var(--accent);
+  opacity: 0.7;
 }
 
 .metric-time {
@@ -3397,22 +3587,22 @@ body.resizing {
 .metric-flag {
   flex-shrink: 0;
   padding: 0 6px;
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.12));
   color: var(--muted);
   font-size: 0.88em;
 }
 
 .metric-flag.warn {
-  color: var(--vscode-charts-yellow, #d0a54e);
+  color: var(--warn);
 }
 
 .metric-flag.verify-passed {
-  color: var(--vscode-charts-green, #6cbe6c);
+  color: var(--ok);
 }
 
 .metric-flag.verify-failed {
-  color: var(--vscode-charts-red, #d05e5e);
+  color: var(--danger);
 }
 
 /*
@@ -3453,8 +3643,14 @@ body.resizing {
   .live-dots i,
   .type-cursor,
   .agent-dot,
+  .tl-permission.pending::after,
   .agent-track-fill.running {
     animation: none;
+  }
+
+  /* The rail dot still has to say "this is the blocked one" without moving. */
+  .tl-permission.pending::after {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
   }
 
   .agent-track-fill.running {

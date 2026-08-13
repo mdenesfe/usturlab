@@ -84,6 +84,88 @@ const PERMISSION_MODES: Array<{ id: string; label: string; hint: string }> = [
   { id: 'ask', label: 'Ask', hint: 'Stop and ask before each command or file change — on every provider' },
 ];
 
+const ROUTING_MODES: Array<{ id: 'auto' | 'manual'; label: string; hint: string }> = [
+  { id: 'auto', label: 'Auto', hint: 'Reads the task and picks the model. Rules always win.' },
+  { id: 'manual', label: 'Manual', hint: 'Follows your chain in order, without judging the task.' },
+];
+
+/**
+ * Both switches behind one word.
+ *
+ * How much the model may do, and how it is routed, are two axes that were
+ * costing two dropdowns in a bar that should read as empty. The button shows
+ * the state you changed away from the default, and the menu holds the rest.
+ */
+function ModeMenu({
+  permissionMode,
+  askPermission,
+  routingMode,
+  onModeChange,
+}: {
+  permissionMode: string;
+  askPermission: boolean;
+  routingMode: 'auto' | 'manual';
+  onModeChange: (modes: { permissionMode?: string; routingMode?: 'auto' | 'manual' }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = askPermission ? 'ask' : permissionMode;
+  const label = PERMISSION_MODES.find((m) => m.id === current)?.label ?? current;
+
+  return (
+    <div class="mode-menu" onBlur={() => setTimeout(() => setOpen(false), 120)}>
+      <button
+        class={`mode-btn ${open ? 'open' : ''}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="What the model may do, and how it is routed"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {label}
+        {/* Auto is the default and says nothing; manual is a choice you made. */}
+        {routingMode === 'manual' && <span class="mode-extra">manual</span>}
+      </button>
+      {open && (
+        <div class="menu-popup" role="menu" onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
+          <div class="menu-label">the model may</div>
+          {PERMISSION_MODES.map((m) => (
+            <button
+              key={m.id}
+              class={`menu-row ${current === m.id ? 'on' : ''}`}
+              role="menuitemradio"
+              aria-checked={current === m.id}
+              title={m.hint}
+              onClick={() => {
+                onModeChange({ permissionMode: m.id });
+                setOpen(false);
+              }}
+            >
+              <span class="menu-name">{m.label}</span>
+              <span class="menu-hint">{m.hint}</span>
+            </button>
+          ))}
+          <div class="menu-label">routing</div>
+          {ROUTING_MODES.map((m) => (
+            <button
+              key={m.id}
+              class={`menu-row ${routingMode === m.id ? 'on' : ''}`}
+              role="menuitemradio"
+              aria-checked={routingMode === m.id}
+              title={m.hint}
+              onClick={() => {
+                onModeChange({ routingMode: m.id });
+                setOpen(false);
+              }}
+            >
+              <span class="menu-name">{m.label}</span>
+              <span class="menu-hint">{m.hint}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Composer({
   accounts,
   tags,
@@ -204,8 +286,8 @@ export function Composer({
               ? 'No accounts yet — add one to start'
               : 'Only a reviewer account is connected — add one that can do the work'
             : running
-              ? 'Task running… Enter queues your next message · Esc stops'
-              : 'Describe the task…  @ account · # tag · / command'
+              ? 'Running… Esc stops'
+              : 'Describe the task…'
         }
         rows={2}
         onInput={(e) => {
@@ -272,61 +354,18 @@ export function Composer({
         >
           <IconPlus size={13} />
         </button>
-        <select
-          class="mode-select"
-          aria-label="Routing mode"
-          title="Routing: Auto reads the task and picks the model; Manual follows your chain. Rules always win."
-          value={routingMode}
-          onChange={(e) =>
-            onModeChange({ routingMode: (e.target as HTMLSelectElement).value as 'auto' | 'manual' })
-          }
-        >
-          <option value="auto">✦ Auto</option>
-          <option value="manual">Manual</option>
-        </select>
-        <select
-          class="mode-select"
-          aria-label="Permission mode"
-          title={PERMISSION_MODES.find((m) => m.id === permissionMode)?.hint}
-          value={askPermission ? 'ask' : permissionMode}
-          onChange={(e) => onModeChange({ permissionMode: (e.target as HTMLSelectElement).value })}
-        >
-          {PERMISSION_MODES.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-        <div class="account-strip">
-          {/* Every pill is a "route here" button; a reviewer has nowhere to route to. */}
-          {routable.map((a) => (
-            <button
-              key={a.id}
-              class={`account-pill ${a.available ? '' : 'limited'}`}
-              // The pill says "ready" or "limited" with a coloured dot alone.
-              aria-label={`Route to ${a.provider}:${a.label} — ${a.available ? 'ready' : 'limited'}`}
-              title={
-                a.available
-                  ? (a.usage ?? []).map((u) => `${u.utilizationPct}% of ${u.label}`).join(' · ') ||
-                    'ready — click to route explicitly'
-                  : `limited${a.resetAt ? ` · resets ${new Date(a.resetAt).toLocaleTimeString()}` : ''}`
-              }
-              onClick={() => {
-                const mention = `@${a.provider}:${a.label} `;
-                setText((prev) => (prev.startsWith(mention.trim()) ? prev : mention + prev));
-                textareaRef.current?.focus();
-              }}
-            >
-              <BrandMark provider={a.provider} size={13} />
-              <span class="pill-name">{a.label}</span>
-              {(a.usage ?? []).length > 0 ? (
-                <span class="pill-pct">{Math.max(...a.usage!.map((u) => u.utilizationPct))}%</span>
-              ) : (
-                <span class={`dot ${a.available ? 'ok' : 'off'}`} />
-              )}
-            </button>
-          ))}
-        </div>
+        <ModeMenu
+          permissionMode={permissionMode}
+          askPermission={askPermission}
+          routingMode={routingMode}
+          onModeChange={onModeChange}
+        />
+        {/*
+          Which account gets the work is the router's job, and typing @ still
+          overrides it. A row of pills only restated what the accounts tab
+          already says, and grew a line taller with every account added.
+        */}
+        <span class="bar-gap" />
         {running ? (
           <button class="run-btn stop" title="Stop (Esc)" onClick={onCancel}>
             <IconStop size={12} /> Stop
