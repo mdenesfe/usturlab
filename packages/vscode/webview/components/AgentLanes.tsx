@@ -52,13 +52,23 @@ function reportedLine(summary: string): string | undefined {
   return line.length > 120 ? `${line.slice(0, 119)}…` : line;
 }
 
+/*
+ * How long it took, on the row. The tool and token counts are already summed
+ * in the fan-out's own header, so per lane they ride along in the tooltip
+ * rather than adding a third number to every line.
+ */
 function Meta({ lane }: { lane: AgentLane }) {
-  const parts: string[] = [];
-  if (lane.toolUses !== undefined) parts.push(`${lane.toolUses} tool${lane.toolUses === 1 ? '' : 's'}`);
-  if (lane.tokens !== undefined) parts.push(`${formatTokens(lane.tokens)} tok`);
-  if (lane.durationMs !== undefined) parts.push(formatDuration(lane.durationMs));
-  if (parts.length === 0) return null;
-  return <span class="agent-meta">{parts.join(' · ')}</span>;
+  const detail: string[] = [];
+  if (lane.toolUses !== undefined) detail.push(`${lane.toolUses} tool${lane.toolUses === 1 ? '' : 's'}`);
+  if (lane.tokens !== undefined) detail.push(`${formatTokens(lane.tokens)} tok`);
+  if (lane.durationMs === undefined) {
+    return detail.length > 0 ? <span class="agent-meta">{detail.join(' · ')}</span> : null;
+  }
+  return (
+    <span class="agent-meta" title={detail.join(' · ') || undefined}>
+      {formatDuration(lane.durationMs)}
+    </span>
+  );
 }
 
 function Lane({ lane, longestMs, status }: { lane: AgentLane; longestMs: number; status: AgentLane['status'] }) {
@@ -167,11 +177,12 @@ export function AgentLanes({ lanes, live = false }: { lanes: AgentLane[]; live?:
   const allSteps = lanes.flatMap((lane) => lane.steps);
 
   return (
-    <div class={`agent-fanout ${running > 0 ? 'live' : ''} ${parallel ? 'parallel' : ''}`}>
+    <div class={`agent-fanout ${running > 0 ? 'live' : ''}`}>
       <div class="agent-fanout-head">
         <span class="agent-fanout-count">
           {lanes.length} agent{lanes.length > 1 ? 's' : ''}
         </span>
+        {/* Said in a word, since the lanes are drawn as a plain indented list. */}
         {parallel && <span class="agent-fanout-mode">in parallel</span>}
         <span class="agent-fanout-state">{state}</span>
         <span class="agent-fanout-total">

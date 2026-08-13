@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.10.0 — 2026-08-14
+
+### The conversation is one thread, so it is drawn as one
+
+A run used to arrive as a stack of tiles: the prompt in a bubble on the right, the answer in a tinted box, tool activity in a bordered panel, the checklist in another, the permission question in a third. Five containers for one piece of work, each with its own frame, fill and radius, none of them saying anything the position on the page did not already say.
+
+There is a single hairline rail down the transcript now, and every event is a dot on it. Your message, the answer, what the router did, what needs your decision — one column, in order. The dot carries the state that used to need a box: hollow for something that happened, filled for someone speaking, in the account's own colour so a run that failed over reads as two providers at a glance, a lit centre while something is still moving, and a pulse while the model is blocked on you.
+
+### The work is not the point; the answer is
+
+Everything the model did to produce an answer — files read, commands run, subagents dispatched — is one dim line underneath it: `3 steps · 2 agents`. Click it and the whole record is there, unchanged. While the run is live that line names what is happening right now instead of counting, and the work bar above the composer carries the rest, so nothing is hidden while you are waiting on it. The model's own checklist follows the same rule: `tasks 2/4` and the item it is on, with the list one click away.
+
+The answer itself is no longer interrupted by any of it. Tool calls used to be spliced between paragraphs of the reply; the prose now runs continuously and the record sits below it.
+
+The numbers beside a line — which model, how long, what it would have cost, how many tokens a lane spent — hold their space and fade in when you look at the row they belong to. They stay in the DOM throughout, so a screen reader still reads them and a keyboard user still reaches them, and on a touch screen they simply show.
+
+### A composer with nothing in it but your task
+
+The composer carried a chip per account, wrapping onto a second line as soon as you registered a fourth, restating quota the Accounts tab already shows. They are gone: routing is the router's job, `@claude:work` still overrides it with completion as you type, and quota lives where quota is managed.
+
+What is left is the text you are writing, a `+`, one word — `Plan` — and Send. That word opens a menu holding both switches that used to be two dropdowns: what the model may do (plan, edit, full, ask) and how it is routed (auto, manual), each with the sentence saying what choosing it actually does. Auto is the default and says nothing; pick manual and the button says so.
+
+### One design, on every screen
+
+Accounts, rules and analytics were rebuilt in the same language rather than three dialects of it. Cards became lists separated by hairlines, tables lost their frames, and the coloured edge on an analytics row went away because the flag on the right already said `error` or `failover`. Selection is a resting surface instead of a slab of theme blue.
+
+Underneath, the values that were being invented per rule are now a small fixed set: four radii and nothing in between, one hairline, two raised planes, two shadows, one motion duration. Colour is reserved for state and for the four provider brands — the same four values had been written six different ways. Glass is used only where a surface genuinely floats over moving content, and menus are opaque, because a menu with words readable through it is a worse menu.
+
+Everything is theme-aware in both directions, focus rings are part of the design rather than whatever the platform left behind, and the reduced-motion path keeps the blocked-on-you dot legible without animating it.
+
+### Added
+
+- **A design harness** (`pnpm -C packages/vscode preview`) renders the real webview bundle against sample host messages in a browser: every screen, both themes, no VS Code window, no account, no CLI. It is excluded from the published extension.
+
+### Removed
+
+- The routing badge component and its styles, which nothing had rendered for several releases. The reply's own header says which account and model ran it; the rule that picked them is in its tooltip.
+
 ## 0.9.0 — 2026-08-12
 
 ### One place to write a rule

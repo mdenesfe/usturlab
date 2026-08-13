@@ -10,7 +10,7 @@ It does not stop at picking who runs the task. Every provider is given the conte
 
 Subagents get their own lane, so a fan-out reads as a fan-out — and the cost line says `~$0.47` with a tilde, because that is what the run *would* have cost: on a subscription nobody was charged.
 
-<img src="https://raw.githubusercontent.com/mdenesfe/usturlab/main/docs/media/ui-agents.png" alt="A run routed to the personal account: two agents in parallel, each lane showing its tool count, tokens and duration." width="100%">
+<img src="https://raw.githubusercontent.com/mdenesfe/usturlab/main/docs/media/ui-agents.png" alt="A run routed to the personal account: two subagents in parallel, each lane showing what it is doing and how long it took." width="100%">
 
 ## Making every model smarter
 
@@ -32,25 +32,27 @@ A model's output quality is a function of the context it gets, the constraints i
 
 ## The UI
 
-<img src="https://raw.githubusercontent.com/mdenesfe/usturlab/main/docs/media/ui-panel.png" alt="The usturlab panel: chat list on the left, an empty conversation in the editor, and a composer with one chip per registered account." width="100%">
+<img src="https://raw.githubusercontent.com/mdenesfe/usturlab/main/docs/media/ui-panel.png" alt="The usturlab panel: chat list on the left, an empty conversation in the editor, and the composer at the bottom." width="100%">
 
-Every account is a chip in the composer. When one reports its limit, its chip dims and the next in your chain picks the task up — the badge on the reply says which account actually ran it.
+Failover is visible where it happened. When an account reports its limit, the transcript says so on the rail and the next account in your chain picks the task up — the reply that follows carries that account's name and colour, so who actually ran it is never a guess.
 
-<img src="https://raw.githubusercontent.com/mdenesfe/usturlab/main/docs/media/ui-failover.png" alt="After the personal account hits its limit its chip is dimmed, the reply is badged work, and the status bar reads claude:work." width="100%">
+<img src="https://raw.githubusercontent.com/mdenesfe/usturlab/main/docs/media/ui-failover.png" alt="A run that moved from the personal account to work after a limit, with both replies on the same timeline." width="100%">
 
 Analytics separates what you were billed from what you weren't: `Would have cost` is the list price of work your subscriptions covered, and it is never added to money actually charged.
 
 <img src="https://raw.githubusercontent.com/mdenesfe/usturlab/main/docs/media/ui-analytics.png" alt="Analytics: clean-run rate, task count, median duration, and a would-have-cost figure labelled as work the subscription covered." width="100%">
 
-Claude-panel style, built for a developer environment:
+One timeline, and nothing boxed:
 
 - **Sidebar** — your chat list, grouped by date (Today / Yesterday / Last 7 days / Older). Running chats show a pulsing dot. Nothing is typed here; it's a clean index.
-- **Chats open in the editor area** — one tab per conversation, centered column, monospace prompts, markdown + syntax-highlighted code blocks, a routing badge on every reply (`⤳ codex:work /gpt-5.4 [tests-to-codex]`), failover dividers when an account hits its limit mid-task. Two chats side-by-side run concurrently.
-- **Parallel agents get lanes.** When a model splits the work across subagents, each one is its own lane — its tool calls, what it is doing right now, its token spend, and what it reported back. Agents whose lifetimes overlap share one block under a single trunk; when they finish, each lane keeps a duration bar proportional to the slowest.
+- **Chats open in the editor area** — one tab per conversation, a reading-width column, markdown + syntax-highlighted code blocks. A hairline rail runs down the transcript and every event is a dot on it, in the colour of the account it belongs to. Two chats side-by-side run concurrently.
+- **The work stays out of the answer's way.** Everything the model did — files read, commands run, subagents dispatched — is one dim line under the reply (`3 steps · 2 agents`) that opens on click. The model's own checklist is one line too (`tasks 2/4`). Model, duration and cost fade in when you look at the row they belong to.
+- **Parallel agents get lanes.** When a model splits the work across subagents, each one is its own lane — its tool calls, what it is doing right now, and what it reported back; when they finish, each lane keeps a duration bar proportional to the slowest.
 - **The run never scrolls away.** A bar above the composer holds the elapsed time and the current activity — `thinking`, the file being edited, how many agents are working, or `waiting for you` when the model is blocked on a permission question.
+- **A composer with nothing in it but your task.** The text you are writing, a `+`, one word — `Plan` — and Send. That word opens both switches: what the model may do (plan, edit, full, ask) and how it is routed (auto, manual). Typing `@` completes account and model names, `#` your tag rules, `/` the commands.
 - **A run that ends, ends.** Stop it and the turn closes with `⊘ stopped by you`; when every account fails, the error closes it and offers **Retry**. Copy sits on every code block and every answer.
 - **Usable without a mouse.** The chat list is keyboard-navigable, the transcript is a `log` and the work bar a `status`, and nothing conveys state by colour alone.
-- **Accounts tab** — provider cards with status (`● ready` / `◌ limited · resets 18:30`), auth type, usage bars, add/remove.
+- **Accounts tab** — one row per account with status (`● ready` / `◌ limited · resets 18:30`), auth type, usage bars, add/remove.
 - **Rules tab** — your routing rules, read and written in one place: the ordered list is the order the router tries them in, match conditions are chips, failover chains are pill sequences. The JSON file stays the source of truth and edits made there show up here immediately.
 
 Conversations persist across VS Code restarts, including native CLI session ids, so old chats keep their context.
@@ -87,7 +89,7 @@ Secrets (tokens, API keys) live in the VS Code secret store. Profile directories
 ## Quick start
 
 1. Click the usturlab icon in the activity bar → **Add account** (or `usturlab: Add Account` from the command palette). Each account gets an isolated profile, so two Claude accounts never collide.
-2. Click **+ New chat** — the chat opens as an editor tab. Type your task; the routing badge shows which account/model was picked and why.
+2. Click **+ New chat** — the chat opens as an editor tab. Type your task; the reply is headed with the account and model that ran it, and the rule that picked them is in its tooltip.
 3. Open the **Rules** tab (or `usturlab: Routing Rules`) and create your rules file:
 
 ```json

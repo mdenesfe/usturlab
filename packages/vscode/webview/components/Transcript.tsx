@@ -1,4 +1,4 @@
-import type { Segment, ToolStep, TranscriptItem } from '../../src/panel/transcript.js';
+import type { Segment, TranscriptItem } from '../../src/panel/transcript.js';
 import type { PermissionDecision } from '../../../core/src/adapters/permission.js';
 import { formatCost } from '../../../core/src/accounts/billing.js';
 import { Markdown } from './Markdown.js';
@@ -7,50 +7,93 @@ import { BRAND_COLOR, BrandMark, PROVIDER_NAME } from './brandIcons.js';
 import { assistantText } from '../../src/panel/transcript.js';
 import { AgentLanes } from './AgentLanes.js';
 import { CopyButton } from './CopyButton.js';
-import {
-  LiveDots,
-  ToolStepRow,
-  fileName,
-  summarizeSteps,
-  touchedFiles,
-  useAutoOpen,
-} from './steps.js';
+import { LiveDots, ToolStepRow, fileName, useAutoOpen } from './steps.js';
 
 /**
- * Collapsible timeline entry for consecutive tool activity. It opens itself
- * while the work is live — watching the model work is the point, and a closed
- * box that says "3 steps" hides exactly what you came to see.
+ * Everything the model did to produce the answer, on one line.
+ *
+ * The work is not the point — the answer is. Files read, commands run and
+ * subagents dispatched collapse into a single count that opens when you
+ * actually want it. While the run is live the line names what is happening
+ * right now, so nothing feels frozen, and the work bar carries the rest.
  */
-function ToolGroup({ steps, running }: { steps: ToolStep[]; running: boolean }) {
+function Activity({ segments, live }: { segments: Segment[]; live: boolean }) {
+  const { open, onSummaryClick } = useAutoOpen(false);
+  const steps = segments.flatMap((s) => (s.kind === 'tools' ? s.steps : []));
+  const lanes = segments.flatMap((s) => (s.kind === 'agents' ? s.lanes : []));
+  if (steps.length === 0 && lanes.length === 0) return null;
+
+  const counts = [
+    steps.length > 0 ? `${steps.length} step${steps.length > 1 ? 's' : ''}` : undefined,
+    lanes.length > 0 ? `${lanes.length} agent${lanes.length > 1 ? 's' : ''}` : undefined,
+  ].filter(Boolean);
   const latest = steps[steps.length - 1];
-  const files = touchedFiles(steps);
-  const { open, onSummaryClick } = useAutoOpen(running);
+
   return (
-    <details class={`tool-group ${running ? 'live' : ''}`} open={open}>
-      <summary class="tool-summary" onClick={onSummaryClick}>
-        <span class="tool-count">
-          {steps.length} step{steps.length > 1 ? 's' : ''}
-        </span>
-        <span class="tool-names">{summarizeSteps(steps)}</span>
-        {running && latest ? (
-          <span class="tool-running">
+    <details class="activity" open={open}>
+      <summary class="activity-summary" onClick={onSummaryClick}>
+        {live && latest ? (
+          <span class="activity-now">
             {latest.path ? fileName(latest.path) : latest.name}
             <LiveDots />
           </span>
         ) : (
-          files.length > 0 && (
-            <span class="tool-files" title={steps.map((s) => s.path).filter(Boolean).join('\n')}>
-              {files.slice(0, 3).join(' · ')}
-              {files.length > 3 ? ` +${files.length - 3}` : ''}
-            </span>
-          )
+          <span class="activity-count">{counts.join(' · ')}</span>
         )}
       </summary>
-      <div class="tool-steps">
-        {steps.map((step, i) => (
-          <ToolStepRow key={i} step={step} />
-        ))}
+      <div class="activity-body">
+        {segments.map((segment, i) => {
+          if (segment.kind === 'tools') {
+            return (
+              <div key={i} class="tool-steps">
+                {segment.steps.map((step, j) => (
+                  <ToolStepRow key={j} step={step} />
+                ))}
+              </div>
+            );
+          }
+          if (segment.kind === 'agents') return <AgentLanes key={i} lanes={segment.lanes} live={live} />;
+          return null;
+        })}
       </div>
+    </details>
+  );
+}
+
+/**
+ * The model's checklist, closed. The summary carries what you actually need
+ * mid-run — how far along it is and what it is on — and the rows themselves
+ * are one click away for when you want them.
+ */
+function TaskGroup({ item }: { item: Extract<TranscriptItem, { kind: 'tasks' }> }) {
+  const done = item.items.filter((t) => t.status === 'done').length;
+  const active = item.items.find((t) => t.status === 'active');
+  const { open, onSummaryClick } = useAutoOpen(false);
+  return (
+    <details class={`tl tl-tasks ${active ? 'tl-live' : ''} task-block`} open={open}>
+      <summary class="task-summary" onClick={onSummaryClick}>
+        <span class="task-label">tasks</span>
+        <span class="task-count">
+          {done}/{item.items.length}
+        </span>
+        <span class="task-bar">
+          <span
+            class="task-fill"
+            style={{ width: `${(done / Math.max(item.items.length, 1)) * 100}%` }}
+          />
+        </span>
+        {active && <span class="task-current">{active.text}</span>}
+      </summary>
+      <ol class="task-items">
+        {item.items.map((task, j) => (
+          <li key={j} class={`task-item ${task.status}`}>
+            <span class="task-mark">
+              {task.status === 'done' ? '✓' : task.status === 'active' ? '▸' : '○'}
+            </span>
+            <span class="task-text">{task.text}</span>
+          </li>
+        ))}
+      </ol>
     </details>
   );
 }
@@ -78,7 +121,7 @@ function PermissionCard({
   const { request } = item;
   if (item.answered) {
     return (
-      <div class={`permission-block answered ${item.allowed ? 'allowed' : 'denied'}`}>
+      <div class={`tl tl-permission permission-block answered ${item.allowed ? 'allowed' : 'denied'}`}>
         <span class="permission-mark">{item.allowed ? '✓' : '✕'}</span>
         <span class="permission-title">{request.title}</span>
         <span class="permission-verdict">{item.allowed ? 'allowed' : 'denied'}</span>
@@ -87,7 +130,11 @@ function PermissionCard({
   }
   return (
     // The model is blocked on this, so it must be announced, not just drawn.
-    <div class="permission-block pending" role="alertdialog" aria-label={request.title}>
+    <div
+      class="tl tl-permission pending permission-block"
+      role="alertdialog"
+      aria-label={request.title}
+    >
       <div class="permission-head">
         <span class={`permission-kind ${request.kind}`}>{KIND_GLYPH[request.kind] ?? '·'}</span>
         <span class="permission-title">{request.title}</span>
@@ -183,9 +230,11 @@ export function Transcript({
         switch (item.kind) {
           case 'user':
             return (
-              <div key={i} class="msg-user">
-                <div class="msg-user-label">you</div>
-                <div class="msg-user-text">{item.text}</div>
+              // The dot and the dimmer type are enough to say who is speaking;
+              // the word is kept for anyone listening rather than looking.
+              <div key={i} class="tl tl-user">
+                <div class="sr-only">you</div>
+                <div class="tl-user-text">{item.text}</div>
               </div>
             );
           case 'assistant': {
@@ -193,27 +242,30 @@ export function Transcript({
             const color = provider ? BRAND_COLOR[provider] : undefined;
             const lastSegment: Segment | undefined = item.segments[item.segments.length - 1];
             const answer = assistantText(item).trim();
+            // The cursor belongs on the prose being typed, which is not always
+            // the last segment — a tool call can land after it.
+            const lastTextIndex = item.segments.reduce(
+              (found, segment, j) => (segment.kind === 'text' ? j : found),
+              -1,
+            );
             return (
+              // The dot on the rail is the account's own colour, so a run that
+              // failed over reads as two providers at a glance.
               <div
                 key={i}
-                class="msg-assistant"
-                style={
-                  color
-                    ? { background: `color-mix(in srgb, ${color} 6%, transparent)` }
-                    : undefined
-                }
+                class={`tl tl-assistant ${item.done ? '' : 'tl-live'}`}
+                style={color ? `--dot:${color}` : undefined}
               >
                 {item.target && provider && (
                   <div class="assistant-head">
                     <span title={PROVIDER_NAME[provider]} class="assistant-mark">
                       <BrandMark provider={provider} size={13} />
                     </span>
-                    <span class="assistant-name" style={{ color }}>
-                      {item.target.account}
-                    </span>
-                    <span class="assistant-meta">
+                    {/* The rail dot already carries the account's colour, so the
+                        name itself does not need to be painted too. */}
+                    <span class="assistant-name">{item.target.account}</span>
+                    <span class="assistant-meta" title={item.ruleId ? `rule: ${item.ruleId}` : undefined}>
                       {item.target.model ? `· ${item.target.model} ` : ''}
-                      {item.ruleId ? `· ${item.ruleId} ` : ''}
                       {item.done && item.durationMs !== undefined
                         ? `· ${(item.durationMs / 1000).toFixed(1)}s`
                         : ''}
@@ -235,23 +287,18 @@ export function Transcript({
                     )}
                   </div>
                 )}
+                {/* The answer, uninterrupted — what the model did to get here
+                    is one line below it rather than spliced through it. */}
                 {item.segments.map((segment, j) => {
-                  const isLast = j === item.segments.length - 1;
-                  if (segment.kind === 'tools') {
-                    return (
-                      <ToolGroup key={j} steps={segment.steps} running={!item.done && isLast} />
-                    );
-                  }
-                  if (segment.kind === 'agents') {
-                    return <AgentLanes key={j} lanes={segment.lanes} live={running === true} />;
-                  }
+                  if (segment.kind !== 'text') return null;
                   return (
                     <div key={j} class="assistant-body">
                       <Markdown text={segment.text} />
-                      {!item.done && isLast && <span class="type-cursor" />}
+                      {!item.done && j === lastTextIndex && <span class="type-cursor" />}
                     </div>
                   );
                 })}
+                <Activity segments={item.segments} live={!item.done} />
                 {!item.done && !lastSegment && (
                   <div class="thinking-row">
                     thinking
@@ -264,42 +311,13 @@ export function Transcript({
               </div>
             );
           }
-          case 'tasks': {
-            const done = item.items.filter((t) => t.status === 'done').length;
-            const active = item.items.find((t) => t.status === 'active');
-            return (
-              <details key={i} class="task-block" open={!!active}>
-                <summary class="task-summary">
-                  <span class="task-label">tasks</span>
-                  <span class="task-count">
-                    {done}/{item.items.length}
-                  </span>
-                  <span class="task-bar">
-                    <span
-                      class="task-fill"
-                      style={{ width: `${(done / Math.max(item.items.length, 1)) * 100}%` }}
-                    />
-                  </span>
-                  {active && <span class="task-current">{active.text}</span>}
-                </summary>
-                <ol class="task-items">
-                  {item.items.map((task, j) => (
-                    <li key={j} class={`task-item ${task.status}`}>
-                      <span class="task-mark">
-                        {task.status === 'done' ? '✓' : task.status === 'active' ? '▸' : '○'}
-                      </span>
-                      <span class="task-text">{task.text}</span>
-                    </li>
-                  ))}
-                </ol>
-              </details>
-            );
-          }
+          case 'tasks':
+            return <TaskGroup key={i} item={item} />;
           case 'permission':
             return <PermissionCard key={i} item={item} onDecide={onPermission} />;
           case 'review':
             return (
-              <details key={i} class="review-block">
+              <details key={i} class="tl tl-review review-block">
                 <summary class="review-summary">
                   <span class="review-badge">review</span>
                   <span class="review-by">{item.by}</span>
@@ -312,19 +330,19 @@ export function Transcript({
             );
           case 'failover':
             return (
-              <div key={i} class="failover-banner">
+              <div key={i} class="tl tl-failover failover-banner">
                 ⚡ {item.text}
               </div>
             );
           case 'notice':
             return (
-              <div key={i} class="divider notice">
+              <div key={i} class="tl tl-notice">
                 <span>{item.text}</span>
               </div>
             );
           case 'error':
             return (
-              <div key={i} class="msg-error" role="alert">
+              <div key={i} class="tl tl-error msg-error" role="alert">
                 <span class="msg-error-text">{item.text}</span>
                 {/* Only the failure you are actually looking at is worth
                     offering to redo; older ones are history. */}

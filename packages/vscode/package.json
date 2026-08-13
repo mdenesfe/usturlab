@@ -2,7 +2,7 @@
   "name": "usturlab",
   "displayName": "usturlab \u2014 AI Subscription Router",
   "description": "Add all your AI subscriptions (multiple Claude accounts, Codex, Gemini, Copilot) and route every task to the best account and model with user-defined rules and automatic quota failover.",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "publisher": "mdenesfe",
   "license": "MIT",
   "icon": "media/marketplace-icon.png",
@@ -231,6 +231,7 @@
   "scripts": {
     "build": "node esbuild.mjs && tsc -p tsconfig.json",
     "watch": "node esbuild.mjs --watch",
+    "preview": "node esbuild.mjs && open dev/preview.html",
     "typecheck": "tsc -p tsconfig.json",
     "test:vscode": "vscode-test",
     "package": "node esbuild.mjs --production && vsce package --no-dependencies",
