@@ -2,7 +2,7 @@
   "name": "usturlab",
   "displayName": "usturlab \u2014 AI Subscription Router",
   "description": "Add all your AI subscriptions (multiple Claude accounts, Codex, Gemini, Copilot) and route every task to the best account and model with user-defined rules and automatic quota failover.",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "publisher": "mdenesfe",
   "license": "MIT",
   "icon": "media/marketplace-icon.png",
@@ -37,6 +37,14 @@
           "title": "usturlab",
           "icon": "media/icon.svg"
         }
+      ],
+      "secondarySidebar": [
+        {
+          "id": "usturlab-secondary",
+          "title": "usturlab",
+          "icon": "media/icon.svg",
+          "when": "!usturlab.noSecondarySidebar"
+        }
       ]
     },
     "views": {
@@ -45,6 +53,14 @@
           "type": "webview",
           "id": "usturlab.chat",
           "name": "usturlab"
+        }
+      ],
+      "usturlab-secondary": [
+        {
+          "type": "webview",
+          "id": "usturlab.chatSecondary",
+          "name": "usturlab",
+          "when": "!usturlab.noSecondarySidebar"
         }
       ]
     },
@@ -78,7 +94,7 @@
       {
         "command": "usturlab.openChatInTab",
         "title": "usturlab: Open Chat",
-        "icon": "$(comment-discussion)"
+        "icon": "media/tab-icon.svg"
       },
       {
         "command": "usturlab.openAccounts",
@@ -113,7 +129,13 @@
       }
     ],
     "menus": {
-      "view/title": []
+      "view/title": [],
+      "editor/title": [
+        {
+          "command": "usturlab.openChatInTab",
+          "group": "navigation"
+        }
+      ]
     },
     "jsonValidation": [
       {

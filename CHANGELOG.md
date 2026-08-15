@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.1 — 2026-08-15
+
+### Where the other agents already are
+
+Claude Code and Codex each sit in two places at once: an icon on the left, and one in the strip at the top right. usturlab only ever had the left. It now has both — the same session list, docked in the secondary side bar, so a conversation can stand beside the file it is about instead of across the window from it. The editor toolbar carries the mark too; clicking it opens your last conversation in its tab.
+
+Both lists are the same lists. Open a chat from either and it is the same conversation, in the same place it always opens.
+
+On VS Code older than 1.106 — which cannot take a view container in the secondary side bar at all — nothing moves and nothing is duplicated: the activity bar entry stays the only one.
+
 ## 0.10.0 — 2026-08-14
 
 ### The conversation is one thread, so it is drawn as one

@@ -35,6 +35,8 @@ export function activate(ctx: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('usturlab');
   ctx.subscriptions.push(output);
 
+  hideSecondarySidebarOnOldVSCode();
+
   // VS Code launched from the Dock inherits a minimal PATH; make sure the
   // usual CLI homes are reachable so `claude`/`codex`/... resolve.
   const extraDirs = [
@@ -155,6 +157,9 @@ export function activate(ctx: vscode.ExtensionContext): void {
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chat, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
+    vscode.window.registerWebviewViewProvider(ChatViewProvider.secondaryViewType, chat, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
   );
 
   registerCommands(ctx, { accounts, adapters, quota, rules, chat, statusBar });
@@ -177,6 +182,17 @@ export function activate(ctx: vscode.ExtensionContext): void {
   startUsagePolling(ctx, usageRefresher, output);
 
   output.appendLine('[usturlab] activated');
+}
+
+/**
+ * View containers may live in the secondary side bar — the strip at the top
+ * right — only from VS Code 1.106 on. Older builds would spill that copy of
+ * the chat list into the Explorer, so hide it there and keep the activity bar.
+ */
+function hideSecondarySidebarOnOldVSCode(): void {
+  const [major = 0, minor = 0] = vscode.version.split('.').map(Number);
+  if (major > 1 || (major === 1 && minor >= 106)) return;
+  void vscode.commands.executeCommand('setContext', 'usturlab.noSecondarySidebar', true);
 }
 
 /** Opt-in continuous polling (usturlab.pollUsage); on-demand refresh always works. */

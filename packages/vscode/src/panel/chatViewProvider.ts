@@ -104,6 +104,8 @@ const MAX_CONVERSATIONS = 50;
  */
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   static readonly viewType = 'usturlab.chat';
+  /** Same list, docked in the secondary side bar (top right) instead. */
+  static readonly secondaryViewType = 'usturlab.chatSecondary';
 
   private surfaces = new Map<vscode.Webview, Surface>();
   private panels = new Map<string, vscode.WebviewPanel>();
