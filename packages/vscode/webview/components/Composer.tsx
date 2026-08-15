@@ -77,11 +77,16 @@ function computeSuggestions(
   return [];
 }
 
+/*
+ * Three levels, and they are levels: each one allows strictly more than the
+ * one above it. What separates Edit from Full is the sandbox each CLI is
+ * started with, so the hints name that rather than both saying "accepts
+ * things automatically".
+ */
 const PERMISSION_MODES: Array<{ id: string; label: string; hint: string }> = [
-  { id: 'safe', label: 'Plan', hint: 'Read and plan only — no file changes' },
-  { id: 'edits', label: 'Edit', hint: 'Auto-accept file edits' },
-  { id: 'full', label: 'Full', hint: 'Skip all approvals — use with care' },
-  { id: 'ask', label: 'Ask', hint: 'Stop and ask before each command or file change — on every provider' },
+  { id: 'safe', label: 'Plan', hint: 'Reads and proposes. Changes nothing, runs nothing.' },
+  { id: 'edits', label: 'Edit', hint: 'Edits files in this workspace and runs commands inside it.' },
+  { id: 'full', label: 'Full', hint: 'No sandbox and no approvals — it can reach outside the workspace.' },
 ];
 
 const ROUTING_MODES: Array<{ id: 'auto' | 'manual'; label: string; hint: string }> = [
@@ -90,11 +95,14 @@ const ROUTING_MODES: Array<{ id: 'auto' | 'manual'; label: string; hint: string 
 ];
 
 /**
- * Both switches behind one word.
+ * The three switches behind one word.
  *
- * How much the model may do, and how it is routed, are two axes that were
- * costing two dropdowns in a bar that should read as empty. The button shows
- * the state you changed away from the default, and the menu holds the rest.
+ * They are three separate axes and the menu has to say so. Asking before each
+ * step was listed as a fourth permission level, which made it look like an
+ * alternative to Plan/Edit/Full — it is not: it sits on top of whichever level
+ * is set, and choosing it used to hide which one that was. It is a toggle now,
+ * and it says when it does nothing: Full skips approvals by definition, so
+ * there is nothing left to ask about.
  */
 function ModeMenu({
   permissionMode,
@@ -105,11 +113,16 @@ function ModeMenu({
   permissionMode: string;
   askPermission: boolean;
   routingMode: 'auto' | 'manual';
-  onModeChange: (modes: { permissionMode?: string; routingMode?: 'auto' | 'manual' }) => void;
+  onModeChange: (modes: {
+    permissionMode?: string;
+    routingMode?: 'auto' | 'manual';
+    ask?: boolean;
+  }) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const current = askPermission ? 'ask' : permissionMode;
-  const label = PERMISSION_MODES.find((m) => m.id === current)?.label ?? current;
+  const label = PERMISSION_MODES.find((m) => m.id === permissionMode)?.label ?? permissionMode;
+  // Full ignores it — the run is unattended by definition.
+  const asking = askPermission && permissionMode !== 'full';
 
   return (
     <div class="mode-menu" onBlur={() => setTimeout(() => setOpen(false), 120)}>
@@ -117,11 +130,12 @@ function ModeMenu({
         class={`mode-btn ${open ? 'open' : ''}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        title="What the model may do, and how it is routed"
+        title="What the model may do, whether it asks first, and how it is routed"
         onClick={() => setOpen((v) => !v)}
       >
         {label}
-        {/* Auto is the default and says nothing; manual is a choice you made. */}
+        {/* Only what you changed away from the default earns a word here. */}
+        {asking && <span class="mode-extra">ask</span>}
         {routingMode === 'manual' && <span class="mode-extra">manual</span>}
       </button>
       {open && (
@@ -130,9 +144,9 @@ function ModeMenu({
           {PERMISSION_MODES.map((m) => (
             <button
               key={m.id}
-              class={`menu-row ${current === m.id ? 'on' : ''}`}
+              class={`menu-row ${permissionMode === m.id ? 'on' : ''}`}
               role="menuitemradio"
-              aria-checked={current === m.id}
+              aria-checked={permissionMode === m.id}
               title={m.hint}
               onClick={() => {
                 onModeChange({ permissionMode: m.id });
@@ -143,6 +157,25 @@ function ModeMenu({
               <span class="menu-hint">{m.hint}</span>
             </button>
           ))}
+          {/* Not a fourth level: it rides on top of the one above. */}
+          <button
+            class={`menu-row toggle ${asking ? 'on' : ''} ${permissionMode === 'full' ? 'inert' : ''}`}
+            role="menuitemcheckbox"
+            aria-checked={asking}
+            onClick={() => {
+              onModeChange({ ask: !askPermission });
+              setOpen(false);
+            }}
+          >
+            <span class="menu-name">
+              <span class="menu-check">{asking ? '✓' : ''}</span> ask before each step
+            </span>
+            <span class="menu-hint">
+              {permissionMode === 'full'
+                ? 'Full has no approvals to stop at — set Plan or Edit for this to apply.'
+                : 'Stops on every command and file change, on every provider. Reads never interrupt you.'}
+            </span>
+          </button>
           <div class="menu-label">routing</div>
           {ROUTING_MODES.map((m) => (
             <button
@@ -191,7 +224,12 @@ export function Composer({
   attachments: string[];
   onSend: (text: string) => void;
   onCancel: () => void;
-  onModeChange: (modes: { permissionMode?: string; routingMode?: 'auto' | 'manual' }) => void;
+  onModeChange: (modes: {
+    permissionMode?: string;
+    routingMode?: 'auto' | 'manual';
+    /** Whether to stop and ask — orthogonal to the permission level. */
+    ask?: boolean;
+  }) => void;
   onPickAttachments: () => void;
   onRemoveAttachment: (path: string) => void;
 }) {

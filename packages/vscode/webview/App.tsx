@@ -287,23 +287,18 @@ function ChatApp() {
           onRemoveAttachment={(path) => setAttachments((prev) => prev.filter((p) => p !== path))}
           onSend={send}
           onCancel={() => vscode.postMessage({ kind: 'cancel' })}
-          onModeChange={(modes) => {
-            // "Ask" is a separate switch, not a fourth permission level: it
-            // decides who answers, while the mode still bounds what can be asked.
-            if (modes.permissionMode === 'ask') {
-              setAskPermission(true);
-              vscode.postMessage({ kind: 'setAskPermission', ask: true });
-              return;
+          onModeChange={({ ask, ...modes }) => {
+            // Asking is its own switch: it rides on top of the level rather
+            // than replacing it, so changing one must never clear the other.
+            if (ask !== undefined) {
+              setAskPermission(ask);
+              vscode.postMessage({ kind: 'setAskPermission', ask });
             }
-            if (modes.permissionMode) {
-              setPermissionMode(modes.permissionMode);
-              if (askPermission) {
-                setAskPermission(false);
-                vscode.postMessage({ kind: 'setAskPermission', ask: false });
-              }
-            }
+            if (modes.permissionMode) setPermissionMode(modes.permissionMode);
             if (modes.routingMode) setRoutingMode(modes.routingMode);
-            vscode.postMessage({ kind: 'setModes', ...modes });
+            if (modes.permissionMode || modes.routingMode) {
+              vscode.postMessage({ kind: 'setModes', ...modes });
+            }
           }}
         />
       </div>

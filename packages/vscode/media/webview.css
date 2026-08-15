@@ -1766,6 +1766,25 @@ kbd,
   font-size: 0.8em;
 }
 
+/* The one row that is a toggle, not a choice among the rows above it. */
+.menu-row.toggle .menu-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.menu-check {
+  display: inline-block;
+  width: 9px;
+  color: var(--accent);
+}
+
+/* On in principle, doing nothing in practice — say so rather than hide it. */
+.menu-row.inert .menu-name,
+.menu-row.inert .menu-hint {
+  opacity: 0.55;
+}
+
 /* The sentence that says what choosing this actually does. */
 .menu-hint {
   font-size: 0.75em;

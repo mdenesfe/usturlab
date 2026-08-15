@@ -16,6 +16,21 @@ A running task said `thinking` in the transcript where the answer was about to a
 
 There is one now, in the header of the reply being written, beside the account that is writing it: what the run is doing — `thinking`, `writing`, `working`, `2 agents`, or `waiting for you` when it is blocked on a permission question — and how long it has been going. The bar above the composer is gone; the `Esc stops` hint it carried is in the composer's own placeholder while a task runs.
 
+### "Ask" was never a fourth permission level
+
+The menu listed Plan, Edit, Full and Ask as one choice, but the code has always
+treated asking as a switch sitting on top of the level — it decides who answers,
+while the level still bounds what can be asked. Listing them together meant
+turning asking on hid which level was actually in effect, `Edit + ask` could not
+be expressed at all, and `Full + ask` was offered even though `Full` skips
+approvals by definition and ignores it.
+
+There are three levels now and a separate toggle under them. The button says
+what you changed away from the default — `Edit · ask`, `Full · manual` — and the
+toggle says plainly when it does nothing: on Full there is nothing to stop at.
+The three hints also stop paraphrasing each other; they name the sandbox, which
+is what actually separates Edit from Full.
+
 ### Fixed
 
 - **Notifications said "usturlab — AI Subscription Router".** VS Code labels a notification with the extension's display name, so every finished-run toast carried the tagline. The extension is called usturlab; the description still says what it does, where a description belongs.
