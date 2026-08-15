@@ -1792,41 +1792,67 @@ kbd,
   color: var(--muted);
 }
 
+/* One row per file, above the prompt, in the order they were attached. */
 .attachment-strip {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 8px 10px 0;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 9px 9px 2px;
+  list-style: none;
 }
 
-.attachment-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+.attachment-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 5px;
+  border-radius: var(--radius-sm);
   font-family: var(--mono);
-  font-size: 0.72em;
-  padding: 2px 4px 2px 8px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border);
-  background: var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.1));
-  max-width: 220px;
+  font-size: 0.74em;
+  transition: background var(--fast);
+}
+
+.attachment-row:hover {
+  background: var(--sunken);
+}
+
+.attachment-name {
+  flex-shrink: 0;
+}
+
+/* Where it came from, in case two files share a name. */
+.attachment-dir {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--muted);
+  opacity: 0.7;
 }
 
 .attachment-x {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 2px;
   border: none;
   background: transparent;
   color: var(--muted);
-  cursor: pointer;
-  padding: 0 2px;
   font-size: 1.2em;
   line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--fast);
+}
+
+.attachment-row:hover .attachment-x,
+.attachment-x:focus-visible {
+  opacity: 1;
 }
 
 .attachment-x:hover {
-  color: var(--vscode-errorForeground);
+  color: var(--danger);
 }
 
 /* ── suggestion popup (@ / # / /) ───────────────────────── */

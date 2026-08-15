@@ -315,6 +315,33 @@ export function Composer({
           <div class="suggest-hint">↑↓ navigate · Tab/Enter select · Esc dismiss</div>
         </div>
       )}
+      {/*
+        Above the prompt, one per line, in the order you attached them: these
+        are part of the message you are about to send, so they read as a list
+        of things being sent rather than as chips hanging off the bottom.
+      */}
+      {attachments.length > 0 && (
+        <ul class="attachment-strip">
+          {attachments.map((path) => {
+            const name = path.split('/').pop() ?? path;
+            const dir = path.slice(0, Math.max(0, path.length - name.length - 1));
+            return (
+              <li key={path} class="attachment-row" title={path}>
+                <span class="attachment-name">{name}</span>
+                {dir && <span class="attachment-dir">{dir}</span>}
+                <button
+                  class="attachment-x"
+                  title="Remove"
+                  aria-label={`Remove ${name}`}
+                  onClick={() => onRemoveAttachment(path)}
+                >
+                  ×
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       <textarea
         ref={textareaRef}
         value={text}
@@ -367,22 +394,6 @@ export function Composer({
         }}
         onBlur={() => setTimeout(() => setSuggestions([]), 150)}
       />
-      {attachments.length > 0 && (
-        <div class="attachment-strip">
-          {attachments.map((path) => (
-            <span key={path} class="attachment-chip" title={path}>
-              {path.split('/').pop()}
-              <button
-                class="attachment-x"
-                title="Remove"
-                onClick={() => onRemoveAttachment(path)}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
       <div class="composer-bar">
         <button
           class="icon-btn attach-btn"

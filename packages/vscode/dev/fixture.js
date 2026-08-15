@@ -49,6 +49,11 @@ setTimeout(() => {
   post({ kind: 'agentEnd', messageId: M, id: 'a2', status: 'completed', summary: 'Tables lose their frames; rows keep hairlines.', toolUses: 7, tokens: 15400, durationMs: 24000 });
   post({ kind: 'permission', messageId: M, request: { id: 'p1', kind: 'command', title: 'git commit -m "timeline UI"', detail: '4 files changed, 312 insertions(+), 96 deletions(-)' },
     target: { provider: 'claude', account: 'work' } });
+  post({ kind: 'attachments', paths: [
+    'packages/vscode/media/webview.css',
+    'packages/vscode/webview/components/Transcript.tsx',
+    'docs/media/README.md',
+  ] });
   post({ kind: 'busy', running: true });
 }, 60);
 

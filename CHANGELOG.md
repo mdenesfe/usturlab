@@ -31,6 +31,13 @@ toggle says plainly when it does nothing: on Full there is nothing to stop at.
 The three hints also stop paraphrasing each other; they name the sandbox, which
 is what actually separates Edit from Full.
 
+### Attachments read as a list
+
+Files you attach were chips wrapping along the bottom edge of the composer,
+below the prompt they belong to. They sit above it now, one per line in the
+order you attached them, each with the folder it came from — so two files with
+the same name are still telling apart — and an × that appears on hover.
+
 ### Fixed
 
 - **Notifications said "usturlab — AI Subscription Router".** VS Code labels a notification with the extension's display name, so every finished-run toast carried the tagline. The extension is called usturlab; the description still says what it does, where a description belongs.
