@@ -148,6 +148,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       lastPrompt?: string;
       lastFinishedAt?: number;
       lastMetricId?: string;
+      /**
+       * Everything the last run read. This is the size of what another account
+       * would have to rebuild from cold, so it is what makes moving expensive.
+       */
+      lastContextTokens?: number;
       /** Files this thread has touched, and what last went wrong — brief material. */
       touchedFiles?: string[];
       lastFailure?: string;
@@ -253,6 +258,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       lastTarget: ctx.lastTarget,
       recentComplexity: ctx.recentComplexity as ConversationContext['recentComplexity'],
       turnCount: ctx.turnCount,
+      // How warm that target still is, and how much a move would cost.
+      lastRunAt: ctx.lastFinishedAt,
+      lastContextTokens: ctx.lastContextTokens,
     };
   }
 
@@ -1021,6 +1029,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
               kind: cls?.kind,
               complexity: cls?.complexity,
               tier: ev.decision.tier,
+              effort: ev.decision.effort,
               routingReason: ev.decision.reason,
               ruleId: ev.decision.ruleId,
             };
@@ -1146,6 +1155,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             // it under a tier it may not have run on.
             metric.model = undefined;
             metric.tier = undefined;
+            metric.effort = undefined;
             break;
           case 'failover': {
             // The account that could not finish is recorded on its own, or the
@@ -1162,6 +1172,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 routingReason: metric.routingReason,
                 kind: metric.kind,
                 complexity: metric.complexity,
+                tier: metric.tier,
+                effort: metric.effort,
                 durationMs: Date.now() - startedAt,
                 status: 'failover',
                 failoverReason: ev.reason,
@@ -1310,6 +1322,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           routingReason: metric.routingReason,
           kind: metric.kind,
           complexity: metric.complexity,
+          tier: metric.tier,
+          effort: metric.effort,
           inputTokens: metric.inputTokens,
           outputTokens: metric.outputTokens,
           cachedInputTokens: metric.cachedInputTokens,
@@ -1338,6 +1352,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         ctx.lastPrompt = text;
         ctx.lastFinishedAt = Date.now();
         ctx.lastMetricId = metric.status ? metric.id : undefined;
+        // Keep the last known figure when a run did not report one — a silent
+        // turn does not mean the conversation suddenly became free to move.
+        if (metric.inputTokens) ctx.lastContextTokens = metric.inputTokens;
         if (steered) ctx.corrections = (ctx.corrections ?? 0) + 1;
         if (metric.verified === 'failed') {
           ctx.failedVerifications = (ctx.failedVerifications ?? 0) + 1;

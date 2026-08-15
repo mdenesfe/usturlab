@@ -82,7 +82,21 @@ async function runPrompt(sessionId, text, respond) {
   if (active === turn) active = null;
   // A cancelled turn settles last, exactly like the real agents.
   if (turn.cancelled) await sleep(80);
-  respond({ result: { stopReason: 'end_turn' } });
+  // Usage is optional in the protocol; an agent that reports it puts it here,
+  // in the shape the real Copilot bundle declares.
+  const usage = /USAGE/.test(text)
+    ? {
+        usage: {
+          inputTokens: 1200,
+          outputTokens: 300,
+          cachedReadTokens: 8000,
+          cachedWriteTokens: 0,
+          thoughtTokens: 0,
+          totalTokens: 9500,
+        },
+      }
+    : {};
+  respond({ result: { stopReason: 'end_turn', ...usage } });
 }
 
 createInterface({ input: process.stdin }).on('line', async (line) => {

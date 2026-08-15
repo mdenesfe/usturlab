@@ -59,7 +59,9 @@ describe('brief plumbing', () => {
     const fake = new FakeAdapter('claude');
     fake.script('claude-a', [{ type: 'result', text: 'ok' }]);
     const { orchestrator } = setup(fake, {
-      getBrief: () => '## Where the user is\nOpen in the editor: src/a.ts',
+      getBrief: () => [
+        { id: 'editor', title: 'Where the user is', body: 'Open in the editor: src/a.ts' },
+      ],
       getProviderBrief: () => ({ text: '- Read a file before you edit it.', lineIds: ['read-first'] }),
     });
 
@@ -80,7 +82,7 @@ describe('brief plumbing', () => {
     const { orchestrator } = setup(fake, {
       getBrief: (t) => {
         seen.push(t.permissionMode);
-        return '';
+        return [];
       },
     });
 
@@ -169,7 +171,7 @@ describe('brief plumbing', () => {
       getAccounts: () => twoAccounts,
       resolveAccount: async (t) => twoAccounts.find((a) => a.provider === t.provider && a.label === t.account),
       getProviderBrief: () => ({ text: '- always', lineIds: ['x'] }),
-      getBrief: () => '## Repository state\nBranch: main',
+      getBrief: () => [{ id: 'repo', title: 'Repository state', body: 'Branch: main' }],
     });
 
     await drain(orchestrator.run(task(), new AbortController().signal));

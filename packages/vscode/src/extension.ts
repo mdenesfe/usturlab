@@ -106,6 +106,8 @@ export function activate(ctx: vscode.ExtensionContext): void {
     getConversationContext: (id) => chatRef?.conversationContext(id),
     getAutoPlan: () =>
       vscode.workspace.getConfiguration('usturlab').get<boolean>('autoPlanHeavyEdits', true),
+    getSizeReasoning: () =>
+      vscode.workspace.getConfiguration('usturlab').get<boolean>('sizeReasoning', true),
     getRules: () => rules.getRules(),
     getCustomCommands: () => rules.getCustomCommands(),
     getRoutingMode: () =>
@@ -114,7 +116,7 @@ export function activate(ctx: vscode.ExtensionContext): void {
     resolveAccount: (target) => accounts.resolve(target),
     getBrief: (task, provider) => {
       const config = vscode.workspace.getConfiguration('usturlab');
-      if (!config.get<boolean>('sendWorkspaceContext', true)) return '';
+      if (!config.get<boolean>('sendWorkspaceContext', true)) return [];
       return workspaceContext.buildFor(task, provider, {
         preferences: preferences.preferences(),
         // The same commands verification would run, so the model is told the

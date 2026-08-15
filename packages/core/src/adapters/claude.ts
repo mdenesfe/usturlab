@@ -9,6 +9,7 @@ import { buildChildEnv } from '../accounts/env.js';
 import type {
   AdapterEvent,
   AgentStatus,
+  Effort,
   PermissionMode,
   ResolvedAccount,
   Usage,
@@ -74,6 +75,38 @@ export function claudeUsage(msg: Record<string, unknown>): Usage {
   return usage;
 }
 
+/**
+ * Claude Code's thinking budget — one setting, and only one value of it that
+ * survived measurement.
+ *
+ * Measured against claude 2.1.216 on a reasoning question whose answer is three
+ * tokens, so output tokens are almost entirely thinking:
+ *
+ *   MAX_THINKING_TOKENS=0        3 tokens, no thinking block
+ *   MAX_THINKING_TOKENS=1024     4.343 / 4.360 / 5.911
+ *   unset (Claude decides)       3.533 / 4.586 / 5.153
+ *   MAX_THINKING_TOKENS=31999    3.316 / 6.183 / 9.992
+ *
+ * Two things follow. Turning thinking off works, completely, and is worth three
+ * orders of magnitude on work that never needed it. And the numbers in between
+ * do nothing that can be told apart from the default: 1024 did not hold the run
+ * anywhere near 1024, and the spread inside a single setting is wider than the
+ * gap between settings. So the middle of the scale is left alone rather than
+ * shipped on the strength of the name of the variable — raising a ceiling the
+ * model was not pressing against only risks paying for it.
+ *
+ * The documented `think` / `ultrathink` keywords are an interactive-mode
+ * feature: appending `ultrathink` to a `-p` prompt changed neither whether the
+ * model thought nor how much (4.283 with, 4.590 without). Using them here would
+ * only have added a stray word to the user's request.
+ */
+const THINKING_BUDGET: Record<Effort, string | undefined> = {
+  minimal: '0',
+  low: undefined,
+  medium: undefined,
+  high: undefined,
+};
+
 export class ClaudeAdapter implements ProviderAdapter {
   readonly id = 'claude' as const;
   readonly displayName = 'Claude Code';
@@ -121,7 +154,12 @@ export class ClaudeAdapter implements ProviderAdapter {
     // calls before acting, which the host supplies.
     if (asking) args.push(...req.hostArgs!.args);
 
-    const env = { ...this.buildEnv(account, process.env), ...(req.hostArgs?.env ?? {}) };
+    const thinking = req.effort ? THINKING_BUDGET[req.effort] : undefined;
+    const env = {
+      ...this.buildEnv(account, process.env),
+      ...(thinking === undefined ? {} : { MAX_THINKING_TOKENS: thinking }),
+      ...(req.hostArgs?.env ?? {}),
+    };
     let sawRateLimitRetry = false;
     let sawResult = false;
     let sessionEmitted = false;

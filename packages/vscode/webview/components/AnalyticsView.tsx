@@ -313,6 +313,30 @@ export function AnalyticsView({
             <div class="usage-card-reset">{fmtDuration(stats.avgDurationMs)} average</div>
           </div>
 
+          {/* Context served from the provider's cache instead of read again.
+              It falls when threads get moved between accounts, so it is the
+              closest thing to a score for the routing itself. */}
+          <div class="usage-card">
+            <div class="usage-card-label">Context reused</div>
+            <div class="usage-card-pct">
+              {stats.cacheReported ? Math.round(stats.cacheHitRate) : '—'}
+              {stats.cacheReported && <span class="pct-sign">%</span>}
+            </div>
+            <div class="usage-bar big">
+              <div
+                class={`usage-fill ${rateClass(stats.cacheHitRate)}`}
+                style={{ width: `${stats.cacheReported ? stats.cacheHitRate : 0}%` }}
+              />
+            </div>
+            <div class="usage-card-reset">
+              {!stats.cacheReported
+                ? 'no provider in this period reported cache figures'
+                : stats.cacheRuns < stats.total
+                  ? `read from cache instead of sent again · ${stats.cacheRuns} of ${stats.total} runs report it`
+                  : 'read from cache instead of sent again'}
+            </div>
+          </div>
+
           <div class="usage-card">
             <div class="usage-card-label">
               {stats.billedCost > 0 ? 'Billed' : 'Would have cost'}
@@ -381,6 +405,11 @@ export function AnalyticsView({
                         <div class="group-stats">
                           <span>{itemStats.total} runs</span>
                           <span>{Math.round(100 - itemStats.frictionRate)}% clean</span>
+                          {itemStats.cacheReported && (
+                            <span title="Context this account read from cache instead of again">
+                              {Math.round(itemStats.cacheHitRate)}% reused
+                            </span>
+                          )}
                           <span>{fmtDuration(itemStats.medianDurationMs)}</span>
                           <span>
                             {itemStats.costReported

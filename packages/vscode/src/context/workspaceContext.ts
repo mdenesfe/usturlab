@@ -4,11 +4,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { promisify } from 'node:util';
 import {
-  buildBrief,
+  briefSections,
   classifyTask,
   describeChecks,
   selectChecks,
   shapeTask,
+  type BriefSection,
   type ConventionSource,
   type EditorContext,
   type ProviderId,
@@ -198,9 +199,9 @@ export class WorkspaceContext {
       checks?: VerifyCommand[];
       shapeTasks?: boolean;
     } = {},
-  ): string {
+  ): BriefSection[] {
     try {
-      return buildBrief({
+      return briefSections({
         provider,
         editor: this.snapshot.editor,
         repo: this.snapshot.repo,
@@ -212,7 +213,7 @@ export class WorkspaceContext {
       });
     } catch (e) {
       this.output.appendLine(`[brief] failed: ${(e as Error).message}`);
-      return '';
+      return [];
     }
   }
 }

@@ -1,10 +1,10 @@
 import { EventQueue, JsonRpcProcess } from './jsonRpc.js';
-import { getObject, getString } from './ndjson.js';
+import { getNumber, getObject, getString } from './ndjson.js';
 import { isTransientFailure } from './limits.js';
 import { describeToolUse } from './toolDetail.js';
 import { sameTasks, tasksFromAcpPlan } from './taskList.js';
 import { PermissionGate, acpPermissionKind } from './permission.js';
-import type { AdapterEvent, LimitInfo } from '../types.js';
+import type { AdapterEvent, LimitInfo, Usage } from '../types.js';
 import type { RunRequest } from './adapter.js';
 
 /**
@@ -14,6 +14,43 @@ import type { RunRequest } from './adapter.js';
  * (verified against Copilot: the running turn is cancelled and the new
  * message is answered inside the same session, keeping its context).
  */
+
+/**
+ * Token usage off an ACP `session/prompt` response.
+ *
+ * The field is optional in the protocol and absent from the published schema
+ * page, which is why it looked for a long time as though ACP simply did not
+ * report usage. It does: Copilot's own bundle carries the shape
+ * `{ inputTokens, outputTokens, cachedReadTokens, cachedWriteTokens,
+ * thoughtTokens, totalTokens }` on the prompt response, camelCased. An agent
+ * that sends nothing still costs nothing here — every field is read defensively
+ * and the result is dropped when it is empty.
+ *
+ * One judgement call, because the protocol does not say: whether `inputTokens`
+ * already contains the cached part. Both conventions exist in the wild, so
+ * rather than picking one, the totals are used to tell them apart — if adding
+ * the cache overshoots `totalTokens`, it was already included.
+ */
+export function acpUsage(raw: Record<string, unknown> | undefined): Usage | undefined {
+  if (!raw) return undefined;
+  const at = (key: string): number | undefined => getNumber(raw, key);
+  const input = at('inputTokens');
+  const output = at('outputTokens');
+  const cachedRead = at('cachedReadTokens');
+  const cachedWrite = at('cachedWriteTokens');
+  const total = at('totalTokens');
+  if (input === undefined && output === undefined) return undefined;
+
+  const cached = (cachedRead ?? 0) + (cachedWrite ?? 0);
+  let read = (input ?? 0) + cached;
+  if (total !== undefined && read + (output ?? 0) > total) read = input ?? 0;
+
+  const usage: Usage = {};
+  if (read > 0) usage.inputTokens = read;
+  if (output) usage.outputTokens = output;
+  if (cachedRead) usage.cachedInputTokens = cachedRead;
+  return Object.keys(usage).length > 0 ? usage : undefined;
+}
 
 export interface AcpOptions {
   command: string;
@@ -42,6 +79,8 @@ export async function* runAcp(opts: AcpOptions): AsyncGenerator<AdapterEvent> {
 
   let refusal = false;
   let lastTasks: ReturnType<typeof tasksFromAcpPlan> = [];
+  /** Reported by the agent when the turn settles, when it reports at all. */
+  let usage: Usage | undefined;
 
   const gate = new PermissionGate({
     mode: req.permissionMode,
@@ -60,7 +99,7 @@ export async function* runAcp(opts: AcpOptions): AsyncGenerator<AdapterEvent> {
     } else if (refusal) {
       finish({ type: 'error', message: text || 'agent refused the request', retryable: false });
     } else {
-      finish({ type: 'result', text: text.slice(segStart) });
+      finish({ type: 'result', text: text.slice(segStart), usage });
     }
   };
 
@@ -200,6 +239,10 @@ export async function* runAcp(opts: AcpOptions): AsyncGenerator<AdapterEvent> {
       });
 
       let created: Record<string, unknown> | undefined;
+      // Whether the agent actually still has this conversation. A load that
+      // fails silently becomes a brand-new session below, and everything we
+      // only say to sessions that remember has to be said again.
+      let resumed = false;
       if (req.resumeSessionId) {
         try {
           created = await rpc.request('session/load', {
@@ -208,6 +251,7 @@ export async function* runAcp(opts: AcpOptions): AsyncGenerator<AdapterEvent> {
             mcpServers: [],
           });
           sessionId = req.resumeSessionId;
+          resumed = true;
         } catch {
           created = undefined;
         }
@@ -235,20 +279,27 @@ export async function* runAcp(opts: AcpOptions): AsyncGenerator<AdapterEvent> {
               { sessionId, prompt: [{ type: 'text', text: injected }] },
               30 * 60_000,
             )
-            .then(() => settle())
+            .then((injectedResponse) => {
+              usage = acpUsage(getObject(injectedResponse, 'usage')) ?? usage;
+              settle();
+            })
             .catch((e) => settle(e as Error));
           return true;
         };
       }
 
       // ACP has no system-prompt slot, so standing instructions ride on the
-      // first prompt of a session — and again only when they changed.
+      // first prompt of a session — and again only when they changed. Asking
+      // for a resume is not the same as getting one: a session that was
+      // replaced under us has heard neither the instructions nor the context
+      // the message was written to build on.
       const brief = req.systemBrief?.trim();
-      const needsBrief = !!brief && (!req.resumeSessionId || req.restateBrief === true);
+      const needsBrief = !!brief && (!resumed || req.restateBrief === true);
+      const base = resumed ? req.prompt : (req.coldPrompt ?? req.prompt);
       const promptText = needsBrief
         ? `Standing instructions for this session — follow them for every turn, ` +
-          `and do not acknowledge them:\n${brief}\n\n---\n\n${req.prompt}`
-        : req.prompt;
+          `and do not acknowledge them:\n${brief}\n\n---\n\n${base}`
+        : base;
 
       outstanding++;
       const response = await rpc.request(
@@ -257,6 +308,7 @@ export async function* runAcp(opts: AcpOptions): AsyncGenerator<AdapterEvent> {
         30 * 60_000,
       );
       refusal = getString(response, 'stopReason') === 'refusal';
+      usage = acpUsage(getObject(response, 'usage')) ?? usage;
       settle();
     } catch (e) {
       const message = (e as Error).message;

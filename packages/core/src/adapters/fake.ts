@@ -14,7 +14,9 @@ export class FakeAdapter implements ProviderAdapter {
   readonly runs: Array<{
     accountId: string;
     prompt: string;
+    coldPrompt?: string;
     model?: string;
+    effort?: string;
     resumeSessionId?: string;
     systemBrief?: string;
     restateBrief?: boolean;
@@ -40,7 +42,9 @@ export class FakeAdapter implements ProviderAdapter {
     this.runs.push({
       accountId: account.id,
       prompt: req.prompt,
+      coldPrompt: req.coldPrompt,
       model: req.model,
+      effort: req.effort,
       resumeSessionId: req.resumeSessionId,
       systemBrief: req.systemBrief,
       restateBrief: req.restateBrief,

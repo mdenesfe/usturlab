@@ -54,6 +54,8 @@ export function route(
   let suggestPermission: RoutingDecision['suggestPermission'];
   let estimatedBurnPct: number | undefined;
   let tier: RoutingDecision['tier'];
+  let effort: RoutingDecision['effort'];
+  let moveTokens: number | undefined;
 
   const matchTask = { ...task, prompt: cleaned };
   const matched = rules.rules.filter((r) => matchesRule(r, matchTask));
@@ -114,6 +116,8 @@ export function route(
       suggestPermission = auto.suggestPermission;
       estimatedBurnPct = auto.burn?.pct;
       tier = auto.tier;
+      effort = auto.effort;
+      moveTokens = auto.moveTokens;
     } else {
       raw = defaultChain;
       reason = rules.defaultChain.length > 0 ? 'default chain' : 'priority order';
@@ -164,6 +168,8 @@ export function route(
       suggestPermission,
       estimatedBurnPct,
       tier,
+      effort,
+      moveTokens,
     },
     cleanedPrompt: cleaned,
   };

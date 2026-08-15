@@ -6,7 +6,7 @@ import {
   handoffPrompt,
   resumeInterruptedPrompt,
 } from '../session/sessionStore.js';
-import { withBrief } from '../context/brief.js';
+import { briefDelta, withBrief, type BriefSection } from '../context/brief.js';
 import { route } from '../router/router.js';
 import type { ConversationContext } from '../router/autoRoute.js';
 import type { TaskMetric } from '../quota/metricsSchema.js';
@@ -60,12 +60,22 @@ export interface OrchestratorDeps {
   getConversationContext?: (conversationId: string) => ConversationContext | undefined;
   /** Plan heavy code-writing work before it edits. */
   getAutoPlan?: () => boolean;
+  /**
+   * Let the router size how hard each turn thinks. Off leaves every CLI on its
+   * own default — an escape hatch for a CLI version that does not take the
+   * setting, since a rejected flag would cost a run rather than save tokens.
+   */
+  getSizeReasoning?: () => boolean;
   /** Backoff between same-account retries; one entry per retry. */
   retryBackoffMs?: number[];
 
   // ── what the models are told ──────────────────────────────
-  /** Workspace context assembled by the host (open file, git state, conventions). */
-  getBrief?: (task: TaskRequest, provider: ProviderId) => string;
+  /**
+   * Workspace context assembled by the host (open file, git state, conventions),
+   * as sections rather than text: a resumed session is only sent the ones that
+   * changed since it last heard from us.
+   */
+  getBrief?: (task: TaskRequest, provider: ProviderId) => BriefSection[];
   /** Standing instructions for a provider, plus the line ids they came from. */
   getProviderBrief?: (
     provider: ProviderId,
@@ -107,6 +117,7 @@ export class Orchestrator {
 
     // The router may ask for heavy code-writing work to be planned first.
     const effectivePermission = decision.suggestPermission ?? task.permissionMode;
+    const effort = (this.deps.getSizeReasoning?.() ?? true) ? decision.effort : undefined;
 
     const tried: Target[] = [];
     const history = sessions.getHistory(task.conversationId);
@@ -161,10 +172,21 @@ export class Orchestrator {
         // was requested: an auto-planned edit runs in plan mode, and telling it
         // to run the project's checks there would be an instruction it cannot
         // follow.
-        const brief =
+        const sections =
           this.deps.getBrief?.({ ...task, permissionMode: effectivePermission }, target.provider) ??
-          '';
-        basePrompt = withBrief(basePrompt, brief);
+          [];
+        // Only a live session remembers anything. Without a session id this
+        // target is cold — a fresh account, a failover, a reloaded window — and
+        // it has to hear the whole brief.
+        const known = nativeSid
+          ? sessions.taskBriefState(task.conversationId, target, task.cwd)
+          : undefined;
+        const fullBrief = briefDelta(undefined, sections);
+        const brief = known ? briefDelta(known, sections) : fullBrief;
+        // What this message looks like to a session that remembers nothing:
+        // the whole brief, and the conversation it is missing.
+        const coldMessage = embedHistory(history, withBrief(basePrompt, fullBrief.text));
+        basePrompt = withBrief(basePrompt, brief.text);
 
         const providerBrief = this.deps.getProviderBrief?.(target.provider, effectivePermission);
         const systemBrief = providerBrief?.text;
@@ -180,21 +202,32 @@ export class Orchestrator {
         const prompt =
           adapter.supportsNativeResume && (nativeSid || history.length === 0)
             ? basePrompt
-            : embedHistory(history, basePrompt);
+            : coldMessage;
+        // Only meaningful where a session was asked for: it is the answer to
+        // "what if that session is gone", and adapters that cannot tell ignore it.
+        const coldPrompt = nativeSid ? coldMessage : undefined;
 
         let limitEvent: (AdapterEvent & { type: 'limit' }) | undefined;
         let errorEvent: (AdapterEvent & { type: 'error' }) | undefined;
         let firstResultRecorded = false;
         let gotResult = false;
         let partial = '';
+        // The CLI answered in a different session than the one we asked for —
+        // whatever it used to know, it does not know now.
+        let sessionReplaced = false;
+        // How big this session's context turned out to be. Compared against the
+        // last turn's, it is the only evidence we get that the CLI compacted.
+        let contextTokens: number | undefined;
 
         for await (const ev of adapter.run(
           {
             prompt,
+            coldPrompt,
             cwd: task.cwd,
             model,
             resumeSessionId: nativeSid,
             permissionMode: effectivePermission,
+            effort,
             systemBrief,
             restateBrief,
             askPermission: this.deps.getAskPermission?.() ?? false,
@@ -206,6 +239,7 @@ export class Orchestrator {
         )) {
           if (signal.aborted) return;
           if (ev.type === 'session') {
+            if (nativeSid && ev.sessionId !== nativeSid) sessionReplaced = true;
             sessions.setNativeSession(task.conversationId, target, task.cwd, ev.sessionId);
             yield ev;
           } else if (ev.type === 'limit') {
@@ -218,6 +252,7 @@ export class Orchestrator {
             // Injection-capable adapters may answer several turns per run;
             // keep consuming — the host tracks per-turn transcript state.
             gotResult = true;
+            if (ev.usage?.inputTokens) contextTokens = ev.usage.inputTokens;
             if (!firstResultRecorded) {
               firstResultRecorded = true;
               sessions.appendTurn(task.conversationId, { role: 'user', text: cleanedPrompt });
@@ -230,6 +265,23 @@ export class Orchestrator {
           }
         }
         if (gotResult) {
+          // The session has now read this brief, so the next turn owes it only
+          // what changes. Committed here rather than at send time: a brief that
+          // went into an attempt which hit a limit was never read by anyone.
+          //
+          // Unless the session we were answering in got replaced. An adapter
+          // that noticed will have sent `coldPrompt` and this state would be
+          // right — but one that could not tell has just answered with a brief
+          // it never read, and the cheap way to be correct for both is to make
+          // the next turn say everything again.
+          if (sessionReplaced) {
+            sessions.forgetTaskBrief(task.conversationId, target, task.cwd);
+          } else {
+            sessions.rememberTaskBrief(task.conversationId, target, task.cwd, brief.state, {
+              sentFull: !known,
+              contextTokens,
+            });
+          }
           // A later injected turn may still hit a limit/error — surface it,
           // but the run already produced answers so no failover.
           if (limitEvent) {

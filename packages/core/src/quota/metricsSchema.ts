@@ -1,4 +1,4 @@
-import type { ProviderId, Tier } from '../types.js';
+import type { Effort, ProviderId, Tier } from '../types.js';
 
 /**
  * What actually happened on a run. These records are the only memory the
@@ -19,6 +19,12 @@ export interface TaskMetric {
    * scrappy run on the cheap model is not held against the expensive one.
    */
   tier?: Tier;
+  /**
+   * How hard the model was asked to think. Recorded beside the tier it came
+   * from so the learning loop can tell a weak run at minimum effort from a weak
+   * run at maximum, which are different problems.
+   */
+  effort?: Effort;
   ruleId?: string;
   routingReason?: string;
   /** Task shape as classified before the run. */
@@ -109,6 +115,23 @@ export interface MetricStats {
   /** List price of what subscription accounts ran for free. */
   equivalentCost: number;
   totalTokens: number;
+  /**
+   * Share of everything read that came from the provider's cache, 0..100.
+   *
+   * The one number that says whether the conversations are being kept where
+   * their context already is. It falls when threads are moved between accounts,
+   * when the brief churns, and when the gap between turns outlives the cache.
+   */
+  cacheHitRate: number;
+  /** True when any run reported cache figures, so 0% can be told from silence. */
+  cacheReported: boolean;
+  /**
+   * How many runs the rate was computed from. Usage is optional in ACP and not
+   * every agent fills it in, so a workspace leaning on those has a rate that
+   * describes part of its work — and the panel has to say which part rather
+   * than presenting it as the whole.
+   */
+  cacheRuns: number;
   /** True when at least one run reported a cost, so 0 can be told from silence. */
   costReported: boolean;
   avgDurationMs: number;
@@ -132,6 +155,12 @@ export function calculateStats(metrics: TaskMetric[]): MetricStats {
   const sumCost = (of: (m: TaskMetric) => boolean): number =>
     withCost.filter(of).reduce((sum, m) => sum + (m.costUsd ?? 0), 0);
 
+  // Only runs that reported both halves can answer this — an account that never
+  // reports cache figures would otherwise read as a permanent 0% hit rate.
+  const withCache = metrics.filter((m) => m.cachedInputTokens !== undefined && m.inputTokens);
+  const cacheRead = withCache.reduce((sum, m) => sum + (m.cachedInputTokens ?? 0), 0);
+  const cacheTotal = withCache.reduce((sum, m) => sum + (m.inputTokens ?? 0), 0);
+
   return {
     total: metrics.length,
     successful: successful.length,
@@ -143,6 +172,9 @@ export function calculateStats(metrics: TaskMetric[]): MetricStats {
     billedCost: sumCost((m) => m.metered === true),
     equivalentCost: sumCost((m) => m.metered !== true),
     totalTokens: metrics.reduce((sum, m) => sum + (m.inputTokens ?? 0) + (m.outputTokens ?? 0), 0),
+    cacheHitRate: cacheTotal > 0 ? (cacheRead / cacheTotal) * 100 : 0,
+    cacheReported: withCache.length > 0,
+    cacheRuns: withCache.length,
     costReported: withCost.length > 0,
     avgDurationMs:
       durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0,

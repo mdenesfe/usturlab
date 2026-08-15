@@ -30,6 +30,8 @@ A model's output quality is a function of the context it gets, the constraints i
 
 **It says when a chat has turned against itself.** Two corrections, or checks left red twice, and the thread is now feeding the model its own failed attempts every turn. usturlab says so once and suggests a fresh chat — length alone is never the trigger, only evidence of circling.
 
+**It spends the window, not your money.** On a subscription nothing is billed, so the thing being saved is the 5-hour and weekly window — and that changes what is worth optimizing. A session is only told what changed since your last message, instead of re-reading a description of your editor it already has nine copies of. A thread is held on its account while that provider's cache is still warm and let go once it is not, priced by the context a move would actually make the next account re-read. How hard the model thinks is sized to the task the same way the model is, because reasoning tokens are billed as output. And a large diff is never sent — the file list goes instead, and the model reads what it needs. Fewer tokens is not only cheaper: past a point, accuracy falls with input length, so this is the same lever as quality.
+
 **It learns.** Auto routing calibrates each account from your own clean-run rate — runs you did not have to steer, retry, or escalate — keyed by weight class so a scrappy run on the cheap model is not held against the expensive one, and on light work a measurably faster account wins. It estimates how much of a quota window a task will burn before choosing. Corrections you type mid-run are collected, and a recurring one is *offered* (never silently applied) as a standing rule every provider inherits.
 
 ## The UI
@@ -59,7 +61,7 @@ Conversations persist across VS Code restarts, including native CLI session ids,
 
 <img src="docs/media/ui-accounts.png" alt="The Accounts tab: four accounts listed, with the selected one showing subscription login, its profile path and available models." width="100%">
 
-**Analytics separates what you were billed from what you weren't.** `Would have cost` is the list price of work your subscriptions covered — it is never added to money actually charged, because that sum is neither number.
+**Analytics separates what you were billed from what you weren't.** `Would have cost` is the list price of work your subscriptions covered — it is never added to money actually charged, because that sum is neither number. `Context reused` is the share of everything read that came from the provider's cache rather than being sent again: it falls when threads get moved between accounts, which makes it the closest thing to a score for the routing itself.
 
 <img src="docs/media/ui-analytics.png" alt="Analytics: clean-run rate, task count, median duration, and a would-have-cost figure labelled as work the subscription covered." width="100%">
 

@@ -1,5 +1,54 @@
 # Changelog
 
+## Unreleased
+
+### The brief stopped repeating itself
+
+Every turn carried a fresh copy of the workspace brief — the open file, the branch, the uncommitted changes — into a session that was still holding all the earlier copies. Ten turns in, the window held ten descriptions of where you were sitting, nine of them wrong, and the model had no way to tell which one was current.
+
+A session is now told only what moved since it last heard from us, and told once when something stops applying — a selection you navigated away from is named as gone rather than left standing. A target that has heard nothing, which is every failover and every fresh account, still gets the whole thing.
+
+### Routing knows what a move actually costs
+
+Keeping a conversation on one account was worth a fixed number of points, which was wrong in both directions. Moving a long thread means the next account rebuilds its entire context from cold — that is worth far more than a constant. And the provider's cache that made staying cheap has a life of about five minutes; twenty minutes after your last message there is nothing warm left to protect, and a bonus behaving as though there were pins a conversation to an account that no longer earns it.
+
+Staying is now priced from two things that are actually measured: the context a move would re-read, taken from what the last run really read, and how much of the cache is left on the clock. The routing line says which one is holding the thread — `same thread · cache warm · moving would re-read ~18k`.
+
+### How hard to think is part of the routing decision
+
+Auto routing chose the model and left the thinking budget alone, so a typo fix could be reasoned at the same depth as an architecture migration. Those tokens are billed as output, the most expensive thing a run produces.
+
+The weight class now sets both, through each CLI's own control — a config key on Codex, a thinking budget on Claude — and a CLI with no such control is left alone rather than given a fake one. `usturlab.sizeReasoning` turns it off.
+
+The saving is at the cheap end, not the expensive one. Measured against claude 2.1.216 on a question whose answer is three tokens, so that output tokens are almost entirely thinking:
+
+| thinking budget | output tokens (3 runs) |
+|---|---|
+| off | 3 |
+| 1024 | 4.343 / 4.360 / 5.911 |
+| Claude's own judgement | 3.533 / 4.586 / 5.153 |
+| 31999 | 3.316 / 6.183 / 9.992 |
+
+So usturlab ships the first row and nothing else. Turning thinking off on work that never needed it is worth three orders of magnitude; the values in between cannot be told apart from the default, and 1024 did not hold a run anywhere near 1024. Standard and heavy work is left to Claude's own judgement rather than given a ceiling on the strength of what the variable is called.
+
+### Gemini and Copilot report their tokens now
+
+ACP carries token usage on the prompt response — an optional field, absent from the published schema page, which is why it looked as though these two simply did not report any. They do, and usturlab now reads it. That makes their runs count toward `Context reused`, and gives the router the measured context size it uses to price a failover on those providers too, instead of falling back to a guess from the turn count.
+
+### MCP servers can be given to one CLI instead of all four
+
+Every server in `.usturlab/mcp.json` went to every profile, and each one puts its whole tool schema into that CLI's context on every turn — a tax paid four times for a server three of them never call. Add `"providers": ["claude"]` to a server and only those profiles get it; a server scoped down is removed from the profiles that used to carry it, rather than left behind.
+
+### Budgets are counted in tokens
+
+The brief, the re-embedded history and the interrupted-run handoff were all bounded by character counts, which meant something different in every language — the same 6.000 characters is around 1.500 tokens of English and closer to 3.000 of Turkish. They are token budgets now, so the limit means the same thing regardless of what you write in.
+
+A large diff is no longer sent at all: past its budget the brief hands over the changed files with their `+/−` counts and lets the model read the ones it needs.
+
+### Analytics: context reused
+
+A new figure beside the others — the share of everything read that came from the provider's cache instead of being sent again. It falls when threads get moved between accounts and when the gap between turns outlives the cache, which makes it the closest thing to a score for the routing itself.
+
 ## 0.10.1 — 2026-08-15
 
 ### Where the other agents already are

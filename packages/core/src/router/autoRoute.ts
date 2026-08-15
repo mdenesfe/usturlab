@@ -1,10 +1,12 @@
-import type { AccountProfile, PermissionMode, ProviderId, Target, Tier } from '../types.js';
+import type { AccountProfile, Effort, PermissionMode, ProviderId, Target, Tier } from '../types.js';
 import { isReviewOnly } from '../types.js';
 import type { QuotaTracker } from '../quota/quotaTracker.js';
 import type { TaskMetric } from '../quota/metricsSchema.js';
 import type { Classification, Complexity, TaskKind } from './classify.js';
 import { calibrateAffinity } from './learning.js';
 import { affordability, estimateBurn, type BurnEstimate } from './burn.js';
+import { stickyBonus, type StickyBonus } from './cacheAffinity.js';
+import { formatTokens } from '../context/tokens.js';
 
 /**
  * Automatic model choice: match the task's weight to a model tier, then pick
@@ -12,10 +14,12 @@ import { affordability, estimateBurn, type BurnEstimate } from './burn.js';
  * cost of doing the user's job badly, so on hard work capability outweighs
  * headroom, and on trivial work headroom outweighs capability.
  *
- * Three things keep this honest: the capability table is calibrated by real
+ * Four things keep this honest: the capability table is calibrated by real
  * outcomes, the quota check accounts for what the run will *cost* rather than
- * only what is left, and a conversation stays where it started unless the
- * work genuinely got heavier.
+ * only what is left, the weight class sets how hard the model thinks and not
+ * just which model it is, and a conversation stays where it started unless the
+ * work genuinely got heavier — for exactly as long as staying is still worth
+ * something.
  */
 
 export type { Tier } from '../types.js';
@@ -35,6 +39,21 @@ const TIER_MODELS: Record<ProviderId, Record<Tier, string | undefined>> = {
   openrouter: { light: undefined, standard: undefined, heavy: undefined },
 };
 
+/**
+ * How hard to think, per weight class.
+ *
+ * Choosing the model was only half the decision: the same model can burn ten
+ * times the window depending on how long it reasons first, and those tokens are
+ * priced as output. Trivial work reasoned at maximum is waste; hard work
+ * reasoned at minimum is a second turn, which costs more than the thinking
+ * would have.
+ */
+const TIER_EFFORT: Record<Tier, Effort> = {
+  light: 'minimal',
+  standard: 'medium',
+  heavy: 'high',
+};
+
 const TIER_BY_COMPLEXITY: Record<Complexity, Tier> = {
   trivial: 'light',
   simple: 'light',
@@ -43,9 +62,6 @@ const TIER_BY_COMPLEXITY: Record<Complexity, Tier> = {
 };
 
 const TIER_RANK: Record<Tier, number> = { light: 0, standard: 1, heavy: 2 };
-
-/** Score bonus for keeping a conversation where it already is. */
-const STICKY_BASE = 12;
 
 /** Points a measurably faster account is worth on light work. */
 const SPEED_BONUS = 8;
@@ -75,6 +91,13 @@ export interface ConversationContext {
   /** Complexity of the last few turns, newest first. */
   recentComplexity?: Complexity[];
   turnCount: number;
+  /** When the last turn finished — how much of the provider's cache is left. */
+  lastRunAt?: number;
+  /**
+   * Context the last run read from cache. The size of what another account
+   * would have to rebuild from cold, measured rather than guessed.
+   */
+  lastContextTokens?: number;
 }
 
 /** The heavier of two tiers. */
@@ -92,6 +115,10 @@ export interface AutoRouteResult {
   burn?: BurnEstimate;
   /** Weight class chosen for this turn — recorded with the run. */
   tier: Tier;
+  /** How hard the chosen model should think. */
+  effort: Effort;
+  /** Context a failover would make the next account re-read, when measured. */
+  moveTokens?: number;
 }
 
 interface Candidate {
@@ -100,6 +127,8 @@ interface Candidate {
   headroom: number;
   burn: BurnEstimate;
   account: AccountProfile;
+  /** Set only for the account this conversation is already on. */
+  sticky?: StickyBonus;
   /** Measured median of this account's clean runs, 0 when unmeasured. */
   medianDurationMs: number;
   /** How many runs that median came from. */
@@ -112,6 +141,8 @@ export interface AutoRouteOptions {
   /** Switch heavy code-writing work to plan-first review. */
   autoPlan?: boolean;
   currentPermission?: PermissionMode;
+  /** Injectable clock — cache warmth is a function of it. */
+  now?: number;
 }
 
 /**
@@ -136,6 +167,7 @@ export function autoRoute(
 ): AutoRouteResult {
   const metrics = options.metrics ?? [];
   const conversation = options.conversation;
+  const now = options.now ?? Date.now();
 
   // ── tier, with conversation memory ────────────────────
   const messageTier = TIER_BY_COMPLEXITY[classification.complexity];
@@ -195,18 +227,29 @@ export function autoRoute(
     const reserve = headroom < 15 ? 0.5 : headroom < 30 ? 0.8 : 1;
     const afford = affordability(headroom, burn);
     // Staying in the same conversation is worth real points: it keeps the
-    // native session and everything the model already knows. The longer the
-    // thread, the more expensive moving is — but a reserve/afford penalty on a
-    // draining account still outweighs it.
+    // native session, the provider's warm cache, and everything the model
+    // already knows. How many points is not a constant — it grows with the
+    // context a move would rebuild and shrinks as that cache expires. A
+    // reserve/afford penalty on a draining account still outweighs it.
     const sameAsLast =
       conversation?.lastTarget?.provider === account.provider &&
       conversation?.lastTarget?.account === account.label;
     const sticky =
-      sameAsLast && !escalated ? STICKY_BASE + Math.min(conversation!.turnCount, 6) * 3 : 0;
+      sameAsLast && !escalated
+        ? stickyBonus({
+            provider: account.provider,
+            turnCount: conversation!.turnCount,
+            contextTokens: conversation!.lastContextTokens,
+            elapsedMs:
+              conversation!.lastRunAt === undefined
+                ? undefined
+                : Math.max(0, now - conversation!.lastRunAt),
+          })
+        : undefined;
 
     const score =
       (capabilityWeight * capability + headroomWeight * headroom) * reserve * afford +
-      sticky -
+      (sticky?.points ?? 0) -
       account.priority * 0.5;
 
     candidates.push({
@@ -215,6 +258,7 @@ export function autoRoute(
       headroom,
       burn,
       account,
+      sticky,
       medianDurationMs: performance.medianDurationMs,
       runs: performance.runs,
     });
@@ -246,9 +290,19 @@ export function autoRoute(
       ? ('safe' as PermissionMode)
       : undefined;
 
+  const effort = TIER_EFFORT[tier];
+
   const parts = [`auto · ${classification.complexity} ${classification.kind} → ${tier} model`];
+  if (effort !== 'medium') parts.push(`${effort} reasoning`);
   if (escalated) parts.push(`escalated ${escalated.from}→${escalated.to}`);
-  else if (best && conversation?.lastTarget && conversation.turnCount > 0) parts.push('same thread');
+  else if (best?.sticky) {
+    // Say which of the two reasons to stay is actually doing the work — a warm
+    // cache is a fact about the clock, and the user can see it expire.
+    parts.push(best.sticky.warm ? 'same thread · cache warm' : 'same thread · cache cold');
+  }
+  if (best?.sticky?.moveTokens) {
+    parts.push(`moving would re-read ~${formatTokens(best.sticky.moveTokens)}`);
+  }
   if (best) {
     parts.push(`~${best.burn.pct.toFixed(1)}% burn of ${Math.round(best.headroom)}% left`);
   }
@@ -260,8 +314,11 @@ export function autoRoute(
     suggestPermission,
     burn: best?.burn,
     tier,
+    effort,
+    moveTokens: best?.sticky?.moveTokens,
   };
 }
 
 export const AUTO_TIER_MODELS = TIER_MODELS;
 export const AUTO_TIER_BY_COMPLEXITY = TIER_BY_COMPLEXITY;
+export const AUTO_TIER_EFFORT = TIER_EFFORT;

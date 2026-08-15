@@ -159,11 +159,20 @@ describe('interrupted runs', () => {
 
 describe('handoff prompt', () => {
   it('keeps the tail when the partial answer is long', () => {
-    const partial = 'x'.repeat(9000) + 'THE-LAST-THING';
+    // Comfortably over the handoff budget: the tail is what the next model has
+    // to pick up from, so it is the half that must survive.
+    const partial = 'x'.repeat(30_000) + 'THE-LAST-THING';
     const out = handoffPrompt('carry on', partial, 'claude:a');
     expect(out).toContain('THE-LAST-THING');
     expect(out).toContain('truncated');
-    expect(out.length).toBeLessThan(partial.length + 1500);
+    expect(out.length).toBeLessThan(partial.length);
+  });
+
+  it('sends a partial that fits whole, without cutting it', () => {
+    const partial = 'a short interrupted answer\nwith two lines';
+    const out = handoffPrompt('carry on', partial, 'claude:a');
+    expect(out).toContain(partial);
+    expect(out).not.toContain('truncated');
   });
 
   it('passes the prompt through when nothing was produced', () => {

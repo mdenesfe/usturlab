@@ -1,4 +1,4 @@
-import type { AdapterEvent, PermissionMode, ProviderId, ResolvedAccount } from '../types.js';
+import type { AdapterEvent, Effort, PermissionMode, ProviderId, ResolvedAccount } from '../types.js';
 import type { PermissionDecision } from './permission.js';
 
 /**
@@ -24,10 +24,27 @@ export interface LiveRunHandle {
 export interface RunRequest {
   /** For providers without native resume the orchestrator pre-embeds history here. */
   prompt: string;
+  /**
+   * What to send instead when `resumeSessionId` turns out to be unusable and
+   * the CLI silently starts a fresh one.
+   *
+   * `prompt` is written for a session that remembers the earlier turns: it
+   * carries only the context that changed since the last message. A session
+   * that was quietly replaced remembers none of it, and would be answering with
+   * a brief it never read. Adapters that can tell the difference — the ones
+   * that fall back rather than failing — send this instead.
+   */
+  coldPrompt?: string;
   cwd: string;
   model?: string;
   resumeSessionId?: string;
   permissionMode: PermissionMode;
+  /**
+   * How much reasoning this turn is worth, sized by the router. Each adapter
+   * spends it through whatever its CLI actually exposes; one with no such
+   * control ignores it rather than faking one.
+   */
+  effort?: Effort;
   /**
    * Standing instructions for this provider. Delivered through whatever the
    * CLI actually offers — a system-prompt flag where one exists, otherwise

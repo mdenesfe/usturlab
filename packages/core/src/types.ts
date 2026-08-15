@@ -38,6 +38,17 @@ export type PermissionMode = 'safe' | 'edits' | 'full';
  */
 export type Tier = 'light' | 'standard' | 'heavy';
 
+/**
+ * How much thinking a turn is worth.
+ *
+ * Reasoning tokens are billed as output — the most expensive thing a run can
+ * produce — and every CLI here that exposes the knob exposes it differently
+ * (Codex a config key, Claude a keyword in the prompt). The router picks one
+ * value; each adapter spends it in its own currency, or ignores it when its CLI
+ * has no such control.
+ */
+export type Effort = 'minimal' | 'low' | 'medium' | 'high';
+
 export interface AccountProfile {
   id: string;
   provider: ProviderId;
@@ -182,6 +193,10 @@ export interface RoutingDecision {
    * from a mention, a rule or the manual chain — nobody sized anything then.
    */
   tier?: Tier;
+  /** How much thinking this turn was sized for. Absent for the same reasons. */
+  effort?: Effort;
+  /** Context a failover would make the next account re-read, when measured. */
+  moveTokens?: number;
 }
 
 export type RunEvent =

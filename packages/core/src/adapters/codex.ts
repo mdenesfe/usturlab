@@ -210,7 +210,11 @@ export class CodexAdapter implements ProviderAdapter {
       }
     };
 
-    const rpc = new JsonRpcProcess(this.cliPath, ['app-server'], {
+    // Codex takes reasoning effort as a config key, and `-c` overrides it for
+    // this process only — the user's own config.toml is left alone.
+    const effortArgs = req.effort ? ['-c', `model_reasoning_effort=${req.effort}`] : [];
+
+    const rpc = new JsonRpcProcess(this.cliPath, [...effortArgs, 'app-server'], {
       cwd: req.cwd,
       env,
       signal,
@@ -279,12 +283,16 @@ export class CodexAdapter implements ProviderAdapter {
         if (req.systemBrief?.trim()) threadParams.developerInstructions = req.systemBrief;
 
         let started: Record<string, unknown>;
+        // A thread that could not be resumed is a thread that remembers
+        // nothing, so the message written for it has to change too.
+        let resumed = false;
         if (req.resumeSessionId) {
           try {
             started = await rpc.request('thread/resume', {
               ...threadParams,
               threadId: req.resumeSessionId,
             });
+            resumed = true;
           } catch {
             // Thread rolled off disk or belongs to another cwd — start fresh.
             started = await rpc.request('thread/start', threadParams);
@@ -301,7 +309,7 @@ export class CodexAdapter implements ProviderAdapter {
 
         const turn = await rpc.request('turn/start', {
           threadId,
-          input: [{ type: 'text', text: req.prompt }],
+          input: [{ type: 'text', text: resumed ? req.prompt : (req.coldPrompt ?? req.prompt) }],
         });
         activeTurnId = getString(turn, 'turn', 'id') ?? activeTurnId;
 

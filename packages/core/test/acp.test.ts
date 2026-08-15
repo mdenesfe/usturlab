@@ -54,6 +54,22 @@ describe('ACP adapter', () => {
     expect(result.text).toContain('done');
   });
 
+  it('carries token usage off the prompt response when the agent reports it', async () => {
+    const events = await collect(run('USAGE please'));
+    const result = events.at(-1) as Extract<AdapterEvent, { type: 'result' }>;
+    expect(result.usage).toEqual({
+      inputTokens: 9_200,
+      outputTokens: 300,
+      cachedInputTokens: 8_000,
+    });
+  });
+
+  it('reports no usage for an agent that sends none', async () => {
+    const events = await collect(run('hello'));
+    const result = events.at(-1) as Extract<AdapterEvent, { type: 'result' }>;
+    expect(result.usage).toBeUndefined();
+  });
+
   it('surfaces tool calls with their detail', async () => {
     const events = await collect(run('TOOL please'));
     const tool = events.find((e) => e.type === 'tool-use') as Extract<

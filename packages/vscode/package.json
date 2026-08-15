@@ -212,6 +212,11 @@
           "default": true,
           "markdownDescription": "In auto mode, plan heavy code-writing work before it edits: usturlab switches that turn to Plan so you can review the approach. Turn off to let heavy work edit straight away."
         },
+        "usturlab.sizeReasoning": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "In auto mode, decide how hard each turn thinks — not just which model runs it. Reasoning tokens are billed as output, so a typo fix reasoned at full depth burns a window for nothing: trivial work runs at minimum effort and hard work at maximum. Delivered through each CLI's own control — a config key on Codex, a thinking budget on Claude — and a CLI without one is left alone. Turn off to leave every CLI on its default."
+        },
         "usturlab.sendWorkspaceContext": {
           "type": "boolean",
           "default": true,
