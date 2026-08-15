@@ -84,14 +84,14 @@ function computeSuggestions(
  * things automatically".
  */
 const PERMISSION_MODES: Array<{ id: string; label: string; hint: string }> = [
-  { id: 'safe', label: 'Plan', hint: 'Reads and proposes. Changes nothing, runs nothing.' },
-  { id: 'edits', label: 'Edit', hint: 'Edits files in this workspace and runs commands inside it.' },
-  { id: 'full', label: 'Full', hint: 'No sandbox and no approvals — it can reach outside the workspace.' },
+  { id: 'safe', label: 'Plan', hint: 'Reads and proposes, changes nothing.' },
+  { id: 'edits', label: 'Edit', hint: 'Edits and runs, inside this workspace.' },
+  { id: 'full', label: 'Full', hint: 'Edits and runs anywhere, without asking.' },
 ];
 
 const ROUTING_MODES: Array<{ id: 'auto' | 'manual'; label: string; hint: string }> = [
-  { id: 'auto', label: 'Auto', hint: 'Reads the task and picks the model. Rules always win.' },
-  { id: 'manual', label: 'Manual', hint: 'Follows your chain in order, without judging the task.' },
+  { id: 'auto', label: 'Auto', hint: 'Picks the account and model for the task.' },
+  { id: 'manual', label: 'Manual', hint: 'Follows your chain, top to bottom.' },
 ];
 
 /**
@@ -157,25 +157,27 @@ function ModeMenu({
               <span class="menu-hint">{m.hint}</span>
             </button>
           ))}
-          {/* Not a fourth level: it rides on top of the one above. */}
-          <button
-            class={`menu-row toggle ${asking ? 'on' : ''} ${permissionMode === 'full' ? 'inert' : ''}`}
-            role="menuitemcheckbox"
-            aria-checked={asking}
-            onClick={() => {
-              onModeChange({ ask: !askPermission });
-              setOpen(false);
-            }}
-          >
-            <span class="menu-name">
-              <span class="menu-check">{asking ? '✓' : ''}</span> ask before each step
-            </span>
-            <span class="menu-hint">
-              {permissionMode === 'full'
-                ? 'Full has no approvals to stop at — set Plan or Edit for this to apply.'
-                : 'Stops on every command and file change, on every provider. Reads never interrupt you.'}
-            </span>
-          </button>
+          {/*
+            Not a fourth level: it rides on top of the one above. Full has no
+            approvals to stop at, so under Full there is nothing to offer — an
+            option that cannot do anything is worse than no option.
+          */}
+          {permissionMode !== 'full' && (
+            <button
+              class={`menu-row toggle ${asking ? 'on' : ''}`}
+              role="menuitemcheckbox"
+              aria-checked={asking}
+              onClick={() => {
+                onModeChange({ ask: !askPermission });
+                setOpen(false);
+              }}
+            >
+              <span class="menu-name">
+                <span class="menu-check">{asking ? '✓' : ''}</span> ask before each step
+              </span>
+              <span class="menu-hint">Stops before every change and command.</span>
+            </button>
+          )}
           <div class="menu-label">routing</div>
           {ROUTING_MODES.map((m) => (
             <button

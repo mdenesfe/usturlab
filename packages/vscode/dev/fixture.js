@@ -21,7 +21,7 @@ const accounts = [
 setTimeout(() => {
   post({ kind: 'accounts', accounts });
   if (new URLSearchParams(location.search).has('empty')) return;
-  post({ kind: 'modes', permissionMode: 'safe', routingMode: 'auto', askPermission: false });
+  post({ kind: 'modes', permissionMode: new URLSearchParams(location.search).get('mode2') || 'safe', routingMode: 'auto', askPermission: false });
   post({ kind: 'conversations', activeId: 'a', list: [
     { id: 'a', title: 'Timeline redesign for the chat panel', updatedAt: Date.now() - 6e5 },
     { id: 'b', title: 'Quota failover keeps picking the wrong account', updatedAt: Date.now() - 9e7 },

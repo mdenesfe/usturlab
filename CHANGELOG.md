@@ -26,10 +26,10 @@ be expressed at all, and `Full + ask` was offered even though `Full` skips
 approvals by definition and ignores it.
 
 There are three levels now and a separate toggle under them. The button says
-what you changed away from the default — `Edit · ask`, `Full · manual` — and the
-toggle says plainly when it does nothing: on Full there is nothing to stop at.
-The three hints also stop paraphrasing each other; they name the sandbox, which
-is what actually separates Edit from Full.
+what you changed away from the default — `Edit · ask`, `Full · manual` — and
+under Full the toggle is not there at all, because Full has no approvals to
+stop at. Every hint in the menu is one short sentence saying what that choice
+does, rather than a paragraph explaining itself.
 
 ### Attachments read as a list
 

@@ -1779,11 +1779,6 @@ kbd,
   color: var(--accent);
 }
 
-/* On in principle, doing nothing in practice — say so rather than hide it. */
-.menu-row.inert .menu-name,
-.menu-row.inert .menu-hint {
-  opacity: 0.55;
-}
 
 /* The sentence that says what choosing this actually does. */
 .menu-hint {
