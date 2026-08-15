@@ -7,7 +7,63 @@ import { BRAND_COLOR, BrandMark, PROVIDER_NAME } from './brandIcons.js';
 import { assistantText } from '../../src/panel/transcript.js';
 import { AgentLanes } from './AgentLanes.js';
 import { CopyButton } from './CopyButton.js';
-import { LiveDots, ToolStepRow, fileName, useAutoOpen } from './steps.js';
+import { useEffect, useState } from 'preact/hooks';
+import { LiveDots, ToolStepRow, fileName, formatDuration, useAutoOpen } from './steps.js';
+
+/**
+ * What the run is doing, and how long it has been doing it — once.
+ *
+ * The state was being drawn twice: a `thinking` row where the answer was going
+ * to appear, and a pinned bar saying the same word again above the composer.
+ * It belongs where you are already looking, at the head of the reply being
+ * written, and it carries the clock so nothing else has to.
+ */
+function LiveState({ items, startedAt }: { items: TranscriptItem[]; startedAt: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // A pending question outranks everything: nothing is running until it is
+  // answered. Only one raised since the latest reply counts — an older one was
+  // left behind by a run that already ended.
+  let blocked = false;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (item?.kind === 'permission' && !item.answered) {
+      blocked = true;
+      break;
+    }
+    if (item?.kind === 'assistant') break;
+  }
+  const last = [...items].reverse().find((item) => item.kind === 'assistant');
+  const segments = last?.kind === 'assistant' ? last.segments : [];
+  const agents = segments
+    .flatMap((s) => (s.kind === 'agents' ? s.lanes : []))
+    .filter((lane) => lane.status === 'running').length;
+  const tail = segments[segments.length - 1];
+
+  const label = blocked
+    ? 'waiting for you'
+    : agents > 0
+      ? `${agents} agent${agents === 1 ? '' : 's'}`
+      : tail?.kind === 'text'
+        ? 'writing'
+        : tail?.kind === 'tools'
+          ? 'working'
+          : 'thinking';
+
+  return (
+    // The transcript is a log, so this is the one place a screen reader is told
+    // what is going on — state changes only, never the streamed text.
+    <span class={`live-state ${blocked ? 'blocked' : ''}`} role="status">
+      <span class="live-label">{label}</span>
+      {!blocked && <LiveDots />}
+      <span class="live-time">{formatDuration(Math.max(0, now - startedAt))}</span>
+    </span>
+  );
+}
 
 /**
  * Everything the model did to produce the answer, on one line.
@@ -172,6 +228,7 @@ export function Transcript({
   items,
   noAccounts,
   running,
+  startedAt = 0,
   onAddAccount,
   onPermission,
   onRetry,
@@ -180,6 +237,8 @@ export function Transcript({
   noAccounts?: boolean;
   /** Whether the conversation is still running — an agent cannot outlive it. */
   running?: boolean;
+  /** When the current run began, for the clock on the reply being written. */
+  startedAt?: number;
   onAddAccount?: () => void;
   onPermission?: (id: string, decision: PermissionDecision) => void;
   onRetry?: () => void;
@@ -240,7 +299,6 @@ export function Transcript({
           case 'assistant': {
             const provider = item.target?.provider;
             const color = provider ? BRAND_COLOR[provider] : undefined;
-            const lastSegment: Segment | undefined = item.segments[item.segments.length - 1];
             const answer = assistantText(item).trim();
             // The cursor belongs on the prose being typed, which is not always
             // the last segment — a tool call can land after it.
@@ -264,6 +322,9 @@ export function Transcript({
                     {/* The rail dot already carries the account's colour, so the
                         name itself does not need to be painted too. */}
                     <span class="assistant-name">{item.target.account}</span>
+                    {!item.done && running && startedAt > 0 && (
+                      <LiveState items={items} startedAt={startedAt} />
+                    )}
                     <span class="assistant-meta" title={item.ruleId ? `rule: ${item.ruleId}` : undefined}>
                       {item.target.model ? `· ${item.target.model} ` : ''}
                       {item.done && item.durationMs !== undefined
@@ -299,12 +360,6 @@ export function Transcript({
                   );
                 })}
                 <Activity segments={item.segments} live={!item.done} />
-                {!item.done && !lastSegment && (
-                  <div class="thinking-row">
-                    thinking
-                    <LiveDots />
-                  </div>
-                )}
                 {item.stopped && (
                   <div class="assistant-stopped">⊘ {item.stoppedReason ?? 'stopped'}</div>
                 )}

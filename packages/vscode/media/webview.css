@@ -581,6 +581,27 @@ kbd,
   color: var(--muted);
 }
 
+/*
+ * The one live indicator. It used to be said twice — a `thinking` row where the
+ * answer was about to appear, and a pinned bar repeating the same word above
+ * the composer — so it now sits in the reply's own header and carries the clock.
+ */
+.live-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+}
+
+.live-state.blocked {
+  color: var(--warn);
+}
+
+.live-time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── tool timeline (expandable) ─────────────────────────── */
 
 
@@ -835,14 +856,6 @@ kbd,
   }
 }
 
-.thinking-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-family: var(--mono);
-  font-size: 0.85em;
-  color: var(--muted);
-}
 
 
 
@@ -1605,16 +1618,7 @@ kbd,
   user-select: none;
 }
 
-.thinking {
-  font-family: var(--mono);
-  font-size: 0.85em;
-  color: var(--muted);
-}
 
-.thinking::after {
-  content: '…';
-  animation: pulse 1.2s infinite;
-}
 
 @keyframes pulse {
   0%,
@@ -1633,55 +1637,11 @@ kbd,
   color: var(--muted);
 }
 
-/* ── the run, pinned where it cannot scroll away ─────────── */
 
-.workbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-  padding: 5px 11px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
-  background: var(--glass);
-  backdrop-filter: var(--glass-blur);
-  box-shadow: var(--shadow-1);
-  font-family: var(--mono);
-  font-size: 0.74em;
-  color: var(--muted);
-}
 
-.workbar-state {
-  flex-shrink: 0;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
 
-.workbar.blocked .workbar-state {
-  color: var(--warn);
-}
 
-.workbar-detail {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.workbar-time {
-  margin-left: auto;
-  flex-shrink: 0;
-  color: var(--vscode-foreground);
-  font-variant-numeric: tabular-nums;
-}
-
-.workbar-hint {
-  flex-shrink: 0;
-  opacity: 0.6;
-}
 
 /* ── composer ───────────────────────────────────────────── */
 

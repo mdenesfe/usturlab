@@ -10,6 +10,16 @@ Both lists are the same lists. Open a chat from either and it is the same conver
 
 On VS Code older than 1.106 — which cannot take a view container in the secondary side bar at all — nothing moves and nothing is duplicated: the activity bar entry stays the only one.
 
+### One live indicator, not three
+
+A running task said `thinking` in the transcript where the answer was about to appear, and said it again in a pinned bar above the composer, which also held the clock. Two words for one fact, in two places, neither of them where you were looking.
+
+There is one now, in the header of the reply being written, beside the account that is writing it: what the run is doing — `thinking`, `writing`, `working`, `2 agents`, or `waiting for you` when it is blocked on a permission question — and how long it has been going. The bar above the composer is gone; the `Esc stops` hint it carried is in the composer's own placeholder while a task runs.
+
+### Fixed
+
+- **Notifications said "usturlab — AI Subscription Router".** VS Code labels a notification with the extension's display name, so every finished-run toast carried the tagline. The extension is called usturlab; the description still says what it does, where a description belongs.
+
 ## 0.10.0 — 2026-08-14
 
 ### The conversation is one thread, so it is drawn as one

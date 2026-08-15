@@ -5,7 +5,6 @@ import { vscode } from './vscodeApi.js';
 import { Transcript } from './components/Transcript.js';
 import { applyHostMessage, type TranscriptItem } from '../src/panel/transcript.js';
 import { Composer } from './components/Composer.js';
-import { WorkBar } from './components/WorkBar.js';
 import { HistoryList } from './components/HistoryList.js';
 import { AccountsView } from './components/AccountsView.js';
 import { RulesView } from './components/RulesView.js';
@@ -250,6 +249,7 @@ function ChatApp() {
             items={items}
             noAccounts={accounts.length === 0}
             running={running}
+            startedAt={startedAt}
             onAddAccount={() => vscode.postMessage({ kind: 'addAccount' })}
             onPermission={(id, decision) =>
               vscode.postMessage({ kind: 'permissionDecision', id, decision })
@@ -274,7 +274,6 @@ function ChatApp() {
             ↓ {missed ? 'new activity' : 'latest'}
           </button>
         )}
-        {running && startedAt > 0 && <WorkBar items={items} startedAt={startedAt} />}
         <Composer
           accounts={accounts}
           tags={tags}

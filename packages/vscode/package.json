@@ -1,6 +1,6 @@
 {
   "name": "usturlab",
-  "displayName": "usturlab \u2014 AI Subscription Router",
+  "displayName": "usturlab",
   "description": "Add all your AI subscriptions (multiple Claude accounts, Codex, Gemini, Copilot) and route every task to the best account and model with user-defined rules and automatic quota failover.",
   "version": "0.10.1",
   "publisher": "mdenesfe",
