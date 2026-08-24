@@ -6,6 +6,7 @@ import { buildChildEnv, terminalEnvOverrides } from '../src/accounts/env.js';
 import { readCodexUsage } from '../src/quota/codexUsageReader.js';
 import { fetchClaudeUsage } from '../src/quota/claudeUsagePoller.js';
 import { parseMcpFile, syncMcpToProfile } from '../src/mcp/mcpSync.js';
+import { spawnLines } from '../src/adapters/spawn.js';
 import { parseCommandsFile, matchSlashCommand, expandSlashCommand } from '../src/commands/slashCommands.js';
 import type { AccountProfile, ResolvedAccount } from '../src/types.js';
 
@@ -248,5 +249,66 @@ describe('custom slash commands', () => {
     expect(matchSlashCommand('/review')?.cmd.claudeNative).toBe(true);
     expect(matchSlashCommand('/commit')?.cmd.claudeNative).toBeUndefined();
     expect(matchSlashCommand('not a command')).toBeUndefined();
+  });
+});
+
+describe('spawning a CLI that is a JavaScript file', () => {
+  /**
+   * A `.mjs` runs on its own only where a shebang and an exec bit both mean
+   * something — so on Windows this is the difference between working and
+   * `EFTYPE`, and it is why every fixture CLI in this suite can be spawned.
+   */
+  it('runs it through this Node instead of executing it', async () => {
+    const dir = tmp();
+    const script = join(dir, 'says-hello.mjs');
+    writeFileSync(script, "process.stdout.write('hello ' + process.argv[2] + '\\n');");
+
+    const lines: string[] = [];
+    let exit: number | null | undefined;
+    for await (const ev of spawnLines(script, ['world'], {
+      cwd: dir,
+      env: process.env,
+      signal: new AbortController().signal,
+    })) {
+      if (ev.kind === 'line') lines.push(ev.line);
+      if (ev.kind === 'exit') exit = ev.code;
+      if (ev.kind === 'spawn-error') throw new Error(ev.message);
+    }
+
+    expect(lines).toEqual(['hello world']);
+    expect(exit).toBe(0);
+  });
+
+  it('says which CLI is missing when there is no such binary', async () => {
+    const messages: string[] = [];
+    for await (const ev of spawnLines('usturlab-no-such-cli', [], {
+      cwd: tmp(),
+      env: process.env,
+      signal: new AbortController().signal,
+    })) {
+      if (ev.kind === 'spawn-error') messages.push(ev.message);
+    }
+
+    expect(messages.join('\n')).toContain('usturlab-no-such-cli');
+    expect(messages.join('\n')).toContain('on PATH');
+  });
+
+  it('lets Node report a script path that does not exist', async () => {
+    const missing = join(tmp(), 'not-here.mjs');
+    const output: string[] = [];
+    let exit: number | null | undefined;
+    for await (const ev of spawnLines(missing, [], {
+      cwd: tmp(),
+      env: process.env,
+      signal: new AbortController().signal,
+    })) {
+      if (ev.kind === 'line') output.push(ev.line);
+      if (ev.kind === 'exit') exit = ev.code;
+    }
+
+    // Node exists, so this is never a spawn error — it is Node telling us the
+    // file it was handed is not there, and the path it names is the CLI's.
+    expect(output.join('\n')).toContain('not-here.mjs');
+    expect(exit).not.toBe(0);
   });
 });

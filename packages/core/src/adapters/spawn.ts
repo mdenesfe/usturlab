@@ -16,12 +16,23 @@ export interface SpawnOptions {
   onChild?: (child: ChildProcess) => void;
 }
 
+/**
+ * A CLI path that points at a JavaScript file is run through this Node,
+ * rather than executed. Only a shebang line and an exec bit make such a file
+ * runnable on its own, and Windows has neither — so without this, pointing
+ * `usturlab.cliPath.*` at a `.mjs` entry point works everywhere except there.
+ */
+function nodeScript(command: string, args: string[]): [string, string[]] {
+  return /\.[cm]?js$/i.test(command) ? [process.execPath, [command, ...args]] : [command, args];
+}
+
 /** Spawns a CLI and yields stdout/stderr line-by-line, ending with exit info. */
 export async function* spawnLines(
-  command: string,
-  args: string[],
+  rawCommand: string,
+  rawArgs: string[],
   opts: SpawnOptions,
 ): AsyncGenerator<SpawnEvent> {
+  const [command, args] = nodeScript(rawCommand, rawArgs);
   const child = spawn(command, args, {
     cwd: opts.cwd,
     env: opts.env,
@@ -60,7 +71,9 @@ export async function* spawnLines(
   child.on('error', (err: NodeJS.ErrnoException) => {
     const message =
       err.code === 'ENOENT'
-        ? `Command not found: ${command}. Is the CLI installed and on PATH?`
+        ? // The CLI the caller asked for, not the interpreter we may have
+          // put in front of it: naming node here would send them hunting.
+          `Command not found: ${rawCommand}. Is the CLI installed and on PATH?`
         : err.message;
     push({ kind: 'spawn-error', message });
     done = true;
