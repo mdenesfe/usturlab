@@ -2,7 +2,7 @@
   "name": "usturlab",
   "displayName": "usturlab",
   "description": "Add all your AI subscriptions (multiple Claude accounts, Codex, Gemini, Copilot) and route every task to the best account and model with user-defined rules and automatic quota failover.",
-  "version": "0.10.1",
+  "version": "0.11.0",
   "publisher": "mdenesfe",
   "license": "MIT",
   "icon": "media/marketplace-icon.png",

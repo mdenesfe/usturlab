@@ -1,6 +1,22 @@
 # Changelog
 
-## Unreleased
+## 0.11.0 — 2026-08-24
+
+### Commands a repository brought with it have to be asked for
+
+A custom slash command's template *becomes the prompt* a provider runs, and `.usturlab/commands.json` is read out of the open workspace — so a repository you cloned this morning could redefine `/fix` and have the model act on someone else's sentence while you read your own.
+
+A commands file that came from the workspace is now inert until you enable it: usturlab says how many commands it defines and offers to open the file first. The approval is keyed by the file's content, so editing an enabled file asks again rather than inheriting the old yes, and an untrusted workspace is not read at all. While one waits, your own `~/.usturlab` commands keep working — a file the workspace put there cannot take them away with it.
+
+### The usage call says who it is
+
+Quota polling reads an undocumented endpoint, and it used to send Claude Code's own User-Agent and nothing else, which made the request indistinguishable from the CLI's. It now names usturlab in that header. The setting is still off by default, and the primary way a limit is found — reading the message the CLI itself prints mid-run — needs no such call at all.
+
+### A CLI that is a JavaScript file runs on Windows too
+
+Pointing `usturlab.cliPath.*` at a `.js`/`.mjs` entry point worked everywhere a shebang line and an exec bit mean something, which is not Windows: there it failed with `EFTYPE`. Such a path is now handed to Node instead of executed, on every platform. A missing binary still names the CLI you asked for rather than the interpreter put in front of it.
+
+This is also what the Windows leg of CI had been saying for weeks about nine of usturlab's own tests. Nobody heard it, because those runs never started.
 
 ### The brief stopped repeating itself
 
