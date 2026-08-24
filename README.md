@@ -166,6 +166,9 @@ For Claude, the wizard's first option is a full `claude auth login` inside an is
 - `usturlab: Open Session in Terminal`
 - `usturlab: Toggle Ask Before Acting` — flip `askPermission` without leaving the chat
 - `usturlab: Edit Custom Slash Commands` — your own `/name` prompts, in `.usturlab/commands.json`
+  A commands file that came from the **workspace** stays inert until you enable it: a command's template
+  becomes the prompt a provider runs, so a repository you just opened does not get to write one. The
+  approval is keyed by content — editing an enabled file asks again.
 - `usturlab: Sync MCP Servers to All Profiles` — write `.usturlab/mcp.json` into each CLI's own config
 - `usturlab: Analytics` — what the router learned: clean-run rate and confidence per account, median burn per run, performance per kind of work
 - `usturlab: Simulate Usage Limit (debug)` — test failover without burning quota

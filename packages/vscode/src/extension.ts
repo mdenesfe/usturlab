@@ -67,7 +67,7 @@ export function activate(ctx: vscode.ExtensionContext): void {
   void migrateFromUsrouter(accounts, (line) => output.appendLine(line));
   const quota = new QuotaTracker(globalStateQuotaPersistence(ctx));
   const sessions = new SessionStore();
-  const rules = new RulesManager();
+  const rules = new RulesManager(ctx.workspaceState);
   const metrics = new MetricsStore(ctx);
   const preferences = new PreferenceStore(ctx);
   const workspaceContext = new WorkspaceContext(output);

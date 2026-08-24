@@ -20,7 +20,7 @@ usturlab handles login credentials for several providers and spawns CLIs on your
 - **Account isolation** — each account gets its own profile directory under `~/.usturlab/profiles/`. Anything that lets one account's run read or reuse another's credentials is a vulnerability.
 - **Environment scrubbing** — `packages/core/src/accounts/env.ts` removes hijacking variables (a stray `ANTHROPIC_API_KEY` silently overrides Claude subscription auth) from every subprocess. A gap here means a run silently authenticates as something you did not choose.
 - **Subprocess construction** — every provider adapter in `packages/core/src/adapters/` spawns a CLI. Argument or environment injection reachable from a prompt, a rules file, or a workspace file is a vulnerability.
-- **Rules and command files** — `.usturlab/rules.json`, `commands.json` and `mcp.json` are read from the open workspace. Opening an untrusted repository should never be enough to execute something you did not ask for.
+- **Rules and command files** — `.usturlab/rules.json`, `commands.json` and `mcp.json` are read from the open workspace. Opening an untrusted repository should never be enough to execute something you did not ask for — a workspace `commands.json` is inert until you enable it, keyed by the file's content, and is ignored entirely in an untrusted workspace.
 - **Webview** — the panel renders model output as markdown. Script execution or extension-host access from rendered content is a vulnerability.
 
 ## What is not in scope

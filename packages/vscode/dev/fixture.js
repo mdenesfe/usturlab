@@ -8,12 +8,12 @@ const post = (msg) => window.dispatchEvent(new MessageEvent('message', { data: m
 
 const accounts = [
   { id: 'work', provider: 'claude', label: 'work', authMode: 'subscription', available: true,
-    identity: 'enes@planorsoft.com', models: [{ id: 'opus', label: 'Opus 5' }, { id: 'sonnet', label: 'Sonnet 5' }],
+    identity: 'you@work.example', models: [{ id: 'opus', label: 'Opus 5' }, { id: 'sonnet', label: 'Sonnet 5' }],
     usage: [{ label: 'session', utilizationPct: 42, resetAt: Date.now() + 3600e3 }, { label: 'week', utilizationPct: 71 }] },
   { id: 'personal', provider: 'claude', label: 'personal', authMode: 'subscription', available: true,
-    identity: 'me@gmail.com', models: [{ id: 'opus', label: 'Opus 5' }], usage: [{ label: 'session', utilizationPct: 12 }] },
+    identity: 'you@personal.example', models: [{ id: 'opus', label: 'Opus 5' }], usage: [{ label: 'session', utilizationPct: 12 }] },
   { id: 'main', provider: 'codex', label: 'main', authMode: 'chatgpt', available: true,
-    identity: 'enes@planorsoft.com', models: [{ id: 'gpt', label: 'gpt-5.6' }], usage: [{ label: 'week', utilizationPct: 88 }] },
+    identity: 'you@work.example', models: [{ id: 'gpt', label: 'gpt-5.6' }], usage: [{ label: 'week', utilizationPct: 88 }] },
   { id: 'g', provider: 'gemini', label: 'g-paid', authMode: 'oauth', available: false, resetAt: Date.now() + 7200e3,
     models: [{ id: 'pro', label: 'Gemini 3 Pro' }], usage: [{ label: 'day', utilizationPct: 100 }] },
 ];

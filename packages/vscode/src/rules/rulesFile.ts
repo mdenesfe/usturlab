@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -13,6 +14,15 @@ import {
   type RuleTarget,
   type SlashCommand,
 } from '@usturlab/core';
+
+/** Content hashes of workspace command files the user has enabled. */
+const APPROVED_COMMANDS_KEY = 'usturlab.approvedWorkspaceCommands';
+
+/** The slice of `vscode.Memento` this needs; keeps the class testable. */
+export interface ApprovalStore {
+  get<T>(key: string): T | undefined;
+  update(key: string, value: unknown): Thenable<void>;
+}
 
 export interface RulesState {
   rules: RulesFile;
@@ -29,8 +39,13 @@ export class RulesManager implements vscode.Disposable {
   readonly onDidChange = this.emitter.event;
   private diagnostics = vscode.languages.createDiagnosticCollection('usturlab');
   private watchers: vscode.FileSystemWatcher[] = [];
+  /** Set while a workspace command file is waiting to be enabled. */
+  private pendingCommands: { path: string; hash: string; count: number } | undefined;
+  /** Approvals given with no store behind them: this window only. */
+  private sessionApproved = new Set<string>();
+  private prompted = new Set<string>();
 
-  constructor() {
+  constructor(private readonly approvals?: ApprovalStore) {
     // Every location `locate()` is willing to read from has to be watched, or
     // "edits to the JSON apply live" is only true for the workspace copy: the
     // home-directory fallbacks sit outside the workspace and need a watcher of
@@ -84,30 +99,114 @@ export class RulesManager implements vscode.Disposable {
     return this.customCommands;
   }
 
-  private locateCommands(): string | undefined {
+  /**
+   * Every command file that exists, in preference order, each tagged with
+   * whether it came out of the open workspace. A workspace copy only appears
+   * when the workspace is trusted; the home-directory copies are always the
+   * user's own.
+   */
+  private commandCandidates(): Array<{ path: string; fromWorkspace: boolean }> {
     const ws = vscode.workspace.workspaceFolders?.[0];
-    const candidates: string[] = [];
-    if (ws) candidates.push(join(ws.uri.fsPath, '.usturlab', 'commands.json'));
-    candidates.push(join(homedir(), '.usturlab', 'commands.json'));
-    if (ws) candidates.push(join(ws.uri.fsPath, '.usrouter', 'commands.json'));
-    candidates.push(join(homedir(), '.usrouter', 'commands.json'));
-    return candidates.find((c) => existsSync(c));
+    const trusted = vscode.workspace.isTrusted !== false;
+    const inWorkspace = ws && trusted ? ws.uri.fsPath : undefined;
+    const candidates: Array<{ path: string; fromWorkspace: boolean }> = [];
+    for (const dir of ['.usturlab', '.usrouter']) {
+      if (inWorkspace)
+        candidates.push({ path: join(inWorkspace, dir, 'commands.json'), fromWorkspace: true });
+      candidates.push({ path: join(homedir(), dir, 'commands.json'), fromWorkspace: false });
+    }
+    return candidates.filter((c) => existsSync(c.path));
   }
 
+  private locateCommands(): { path: string; fromWorkspace: boolean } | undefined {
+    return this.commandCandidates()[0];
+  }
+
+  /**
+   * Commands from the home directory are the user's own and load silently. A
+   * file inside the workspace is text someone else may have written, and a
+   * command's template *becomes the prompt* a provider runs — so it stays
+   * inert until the user enables it. The approval is keyed by content, so
+   * editing an enabled file asks again instead of inheriting the old yes.
+   */
   private loadCommands(): void {
     this.customCommands = [];
-    const path = this.locateCommands();
-    if (!path) return;
-    try {
-      const parsed = parseCommandsFile(readFileSync(path, 'utf8'));
-      if (parsed.ok) this.customCommands = parsed.commands;
-    } catch {
-      // ignore, keep empty
+    this.pendingCommands = undefined;
+    for (const found of this.commandCandidates()) {
+      let content: string;
+      try {
+        content = readFileSync(found.path, 'utf8');
+      } catch {
+        continue;
+      }
+      const parsed = parseCommandsFile(content);
+      if (!parsed.ok || parsed.commands.length === 0) continue;
+      if (!found.fromWorkspace) {
+        this.customCommands = parsed.commands;
+        return;
+      }
+      const hash = createHash('sha256').update(content).digest('hex');
+      if (this.approvedHashes().includes(hash)) {
+        this.customCommands = parsed.commands;
+        return;
+      }
+      // Not enabled: ask about it, but keep looking — a file the workspace
+      // put there must not take the user's own commands away with it.
+      if (!this.pendingCommands) {
+        this.pendingCommands = { path: found.path, hash, count: parsed.commands.length };
+        this.promptForWorkspaceCommands(this.pendingCommands);
+      }
     }
   }
 
+  private approvedHashes(): string[] {
+    const stored = this.approvals?.get<string[]>(APPROVED_COMMANDS_KEY) ?? [];
+    return [...stored, ...this.sessionApproved];
+  }
+
+  /** Asked once per file content — a watcher re-firing must not nag. */
+  private promptForWorkspaceCommands(pending: { path: string; hash: string; count: number }): void {
+    if (this.prompted.has(pending.hash)) return;
+    this.prompted.add(pending.hash);
+    const review = 'Review';
+    const enable = 'Enable';
+    void Promise.resolve(
+      vscode.window.showWarningMessage(
+        `This workspace defines ${pending.count} custom slash command${
+          pending.count === 1 ? '' : 's'
+        }. Their text is sent to a provider as your prompt — review ${pending.path} before enabling.`,
+        review,
+        enable,
+      ),
+    ).then(async (pick) => {
+      if (pick === review) {
+        await vscode.window.showTextDocument(vscode.Uri.file(pending.path));
+      } else if (pick === enable) {
+        await this.approveWorkspaceCommands();
+      }
+    });
+  }
+
+  /** True while the workspace offers commands the user has not enabled. */
+  hasPendingWorkspaceCommands(): boolean {
+    return this.pendingCommands !== undefined;
+  }
+
+  /** Enables the workspace command file, for exactly the content on disk now. */
+  async approveWorkspaceCommands(): Promise<void> {
+    const pending = this.pendingCommands;
+    if (!pending) return;
+    if (this.approvals) {
+      const kept = this.approvedHashes().filter((h) => h !== pending.hash);
+      await this.approvals.update(APPROVED_COMMANDS_KEY, [...kept, pending.hash].slice(-20));
+    } else {
+      this.sessionApproved.add(pending.hash);
+    }
+    this.load();
+  }
+
   async openOrCreateCommands(): Promise<void> {
-    const existing = this.locateCommands();
+    const existing = this.locateCommands()?.path;
     const ws = vscode.workspace.workspaceFolders?.[0];
     const path =
       existing ??

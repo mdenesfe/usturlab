@@ -67,6 +67,7 @@ export const fsSpies = {
 
 export const workspace = {
   workspaceFolders: undefined as Array<{ uri: Uri }> | undefined,
+  isTrusted: true,
   fs: fsSpies,
   createFileSystemWatcher: vi.fn((_pattern: string | RelativePattern) => ({
     onDidChange: vi.fn(),
@@ -83,6 +84,9 @@ export const window = {
     | string
     | undefined),
   showInformationMessage: vi.fn(async () => undefined),
+  showWarningMessage: vi.fn(async (_message: string, ..._items: string[]) => undefined as
+    | string
+    | undefined),
   showTextDocument: vi.fn(async (_uri: Uri) => ({})),
 };
 
@@ -97,5 +101,6 @@ export const languages = {
 export function resetVscodeStub(): void {
   vi.clearAllMocks();
   workspace.workspaceFolders = undefined;
+  workspace.isTrusted = true;
   window.showErrorMessage.mockResolvedValue(undefined);
 }

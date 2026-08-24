@@ -1,10 +1,14 @@
 import type { UsageWindow } from './quotaTracker.js';
 
 /**
- * Undocumented endpoint used by Claude Code's own /usage view. Requires the
- * subscription OAuth token, the oauth beta header and a claude-code User-Agent
- * (without it requests land in an aggressively rate-limited bucket).
- * Poll at >= 180s. Best-effort: any schema drift returns [].
+ * Reads the 5h/weekly utilization that Claude Code's own /usage view shows,
+ * using the account's own subscription OAuth token and the oauth beta header
+ * the endpoint expects.
+ *
+ * The endpoint is undocumented, so this is best-effort by construction: a
+ * schema change, an error status or a network failure all return [] and the
+ * Accounts tab simply shows no usage figure. It is also rate-limited strictly
+ * — never poll faster than CLAUDE_USAGE_MIN_INTERVAL_MS.
  */
 export async function fetchClaudeUsage(
   oauthToken: string,
@@ -16,8 +20,10 @@ export async function fetchClaudeUsage(
       headers: {
         Authorization: `Bearer ${oauthToken}`,
         'anthropic-beta': 'oauth-2025-04-20',
-        // The endpoint buckets by UA; stale versions get rate-limited hard.
-        'User-Agent': `claude-code/${opts.userAgentVersion ?? '2.1.216'}`,
+        // Names the CLI protocol version this speaks, and usturlab as the
+        // caller: the request is attributable instead of indistinguishable
+        // from Claude Code's own.
+        'User-Agent': `claude-code/${opts.userAgentVersion ?? '2.1.216'} usturlab`,
       },
     });
     if (!res.ok) {
